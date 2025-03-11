@@ -41,3 +41,5 @@ var/
 
 # Ruff
 .ruff_cache
+
+outputs/
