@@ -43,3 +43,4 @@ var/
 .ruff_cache
 
 outputs/
+logs/
