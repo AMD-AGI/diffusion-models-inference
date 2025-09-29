@@ -1,5 +1,5 @@
 diff --git a/examples/hunyuan_video_usp_example.py b/examples/hunyuan_video_usp_example.py
-index b1d6fce..19fd941 100644
+index b1d6fce..7470839 100644
 --- a/examples/hunyuan_video_usp_example.py
 +++ b/examples/hunyuan_video_usp_example.py
 @@ -92,14 +92,8 @@ def parallelize_transformer(pipe: DiffusionPipeline):
@@ -28,35 +28,58 @@ index b1d6fce..19fd941 100644
          num_inference_steps=input_config.num_inference_steps,
          split_text_embed_in_sp=get_pipeline_parallel_world_size() == 1,
      )
-@@ -282,7 +276,7 @@ def main():
+@@ -270,8 +264,7 @@ def main():
+ 
+     if engine_config.runtime_config.use_torch_compile:
+         torch._inductor.config.reorder_for_compute_comm_overlap = True
+-        pipe.transformer = torch.compile(pipe.transformer,
+-                                         mode="max-autotune-no-cudagraphs")
++        pipe.transformer.compile()
+ 
+         # one step to warmup the torch compiler
+         output = pipe(
+@@ -282,7 +275,7 @@ def main():
              num_inference_steps=1,
              generator=torch.Generator(device="cuda").manual_seed(
                  input_config.seed),
 -        ).frames[0]
-+        )[0].frames[0]
++        )
  
      torch.cuda.reset_peak_memory_stats()
      start_time = time.time()
-@@ -295,7 +289,7 @@ def main():
+@@ -295,7 +288,7 @@ def main():
          num_inference_steps=input_config.num_inference_steps,
          generator=torch.Generator(device="cuda").manual_seed(
              input_config.seed),
 -    ).frames[0]
-+    )[0].frames[0]
++    )
  
      end_time = time.time()
      elapsed_time = end_time - start_time
+@@ -309,9 +302,10 @@ def main():
+     )
+     if is_dp_last_group():
+         resolution = f"{input_config.width}x{input_config.height}"
+-        output_filename = f"results/hunyuan_video_{parallel_info}_{resolution}.mp4"
+-        export_to_video(output, output_filename, fps=15)
+-        print(f"output saved to {output_filename}")
++        for idx, frames in enumerate(output.frames, start=1):
++            output_filename = f"results/hunyuan_video_{idx:02d}_{parallel_info}_{resolution}.mp4"
++            export_to_video(frames, output_filename, fps=15)
++            print(f"output saved to {output_filename}")
+ 
+     if get_world_group().rank == get_world_group().world_size - 1:
+         print(
 diff --git a/xfuser/envs.py b/xfuser/envs.py
-index 77a947e..586e8fa 100644
+index 77a947e..e782e7b 100644
 --- a/xfuser/envs.py
 +++ b/xfuser/envs.py
-@@ -78,11 +78,29 @@ class PackagesEnvChecker:
+@@ -78,11 +78,28 @@ class PackagesEnvChecker:
  
      def initialize(self):
          self.packages_info = {
 +            "has_aiter": self.check_aiter(),
              "has_flash_attn": self.check_flash_attn(),
-+            "has_flash_attn_hopper": self.check_flash_attn_hopper(),
              "has_long_ctx_attn": self.check_long_ctx_attn(),
              "diffusers_version": self.check_diffusers_version(),
          }
@@ -80,7 +103,7 @@ index 77a947e..586e8fa 100644
      def check_flash_attn(self):
          try:
              device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-@@ -94,12 +112,24 @@ class PackagesEnvChecker:
+@@ -94,12 +111,12 @@ class PackagesEnvChecker:
                  from flash_attn import __version__
  
                  if __version__ < "2.6.0":
@@ -91,36 +114,23 @@ index 77a947e..586e8fa 100644
              logger.warning(
                  f'Flash Attention library "flash_attn" not found, '
 -                f"using pytorch attention implementation"
-+                f'using pytorch attention implementation'
-+            )
-+            return False
-+
-+    def check_flash_attn_hopper(self):
-+        try:
-+            from flash_attn_interface import flash_attn_func
-+            logger.info('Using FAv3 Hopper as the attention library')
-+            return True
-+        except ImportError:
-+            logger.warning(
-+                f'FAv3 Hopper not found, '
-+                'defaulting to other attention mechanisms'
++                f'defaulting to other attention mechanisms'
              )
              return False
  
 diff --git a/xfuser/model_executor/layers/attention_processor.py b/xfuser/model_executor/layers/attention_processor.py
-index 77f0bb1..3eb2104 100644
+index 77f0bb1..a2022c6 100644
 --- a/xfuser/model_executor/layers/attention_processor.py
 +++ b/xfuser/model_executor/layers/attention_processor.py
-@@ -49,6 +49,8 @@ logger = init_logger(__name__)
+@@ -49,6 +49,7 @@ logger = init_logger(__name__)
  
  env_info = PACKAGES_CHECKER.get_packages_info()
  HAS_LONG_CTX_ATTN = env_info["has_long_ctx_attn"]
 +HAS_AITER = env_info["has_aiter"]
-+HAS_FLASH_ATTN_HOPPER = env_info["has_flash_attn_hopper"]
  HAS_FLASH_ATTN = env_info["has_flash_attn"]
  
  
-@@ -1357,14 +1359,34 @@ if HunyuanVideoAttnProcessor2_0 is not None:
+@@ -1357,14 +1358,25 @@ if HunyuanVideoAttnProcessor2_0 is not None:
                  from xfuser.core.long_ctx_attention import (
                      xFuserLongContextAttention,
                  )
@@ -133,15 +143,6 @@ index 77f0bb1..3eb2104 100644
 +                    self.hybrid_seq_parallel_attn = xFuserLongContextAttention(
 +                        use_kv_cache=self.use_long_ctx_attn_kvcache,
 +                        attn_type=AttnType.AITER,
-+                    )
-+                elif HAS_FLASH_ATTN_HOPPER:
-+                    import yunchang
-+                    from yunchang.kernels import AttnType
-+
-+                    assert yunchang.__version__ >= "0.6.3"
-+                    self.hybrid_seq_parallel_attn = xFuserLongContextAttention(
-+                        use_kv_cache=self.use_long_ctx_attn_kvcache,
-+                        attn_type=AttnType.FA3,
 +                    )
 +                elif HAS_FLASH_ATTN:
 +                    # self.hybrid_seq_parallel_attn = LongContextAttention()
@@ -157,7 +158,7 @@ index 77f0bb1..3eb2104 100644
                          use_kv_cache=self.use_long_ctx_attn_kvcache,
                          attn_type=AttnType.TORCH,
 diff --git a/xfuser/model_executor/layers/usp.py b/xfuser/model_executor/layers/usp.py
-index b4ca713..1126a0b 100644
+index b4ca713..fc54afa 100644
 --- a/xfuser/model_executor/layers/usp.py
 +++ b/xfuser/model_executor/layers/usp.py
 @@ -1,6 +1,7 @@
@@ -168,7 +169,7 @@ index b4ca713..1126a0b 100644
  
  import torch.distributed._functional_collectives as ft_c
  
-@@ -14,26 +15,57 @@ from xfuser.core.distributed import (
+@@ -14,26 +15,43 @@ from xfuser.core.distributed import (
      get_ring_parallel_world_size,
  )
  
@@ -178,10 +179,6 @@ index b4ca713..1126a0b 100644
  HAS_FLASH_ATTN = env_info["has_flash_attn"]
 +if HAS_FLASH_ATTN:
 +    import flash_attn
-+
-+HAS_FLASH_ATTN_HOPPER = env_info["has_flash_attn_hopper"]
-+if HAS_FLASH_ATTN_HOPPER:
-+    import flash_attn_interface
 +
 +HAS_AITER = env_info["has_aiter"]
 +if HAS_AITER:
@@ -201,21 +198,11 @@ index b4ca713..1126a0b 100644
          }
 -        if HAS_FLASH_ATTN:
 +        if HAS_AITER:
-+            out, *_ = _templated_ring_attention(
-+                PROCESS_GROUP.RING_PG,
-+                1,
-+                _aiter_attn_call,
-+                query,
-+                key,
-+                value,
-+                **kwargs,
-+            )
-+        elif HAS_FLASH_ATTN_HOPPER:
              out, *_ = _templated_ring_attention(
                  PROCESS_GROUP.RING_PG,
                  1,
 -                aten._scaled_dot_product_flash_attention,
-+                _flash_attn_3_call,
++                _aiter_attn_call,
 +                query,
 +                key,
 +                value,
@@ -229,23 +216,24 @@ index b4ca713..1126a0b 100644
                  query,
                  key,
                  value,
-@@ -48,7 +80,7 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
+@@ -48,7 +66,7 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
              out, *_ = _templated_ring_attention(
                  PROCESS_GROUP.RING_PG,
                  1,
 -                aten._scaled_dot_product_efficient_attention,
-+                aten._scaled_dot_product_cudnn_attention,
++                aten._scaled_dot_product_flash_attention,
                  query,
                  key,
                  value,
-@@ -59,10 +91,29 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
+@@ -59,10 +77,20 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
              "dropout_p": dropout_p,
              "is_causal": is_causal,
          }
 -        if HAS_FLASH_ATTN:
 +        if HAS_AITER:
-+            out, *_ = _templated_ring_attention(
-+                PROCESS_GROUP.RING_PG,
+             out, *_ = _templated_ring_attention(
+                 PROCESS_GROUP.RING_PG,
+-                aten._scaled_dot_product_flash_attention,
 +                1,
 +                _aiter_attn_call,
 +                query,
@@ -253,33 +241,23 @@ index b4ca713..1126a0b 100644
 +                value,
 +                **kwargs,
 +            )
-+        elif HAS_FLASH_ATTN_HOPPER:
++        elif HAS_FLASH_ATTN:
 +            out, *_ = _templated_ring_attention(
 +                PROCESS_GROUP.RING_PG,
-+                _flash_attn_3_call,
-+                query,
-+                key,
-+                value,
-+                **kwargs
-+            )
-+        elif HAS_FLASH_ATTN:
-             out, *_ = _templated_ring_attention(
-                 PROCESS_GROUP.RING_PG,
--                aten._scaled_dot_product_flash_attention,
 +                _flash_attn_call,
                  query,
                  key,
                  value,
-@@ -76,7 +127,7 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
+@@ -76,7 +104,7 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
              }
              out, *_ = _templated_ring_attention(
                  PROCESS_GROUP.RING_PG,
 -                aten._scaled_dot_product_efficient_attention,
-+                aten._scaled_dot_product_cudnn_attention,
++                aten._scaled_dot_product_flash_attention,
                  query,
                  key,
                  value,
-@@ -133,12 +184,84 @@ def _ft_c_output_all_to_all(x):
+@@ -133,12 +161,63 @@ def _ft_c_output_all_to_all(x):
      x = x.reshape(world_size, s // world_size, b, -1, d).permute(2, 0, 3, 1, 4).reshape(b, -1, s // world_size, d)
      return x
  
@@ -299,24 +277,6 @@ index b4ca713..1126a0b 100644
 +        causal=is_causal,
 +        return_attn_probs=False,
 +        return_lse=True
-+    )
-+    output = torch.permute(output, [0, 2, 1, 3])
-+    return output, softmax_lse
-+
-+def _flash_attn_3_call(query, key, value, dropout_p, is_causal):
-+    """
-+    Performs the necessary tensor permutes and
-+    then calls attention through flash_attn_3
-+    """
-+    query = torch.permute(query, [0, 2, 1, 3])
-+    key = torch.permute(key, [0, 2, 1, 3])
-+    value = torch.permute(value, [0, 2, 1, 3])
-+    output, softmax_lse = flash_attn_interface.flash_attn_func(
-+        query,
-+        key,
-+        value,
-+        causal=is_causal,
-+        return_attn_probs=True,
 +    )
 +    output = torch.permute(output, [0, 2, 1, 3])
 +    return output, softmax_lse
@@ -347,14 +307,11 @@ index b4ca713..1126a0b 100644
 +    if HAS_AITER:
 +        output, _ = _aiter_attn_call(query, key, value, dropout_p, is_causal)
 +        return output
-+    elif HAS_FLASH_ATTN_HOPPER:
-+        output, _ = _flash_attn_3_call(query, key, value, dropout_p, is_causal)
-+        return output
 +    elif HAS_FLASH_ATTN:
 +        output, _ = _flash_attn_call(query, key, value, dropout_p, is_causal)
 +        return output
 +    else:
-+        with sdpa_kernel(torch.nn.attention.SDPBackend.CUDNN_ATTENTION):
++        with sdpa_kernel(torch.nn.attention.SDPBackend.FLASH_ATTENTION):
 +            output = F.scaled_dot_product_attention(query, key, value, dropout_p=dropout_p, is_causal=is_causal)
 +        return output
  
@@ -367,7 +324,7 @@ index b4ca713..1126a0b 100644
      elif get_ulysses_parallel_world_size() == 1:
          out = ring_attn(query, key, value, dropout_p=dropout_p, is_causal=is_causal)
      elif get_ulysses_parallel_world_size() > 1:
-@@ -147,9 +270,7 @@ def USP(query, key, value, dropout_p=0.0, is_causal=False):
+@@ -147,9 +226,7 @@ def USP(query, key, value, dropout_p=0.0, is_causal=False):
          value = _ft_c_input_all_to_all(value)
  
          if get_ring_parallel_world_size() == 1:

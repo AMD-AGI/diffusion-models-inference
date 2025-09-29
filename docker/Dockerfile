@@ -10,14 +10,14 @@
 
 # core image arguments
 ARG GPU_ARCH="gfx950"
-ARG THEROCK_COMMIT="4d69f64"
-ARG THEROCK_ROCM_NIGHTLY="20250820"
-ARG TRITON_BRANCH="pytorch/rocm7.1_internal_testing"
-ARG PYTORCH_BRANCH="triton_kernel_wrap_fix"
-ARG PYTORCH_VISION_COMMIT="824e8c8726b65fd9d5abdc9702f81c2b0c4c0dc8"
+ARG THEROCK_COMMIT="cf47597b1b0d835caabdf30015068b88b7382a92"
+ARG THEROCK_ROCM_NIGHTLY="7.9.0rc20250925"
+ARG TRITON_BRANCH="bbb06c0334a6772b92d24bde54956e675c8c6604"
+ARG PYTORCH_BRANCH="337ce5ab498bda16d7445f3861123d6c24be954d"
+ARG PYTORCH_VISION_COMMIT="966da7e46f65d6d49df3e31214470a4fe5cc8e66"
 # deps image arguments
-ARG AITER_COMMIT="9700732"
-ARG LONGCONTEXTATTENTION_COMMIT="e59b8f8"
+ARG AITER_COMMIT="a25e55e"
+ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="5dbe4f5"
 ARG ACCELERATE_COMMIT="34c1779"
 ARG XDIT_COMMIT="a440a6e"
@@ -57,8 +57,8 @@ RUN git config --global user.name "TheRock Builder" && \
 # Install ROCm stack
 RUN python -m pip install \
     --no-cache-dir \
-    --index-url "https://d2awnip2yjpvqn.cloudfront.net/v2/${GPU_ARCH}-dcgpu/" \
-    "rocm[libraries,devel]==7.0.0rc${THEROCK_ROCM_NIGHTLY}"
+    --index-url "https://rocm.nightlies.amd.com/v2/${GPU_ARCH}-dcgpu/" \
+    "rocm[libraries,devel]==${THEROCK_ROCM_NIGHTLY}"
 # Running `rocm-sdk path --root` ensures `/app/.venv/lib/python3.12/site-packages/_rocm_sdk_devel` is populated 
 RUN rocm-sdk path --root
 
@@ -69,12 +69,17 @@ ARG PYTORCH_BRANCH
 ARG PYTORCH_VISION_COMMIT
 
 WORKDIR /app
+COPY docker/0001-Keep-only-one-plus-character-in-version-suffix.patch /app/0001-Keep-only-one-plus-character-in-version-suffix.patch
+# https://github.com/ROCm/TheRock/pull/1598
+COPY docker/build_prod_wheels.py /app/build_prod_wheels.py
 RUN git clone https://github.com/ROCm/TheRock.git \
     && cd TheRock/external-builds/pytorch \
     && git checkout ${THEROCK_COMMIT} \
-    && python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_BRANCH} \
-    && python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_BRANCH} \
+    && sh -c "cp /app/0001-Keep-only-one-plus-character-in-version-suffix.patch patches/triton/nightly/triton/base/0001-Keep-only-one-plus-character-in-version-suffix.patch" \
+    && python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_BRANCH} \
+    && python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/triton-lang/triton.git --repo-hashtag ${TRITON_BRANCH} --patchset nightly \
     && python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} \
+    && cp /app/build_prod_wheels.py /app/TheRock/external-builds/pytorch/ \
     && python build_prod_wheels.py build --output-dir /install
 
 FROM base AS core
@@ -122,18 +127,15 @@ RUN git clone https://github.com/ROCm/aiter.git && \
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
     git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
-    git apply /patches/longcontextattention.patch && \
     pip install -e .
 # install diffusers
 RUN git clone https://github.com/huggingface/diffusers.git && \
     cd diffusers && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
-    git apply /patches/diffusers.patch && \
     pip install -e ".[torch]"
 # install accelerate
 RUN git clone https://github.com/huggingface/accelerate.git && \
     cd accelerate && \
-    git reset --hard ${ACCELERATE_COMMIT} && \
     pip install -e .
 # install xfuser
 RUN git clone https://github.com/xdit-project/xDiT.git && \
@@ -155,8 +157,9 @@ FROM deps AS hunyuanvideo
 
 WORKDIR /app/Hunyuanvideo
 COPY src/xDiT/ci/README.huvideo /app/Hunyuanvideo/run.md
-COPY src/xDiT/hunyuan_video_scripts/huvideo_*.py /app/Hunyuanvideo/
-COPY src/xDiT/hunyuan_video_scripts/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
+COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
+COPY src/xDiT/ci/huvideo_utils.py /app/Hunyuanvideo/huvideo_utils.py
+COPY src/xDiT/ci/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
 
 FROM deps AS wan2.1
 ARG WAN1_REPO
