@@ -156,7 +156,7 @@ RUN rm -fr /patches
 FROM deps AS hunyuanvideo
 
 WORKDIR /app/Hunyuanvideo
-COPY src/xDiT/ci/README.huvideo /app/Hunyuanvideo/run.md
+COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/run.md
 COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
 COPY src/xDiT/ci/huvideo_utils.py /app/Hunyuanvideo/huvideo_utils.py
 COPY src/xDiT/ci/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
