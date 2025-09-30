@@ -70,6 +70,19 @@ index b1d6fce..7470839 100644
  
      if get_world_group().rank == get_world_group().world_size - 1:
          print(
+diff --git a/xfuser/core/long_ctx_attention/hybrid/attn_layer.py b/xfuser/core/long_ctx_attention/hybrid/attn_layer.py
+index 739398f..e782765 100644
+--- a/xfuser/core/long_ctx_attention/hybrid/attn_layer.py
++++ b/xfuser/core/long_ctx_attention/hybrid/attn_layer.py
+@@ -29,7 +29,7 @@ class xFuserLongContextAttention(LongContextAttention):
+         ring_impl_type: str = "basic",
+         use_pack_qkv: bool = False,
+         use_kv_cache: bool = False,
+-        attn_type: AttnType = AttnType.FA,
++        attn_type: AttnType = AttnType.AITER,
+         attn_processor: torch.nn.Module = None,
+     ) -> None:
+         """
 diff --git a/xfuser/envs.py b/xfuser/envs.py
 index 77a947e..e782e7b 100644
 --- a/xfuser/envs.py
