@@ -10,13 +10,13 @@
 
 # core image arguments
 ARG GPU_ARCH="gfx950"
-ARG THEROCK_COMMIT="cf47597b1b0d835caabdf30015068b88b7382a92"
-ARG THEROCK_ROCM_NIGHTLY="7.9.0rc20250925"
+ARG THEROCK_COMMIT="e0f8f59cb6723d4edd17403e6e2c21e77e3776b9"
+ARG THEROCK_ROCM_NIGHTLY="7.9.0rc20250930"
 ARG TRITON_BRANCH="bbb06c0334a6772b92d24bde54956e675c8c6604"
-ARG PYTORCH_BRANCH="337ce5ab498bda16d7445f3861123d6c24be954d"
+ARG PYTORCH_BRANCH="23acabb2075d2a7acd326c95213a7fa48750ee3b"
 ARG PYTORCH_VISION_COMMIT="966da7e46f65d6d49df3e31214470a4fe5cc8e66"
 # deps image arguments
-ARG AITER_COMMIT="a25e55e"
+ARG AITER_COMMIT="0112e7a"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="5dbe4f5"
 ARG ACCELERATE_COMMIT="34c1779"
@@ -69,17 +69,13 @@ ARG PYTORCH_BRANCH
 ARG PYTORCH_VISION_COMMIT
 
 WORKDIR /app
-COPY docker/0001-Keep-only-one-plus-character-in-version-suffix.patch /app/0001-Keep-only-one-plus-character-in-version-suffix.patch
-# https://github.com/ROCm/TheRock/pull/1598
-COPY docker/build_prod_wheels.py /app/build_prod_wheels.py
+RUN pip install packaging
 RUN git clone https://github.com/ROCm/TheRock.git \
     && cd TheRock/external-builds/pytorch \
     && git checkout ${THEROCK_COMMIT} \
-    && sh -c "cp /app/0001-Keep-only-one-plus-character-in-version-suffix.patch patches/triton/nightly/triton/base/0001-Keep-only-one-plus-character-in-version-suffix.patch" \
     && python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_BRANCH} \
     && python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/triton-lang/triton.git --repo-hashtag ${TRITON_BRANCH} --patchset nightly \
     && python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} \
-    && cp /app/build_prod_wheels.py /app/TheRock/external-builds/pytorch/ \
     && python build_prod_wheels.py build --output-dir /install
 
 FROM base AS core
