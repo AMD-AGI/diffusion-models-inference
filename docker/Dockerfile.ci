@@ -190,7 +190,7 @@ RUN rm -fr /patches
 FROM deps AS hunyuanvideo
 
 WORKDIR /app/Hunyuanvideo
-COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/run.md
+COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/RUN.md
 COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
 COPY src/xDiT/ci/huvideo_utils.py /app/Hunyuanvideo/huvideo_utils.py
 COPY src/xDiT/ci/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
@@ -207,7 +207,7 @@ RUN pip install "peft>=0.17.0" && \
     sed -i '/^flash_attn/d' requirements.txt && \
     sed -i '/^torch/d' requirements.txt && \
     sed -i '/^torchvision/d' requirements.txt
-COPY src/wan_2_1/ci/README.md /app/Wan2.1/run.md
+COPY src/wan_2_1/ci/README.md /app/Wan2.1/RUN.md
 COPY src/wan_2_1/scripts/wan_i2v.py /app/Wan2.1/run.py
 COPY src/wan_2_1/scripts/list_*.py /app/Wan2.1/
 COPY src/wan_2_1/scripts/timer.py /app/Wan2.1/
@@ -230,7 +230,7 @@ RUN pip install "peft>=0.17.0" && \
     sed -i '/^flash_attn/d' requirements.txt && \
     sed -i '/^torch/d' requirements.txt && \
     sed -i '/^torchvision/d' requirements.txt
-COPY src/wan_2_2/ci/README.md /app/Wan2.2/run.md
+COPY src/wan_2_2/ci/README.md /app/Wan2.2/RUN.md
 COPY src/wan_2_2/scripts/wan_i2v.py /app/Wan2.2/run.py
 COPY src/wan_2_1/scripts/list_*.py /app/Wan2.2/
 COPY src/wan_2_1/scripts/timer.py /app/Wan2.2/
@@ -245,7 +245,7 @@ RUN git -C ./Wan2.2 apply /patches/image2video.patch && \
 FROM deps AS final
 
 WORKDIR /app
-COPY src/xDiT/ci/run_hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
+COPY src/xDiT/ci/run.hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
 COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
 COPY src/wan_2_1/ci/run.sh /app/.ci/run.wan_2_1.sh
 COPY --from=wan2.1 /app/Wan2.1 /app/Wan2.1
