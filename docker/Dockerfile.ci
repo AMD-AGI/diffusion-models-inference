@@ -244,14 +244,18 @@ RUN git -C ./Wan2.2 apply /patches/image2video.patch && \
 
 FROM deps AS final
 
-WORKDIR /app    
+WORKDIR /app
+COPY src/xDiT/ci/run_hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
 COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
+COPY src/wan_2_1/ci/run.sh /app/.ci/run.wan_2_1.sh
 COPY --from=wan2.1 /app/Wan2.1 /app/Wan2.1
 RUN cd /app/Wan2.1 && \
     pip install --no-cache-dir -r requirements.txt
+COPY src/wan_2_2/ci/run.sh /app/.ci/run.wan_2_2.sh
 COPY --from=wan2.2 /app/Wan2.2 /app/Wan2.2
 RUN cd /app/Wan2.2 && \
     pip install --no-cache-dir -r requirements.txt
+COPY .ci/run.sh /app/.ci/run.sh
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
 ENV MIOPEN_USER_DB_PATH="/miopen_userdb"

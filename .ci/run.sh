@@ -1,9 +1,9 @@
 #!/bin/bash
 
 scripts=(
-    "/ci/run.hunyuanvideo.sh"
-    "/ci/run.wan_2_1.sh"
-    "/ci/run.wan_2_2.sh"
+    "/app/.ci/run.hunyuanvideo.sh"
+    "/app/.ci/run.wan_2_1.sh"
+    "/app/.ci/run.wan_2_2.sh"
 )
 
 for script in "${scripts[@]}"; do
