@@ -18,9 +18,9 @@ ARG PYTORCH_VISION_COMMIT="966da7e46f65d6d49df3e31214470a4fe5cc8e66"
 # deps image arguments
 ARG AITER_COMMIT="0112e7a"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
-ARG DIFFUSERS_COMMIT="5dbe4f5"
+ARG DIFFUSERS_COMMIT="814d710"
 ARG ACCELERATE_COMMIT="34c1779"
-ARG XDIT_COMMIT="a440a6e"
+ARG XDIT_COMMIT="e585d98"
 ARG AO_COMMIT="8b72284"
 # workload specific arguments
 ARG WAN1_REPO="https://github.com/Wan-Video/Wan2.1.git"
@@ -178,7 +178,8 @@ RUN git -C ./Wan2.1 apply /patches/image2video.patch && \
     git -C ./Wan2.1 apply /patches/supported_sizes.patch && \
     git -C ./Wan2.1 apply /patches/fsdp.patch && \
     git -C ./Wan2.1 apply /patches/attention.patch && \
-    git -C ./Wan2.1 apply /patches/rmsnorm.patch 
+    git -C ./Wan2.1 apply /patches/rmsnorm.patch && \
+    git -C ./Wan2.1 apply /patches/xdit_context_parallel.patch
 
 FROM deps AS wan2.2
 ARG WAN2_REPO
