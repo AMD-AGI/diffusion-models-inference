@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgfortran5 \
     libgl1 \
     libglib2.0-dev \
+    liblzma-dev \
     ninja-build \
     python3 \
     python3-dev \
@@ -76,7 +77,7 @@ RUN git clone https://github.com/ROCm/TheRock.git \
     && python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_BRANCH} \
     && python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/triton-lang/triton.git --repo-hashtag ${TRITON_BRANCH} --patchset nightly \
     && python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} \
-    && python build_prod_wheels.py build --output-dir /install
+    && USE_ROCM_CK_SDPA=ON python build_prod_wheels.py build --enable-pytorch-flash-attention-linux --output-dir /install
 
 FROM base AS core
 COPY --from=build_torch /install/*.whl /install/
