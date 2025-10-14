@@ -129,6 +129,7 @@ RUN git clone https://github.com/feifeibear/long-context-attention.git && \
 RUN git clone https://github.com/huggingface/diffusers.git && \
     cd diffusers && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
+    git apply /patches/diffusers_aiter.patch && \
     pip install -e ".[torch]"
 # install accelerate
 RUN git clone https://github.com/huggingface/accelerate.git && \
@@ -139,6 +140,7 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xdit.patch && \
+    git apply /patches/xdit_transformer_flux.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # install torchao
@@ -157,6 +159,14 @@ COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/run.md
 COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
 COPY src/xDiT/ci/huvideo_utils.py /app/Hunyuanvideo/huvideo_utils.py
 COPY src/xDiT/ci/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
+
+FROM deps AS flux
+WORKDIR /app/Flux
+COPY src/flux/ci/README.md /app/Flux/RUN.md
+COPY src/flux/flux_utils.py /app/Flux/flux_utils.py
+COPY src/flux/flux_example.py /app/Flux/run.py
+COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
+COPY src/flux/requirements.txt /app/Flux/requirements.txt
 
 FROM deps AS wan2.1
 ARG WAN1_REPO
@@ -208,8 +218,11 @@ RUN git -C ./Wan2.2 apply /patches/image2video.patch && \
 
 FROM deps AS final
 
-WORKDIR /app    
+WORKDIR /app
 COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
+COPY --from=flux /app/Flux /app/Flux
+RUN cd /app/Flux && \
+    pip install --no-cache-dir -r requirements.txt
 COPY --from=wan2.1 /app/Wan2.1 /app/Wan2.1
 RUN cd /app/Wan2.1 && \
     pip install --no-cache-dir -r requirements.txt
