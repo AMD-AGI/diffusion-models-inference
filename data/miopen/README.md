@@ -20,7 +20,7 @@ environment variable to the directory cotaining the user database.
 From the repository root, run
 
 ```
-docker build -f docker/Dockerfile -t pytorch_xdit_core --target core .
+docker build -f docker/Dockerfile[.ci] -t pytorch_xdit_core --target core .
 ```
 
 to build the base image with the default build arguments. For the repository root, run
@@ -36,9 +36,11 @@ docker run \
     --shm-size 128G \
     --rm \
     --mount type=bind,src=.,dst=/app/diffusion-models-inference \
+    -e HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+    -e OMP_NUM_THREADS=16 \
     -e MIOPEN_USER_DB_PATH=/app/diffusion-models-inference/data/miopen/userdb \
     -e MIOPEN_FIND_MODE=1 \
-    -e MIOPEN_FIND_ENFORCE=4 \
+    -e MIOPEN_FIND_ENFORCE=3 \
     -e HOST_UID=$(id -u) \
     pytorch_xdit_core \
     bash /app/diffusion-models-inference/data/miopen/tune.sh
