@@ -42,6 +42,9 @@ fi
 # set HF_TOKEN
 export HF_TOKEN=$MAD_SECRETS_HFTOKEN
 
+# temporary fix to handle host ROCm version <6.4.2
+export HSA_NO_SCRATCH_RECLAIM=1
+
 # run workload
 RECORDS=$(bash -c $SCRIPT)
 

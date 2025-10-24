@@ -8,10 +8,9 @@
     "tags": [
         "inference",
         "diffusion",
-        "i2v",
+        "t2v",
         "pyt",
-        "xdit",
-        "weekly"
+        "xdit"
     ],
     "args": "--workload hunyuanvideo",
     "multiple_results": "results.csv"
@@ -28,8 +27,7 @@
         "diffusion",
         "i2v",
         "pyt",
-        "xdit",
-        "weekly"
+        "xdit"
     ],
     "args": "--workload wan_2_1",
     "multiple_results": "results.csv"
@@ -50,7 +48,7 @@
     ],
     "args": "--workload wan_2_2",
     "multiple_results": "results.csv"
-}
+},
 {
     "name": "pyt_xdit_flux",
     "dockerfile": "docker/pyt_xdit",
@@ -61,7 +59,7 @@
     "tags": [
         "inference",
         "diffusion",
-        "i2v",
+        "t2i",
         "pyt",
         "xdit"
     ],
