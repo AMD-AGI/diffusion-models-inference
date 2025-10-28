@@ -14,7 +14,7 @@ ARG PYTORCH_VISION_COMMIT="966da7e46f65d6d49df3e31214470a4fe5cc8e66"
 # deps image arguments
 ARG AITER_COMMIT="a25e55e"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
-ARG DIFFUSERS_COMMIT="345864e"
+ARG DIFFUSERS_COMMIT="40528e9"
 ARG ACCELERATE_COMMIT="34c1779"
 ARG XDIT_COMMIT="e585d98"
 ARG AO_COMMIT="8b72284"
@@ -167,7 +167,6 @@ RUN git clone https://github.com/feifeibear/long-context-attention.git && \
 RUN git clone https://github.com/huggingface/diffusers.git && \
     cd diffusers && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
-    git apply /patches/diffusers_aiter.patch && \
     pip install -e ".[torch]"
 # install accelerate
 RUN git clone https://github.com/huggingface/accelerate.git && \
