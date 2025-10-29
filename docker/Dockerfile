@@ -12,8 +12,8 @@
 ARG GPU_ARCH="gfx950"
 ARG THEROCK_COMMIT="e0f8f59cb6723d4edd17403e6e2c21e77e3776b9"
 ARG THEROCK_ROCM_NIGHTLY="7.9.0rc20250930"
-ARG TRITON_BRANCH="bbb06c0334a6772b92d24bde54956e675c8c6604"
-ARG PYTORCH_BRANCH="23acabb2075d2a7acd326c95213a7fa48750ee3b"
+ARG TRITON_COMMIT="bbb06c0334a6772b92d24bde54956e675c8c6604"
+ARG PYTORCH_COMMIT="23acabb2075d2a7acd326c95213a7fa48750ee3b"
 ARG PYTORCH_VISION_COMMIT="966da7e46f65d6d49df3e31214470a4fe5cc8e66"
 # deps image arguments
 ARG AITER_COMMIT="0112e7a"
@@ -65,8 +65,8 @@ RUN rocm-sdk path --root
 
 FROM base AS build_torch
 ARG THEROCK_COMMIT
-ARG TRITON_BRANCH
-ARG PYTORCH_BRANCH
+ARG TRITON_COMMIT
+ARG PYTORCH_COMMIT
 ARG PYTORCH_VISION_COMMIT
 
 WORKDIR /app
@@ -74,8 +74,8 @@ RUN pip install packaging
 RUN git clone https://github.com/ROCm/TheRock.git \
     && cd TheRock/external-builds/pytorch \
     && git checkout ${THEROCK_COMMIT} \
-    && python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_BRANCH} \
-    && python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/triton-lang/triton.git --repo-hashtag ${TRITON_BRANCH} --patchset nightly \
+    && python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} \
+    && python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/triton-lang/triton.git --repo-hashtag ${TRITON_COMMIT} --patchset nightly \
     && python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} \
     && USE_ROCM_CK_SDPA=ON python build_prod_wheels.py build --enable-pytorch-flash-attention-linux --output-dir /install
 
