@@ -7,10 +7,10 @@
 #
 
 # core image arguments
-ARG THEROCK_COMMIT="7afbe45"
-ARG TRITON_COMMIT="bbb06c0334a6772b92d24bde54956e675c8c6604"
-ARG PYTORCH_COMMIT="337ce5ab498bda16d7445f3861123d6c24be954d"
-ARG PYTORCH_VISION_COMMIT="966da7e46f65d6d49df3e31214470a4fe5cc8e66"
+ARG THEROCK_COMMIT="3e3f834ff81aa91b0dc721bb1aa2d3206b7d50c4"
+ARG TRITON_COMMIT="7416ffcb92cdbe98d9f97e4e6f95247e46dfc9fd"
+ARG PYTORCH_COMMIT="73adac05d13babb75410c3e033fdce57aa16881a"
+ARG PYTORCH_VISION_COMMIT="f5c6c2ec6490455e86f67b2a25c10390d60a27f7"
 # deps image arguments
 ARG AITER_COMMIT="a25e55e"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
@@ -39,7 +39,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dev \
     libglib2.0-dev \
     libglu1-mesa-dev \
-    liblzma-dev \
     libtool \
     ninja-build \
     patchelf \
@@ -58,11 +57,8 @@ ENV PATH="/venv/bin:$PATH"
 RUN git config --global user.name "TheRock Builder" && \
     git config --global user.email "builder@rocm.ai"
 
-FROM base AS build
+FROM base AS build_rocm
 ARG THEROCK_COMMIT
-ARG TRITON_COMMIT
-ARG PYTORCH_COMMIT
-ARG PYTORCH_VISION_COMMIT
 
 # install ROCm stack
 WORKDIR /app
@@ -80,10 +76,16 @@ RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     cmake --build /app/TheRock/build && \
     cmake --install /app/TheRock/build
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && ldconfig
+RUN echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && ldconfig
 ENV PATH="/opt/rocm/bin:$PATH" \
     ROCM_HOME=/opt/rocm \
     ROCM_PATH=/opt/rocm \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
+
+FROM build_rocm AS build
+ARG TRITON_COMMIT
+ARG PYTORCH_COMMIT
+ARG PYTORCH_VISION_COMMIT
 # fetch sources
 WORKDIR /app/TheRock/external-builds/pytorch
 RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} && \
@@ -102,7 +104,9 @@ RUN cd pytorch && \
     USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
     USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
     PYTORCH_ROCM_ARCH="gfx942;gfx950" \
-    CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
+    CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
+    LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
+    PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
@@ -122,6 +126,7 @@ RUN python -m pip install \
     /install/*.whl
 COPY docker/libkineto.conf /config/libkineto.conf
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && ldconfig
+RUN echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && ldconfig
 ENV PATH="/opt/rocm/bin:$PATH" \
     ROCM_HOME=/opt/rocm \
     ROCM_PATH=/opt/rocm \
