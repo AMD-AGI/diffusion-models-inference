@@ -8,6 +8,9 @@
 
 # core image arguments
 ARG THEROCK_COMMIT="3e3f834ff81aa91b0dc721bb1aa2d3206b7d50c4"
+# Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
+# This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
 ARG TRITON_COMMIT="7416ffcb92cdbe98d9f97e4e6f95247e46dfc9fd"
 ARG PYTORCH_COMMIT="73adac05d13babb75410c3e033fdce57aa16881a"
 ARG PYTORCH_VISION_COMMIT="f5c6c2ec6490455e86f67b2a25c10390d60a27f7"
@@ -59,12 +62,17 @@ RUN git config --global user.name "TheRock Builder" && \
 
 FROM base AS build_rocm
 ARG THEROCK_COMMIT
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
 
 # install ROCm stack
 WORKDIR /app
 RUN git clone https://github.com/ROCm/TheRock.git && \
     cd TheRock && \
     git reset --hard ${THEROCK_COMMIT} && \
+    if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
+        echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
+        git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
+    fi && \
     pip install -r requirements.txt && \
     python build_tools/fetch_sources.py
 RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
