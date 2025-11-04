@@ -46,7 +46,11 @@ export HF_TOKEN=$MAD_SECRETS_HFTOKEN
 export HSA_NO_SCRATCH_RECLAIM=1
 
 # run workload
-RECORDS=$(bash -c $SCRIPT)
+echo "Run instructions:"
+bash $SCRIPT --help
+echo "Run configurations:"
+bash $SCRIPT --mad --dry-run
+RECORDS=$(bash $SCRIPT --mad)
 
 if [ $? -ne 0 ]; then
   echo "Failed to run workload" >&2
@@ -54,9 +58,9 @@ if [ $? -ne 0 ]; then
 fi
 
 if [ $VERBOSE ]; then
-    echo $RECORDS
+    echo "$RECORDS"
 fi
 
 # save results
 echo -e "model,performance,metric" > ../results.csv
-echo -e $RECORDS  >> ../results.csv
+echo -e "$RECORDS"  >> ../results.csv

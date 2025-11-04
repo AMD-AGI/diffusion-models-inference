@@ -14,4 +14,9 @@ for script in "${scripts[@]}"; do
     fi
     echo "Running '${script}'"
     bash $script
+
+    if [ $? -ne 0 ]; then
+        echo "Failed to run '${script}'." >&2
+        exit 1
+    fi
 done
