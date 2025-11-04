@@ -65,8 +65,6 @@ WORKDIR /app
 RUN git clone https://github.com/ROCm/TheRock.git && \
     cd TheRock && \
     git reset --hard ${THEROCK_COMMIT} && \
-    git rev-parse HEAD > /app/therock.txt && \
-    git submodule status > /app/therock_submodules.txt && \
     pip install -r requirements.txt && \
     python build_tools/fetch_sources.py
 RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
@@ -119,7 +117,6 @@ RUN cd pytorch_vision && \
 
 FROM base AS core
 COPY --from=build /opt/rocm /opt/rocm
-COPY --from=build /app/therock*.txt /opt/rocm/share/TheRock/
 COPY --from=build /install/*.whl /install/
 RUN python -m pip install \
     --no-cache-dir \
