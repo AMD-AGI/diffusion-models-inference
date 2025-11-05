@@ -12,7 +12,7 @@ ARG FLASHATTENTION_COMMIT="5c1627a"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="40528e9"
 ARG ACCELERATE_COMMIT="34c1779"
-ARG XDIT_COMMIT="e585d98"
+ARG XDIT_COMMIT="83978b5"
 ARG AO_COMMIT="8b72284"
 # workload specific arguments
 ARG WAN1_REPO="https://github.com/Wan-Video/Wan2.1.git"
@@ -81,8 +81,6 @@ RUN git clone https://github.com/huggingface/accelerate.git && \
 RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/xdit.patch && \
-    git apply /patches/xdit_transformer_flux.patch && \
     git apply /patches-private/xfuser_envs.patch && \
     git apply /patches-private/xfuser_attention_processor.patch && \
     git apply /patches-private/xfuser_base_pipeline.patch && \
