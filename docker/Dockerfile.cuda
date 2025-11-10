@@ -1,0 +1,189 @@
+# Build example image with
+#
+# docker build -f docker/Dockerfile.cuda \
+#              -t pytorch_xdit_cuda .
+#
+# when running from repository root.
+#
+
+# deps image arguments
+ARG GPU_ARCH=""
+ARG FLASHATTENTION_COMMIT="5c1627a"
+ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
+ARG DIFFUSERS_COMMIT="40528e9"
+ARG ACCELERATE_COMMIT="34c1779"
+ARG XDIT_COMMIT="83978b5"
+ARG AO_COMMIT="8b72284"
+# workload specific arguments
+ARG WAN1_REPO="https://github.com/Wan-Video/Wan2.1.git"
+ARG WAN1_COMMIT="204f899"
+ARG WAN2_REPO="https://github.com/Wan-Video/Wan2.2.git"
+ARG WAN2_COMMIT="031a9be"
+
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
+FROM ${BASE_IMAGE} AS core
+
+# For ImportError: libGL.so.1: cannot open shared object file on nvcr.io/nvidia/pytorch:25.06-py3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM core AS deps
+ARG GPU_ARCH
+ARG FLASHATTENTION_COMMIT
+ARG LONGCONTEXTATTENTION_COMMIT
+ARG DIFFUSERS_COMMIT
+ARG ACCELERATE_COMMIT
+ARG XDIT_COMMIT
+ARG AO_COMMIT
+
+# setup
+WORKDIR /app/external
+COPY src/patches /patches
+COPY src/patches-private /patches-private
+# install flash-attention
+RUN if [[ -n "$GPU_ARCH" ]]; then \
+        pip uninstall -y flash-attn; \
+        git clone https://github.com/Dao-AILab/flash-attention.git && \
+        cd flash-attention && \
+        git reset --hard ${FLASHATTENTION_COMMIT}; \
+        if [ "$GPU_ARCH" = "hopper" ]; then \
+            cd hopper && \
+            python setup.py install; \
+        elif [ "$GPU_ARCH" = "blackwell" ]; then \
+            cd flash_attn/cute && \
+            git apply /patches-private/flash_attn_interface.patch && \
+            pip install -e .; \
+        else \
+            echo "invalid GPU_ARCH ${GPU_ARCH}"; \
+        fi \
+    fi
+# install yunchang
+RUN git clone https://github.com/feifeibear/long-context-attention.git && \
+    cd long-context-attention && \
+    git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
+    git apply /patches-private/yunchang_globals.patch && \
+    git apply /patches-private/yunchang_kernels.patch && \
+    git apply /patches-private/yunchang_attention.patch && \
+    pip install -e .
+# install diffusers
+RUN git clone https://github.com/huggingface/diffusers.git && \
+    cd diffusers && \
+    git reset --hard ${DIFFUSERS_COMMIT} && \
+    pip install -e ".[torch]"
+# install accelerate
+RUN git clone https://github.com/huggingface/accelerate.git && \
+    cd accelerate && \
+    pip install -e .
+# install xfuser
+RUN git clone https://github.com/xdit-project/xDiT.git && \
+    cd xDiT && \
+    git reset --hard ${XDIT_COMMIT} && \
+    git apply /patches-private/xfuser_envs.patch && \
+    git apply /patches-private/xfuser_attention_processor.patch && \
+    git apply /patches-private/xfuser_base_pipeline.patch && \
+    git apply /patches-private/xfuser_ring_flash_attn.patch && \
+    pip freeze | grep numpy > constraints.txt && \
+    pip install -c constraints.txt -e .
+# install torchao
+RUN git clone https://github.com/pytorch/ao.git && \
+    cd ao && \
+    git reset --hard ${AO_COMMIT} && \
+    pip install -e . --no-build-isolation
+# cleanup
+RUN rm -fr /patches
+RUN rm -fr /patches-private
+
+FROM deps AS hunyuanvideo
+
+WORKDIR /app/Hunyuanvideo
+COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/RUN.md
+COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
+COPY src/xDiT/ci/huvideo_utils.py /app/Hunyuanvideo/huvideo_utils.py
+COPY src/xDiT/ci/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
+
+FROM deps AS flux
+WORKDIR /app/Flux
+COPY src/flux/ci/README.md /app/Flux/RUN.md
+COPY src/flux/flux_utils.py /app/Flux/flux_utils.py
+COPY src/flux/flux_example.py /app/Flux/run.py
+COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
+COPY src/flux/requirements.txt /app/Flux/requirements.txt
+
+FROM deps AS wan2.1
+ARG GPU_ARCH
+ARG WAN1_REPO
+ARG WAN1_COMMIT
+
+WORKDIR /app
+RUN pip install "peft>=0.17.0" && \
+    git clone ${WAN1_REPO} Wan2.1 && \
+    cd Wan2.1 && \
+    git reset --hard ${WAN1_COMMIT} && \
+    sed -i '/^flash_attn/d' requirements.txt && \
+    sed -i '/^torch/d' requirements.txt && \
+    sed -i '/^torchvision/d' requirements.txt
+COPY src/wan_2_1/ci/README.md /app/Wan2.1/RUN.md
+COPY src/wan_2_1/scripts/wan_i2v.py /app/Wan2.1/run.py
+COPY src/wan_2_1/scripts/list_*.py /app/Wan2.1/
+COPY src/wan_2_1/scripts/timer.py /app/Wan2.1/
+COPY src/wan_2_1/patches /patches
+RUN git -C ./Wan2.1 apply /patches/image2video.patch && \
+    git -C ./Wan2.1 apply /patches/supported_sizes.patch && \
+    git -C ./Wan2.1 apply /patches/fsdp.patch && \
+    git -C ./Wan2.1 apply /patches/cuda_clip.patch && \
+    git -C ./Wan2.1 apply /patches/cuda_prompt_extend.patch && \
+    git -C ./Wan2.1 apply /patches/cuda_attention.patch && \
+    if [ "$GPU_ARCH" = "hopper" ]; then \
+        git -C ./Wan2.1 apply /patches/cuda_fav3_xdit_context_parallel.patch; \
+    elif [ "$GPU_ARCH" = "blackwell" ]; then \
+        git -C ./Wan2.1 apply /patches/cuda_fav4_xdit_context_parallel.patch; \
+    else \
+        git -C ./Wan2.1 apply /patches/cuda_torch_xdit_context_parallel.patch; \
+    fi
+
+FROM deps AS wan2.2
+ARG WAN2_REPO
+ARG WAN2_COMMIT
+
+WORKDIR /app
+RUN pip install "peft>=0.17.0" && \
+    git clone ${WAN2_REPO} Wan2.2 && \
+    cd Wan2.2 && \
+    git reset --hard ${WAN2_COMMIT} && \
+    sed -i '/^flash_attn/d' requirements.txt && \
+    sed -i '/^torch/d' requirements.txt && \
+    sed -i '/^torchvision/d' requirements.txt
+COPY src/wan_2_2/ci/README.md /app/Wan2.2/RUN.md
+COPY src/wan_2_2/scripts/wan_i2v.py /app/Wan2.2/run.py
+COPY src/wan_2_1/scripts/list_*.py /app/Wan2.2/
+COPY src/wan_2_1/scripts/timer.py /app/Wan2.2/
+COPY src/wan_2_1/patches /patches
+RUN patch -d ./Wan2.2 -p1 < /patches/fsdp.patch 
+COPY src/wan_2_2/patches /patches
+RUN git -C ./Wan2.2 apply /patches/image2video.patch && \
+    git -C ./Wan2.2 apply /patches/supported_sizes.patch && \
+    git -C ./Wan2.2 apply /patches/cuda_attention.patch && \
+    git -C ./Wan2.2 apply /patches/cuda_ulysses.patch && \
+    git -C ./Wan2.2 apply /patches/cuda_prompt_extend.patch
+
+FROM deps AS final
+
+WORKDIR /app
+COPY src/xDiT/ci/run.hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
+COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
+COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
+COPY --from=flux /app/Flux /app/Flux
+RUN cd /app/Flux && \
+    pip install --no-cache-dir -r requirements.txt
+COPY src/wan_2_1/ci/run.sh /app/.ci/run.wan_2_1.sh
+COPY --from=wan2.1 /app/Wan2.1 /app/Wan2.1
+RUN cd /app/Wan2.1 && \
+    pip install --no-cache-dir -r requirements.txt
+COPY src/wan_2_2/ci/run.sh /app/.ci/run.wan_2_2.sh
+COPY --from=wan2.2 /app/Wan2.2 /app/Wan2.2
+RUN cd /app/Wan2.2 && \
+    pip install --no-cache-dir -r requirements.txt
+COPY .ci/run.sh /app/.ci/run.sh

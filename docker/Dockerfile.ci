@@ -1,0 +1,284 @@
+# Build example image with
+#
+# docker build -f docker/Dockerfile.ci \
+#              -t amdsiloai/pytorch-xdit:latest .
+#
+# when running from repository root.
+#
+
+# core image arguments
+ARG THEROCK_COMMIT="3e3f834ff81aa91b0dc721bb1aa2d3206b7d50c4"
+# Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
+# This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
+ARG TRITON_COMMIT="7416ffcb92cdbe98d9f97e4e6f95247e46dfc9fd"
+ARG PYTORCH_COMMIT="73adac05d13babb75410c3e033fdce57aa16881a"
+ARG PYTORCH_VISION_COMMIT="f5c6c2ec6490455e86f67b2a25c10390d60a27f7"
+# deps image arguments
+ARG AITER_COMMIT="da9ce4100328afa0d7995cd0e7bb5744d6473cd0"
+ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
+ARG DIFFUSERS_COMMIT="40528e9"
+ARG ACCELERATE_COMMIT="34c1779"
+ARG XDIT_COMMIT="83978b5"
+ARG AO_COMMIT="8b72284"
+# workload specific arguments
+ARG WAN1_REPO="https://github.com/Wan-Video/Wan2.1.git"
+ARG WAN1_COMMIT="204f899"
+ARG WAN2_REPO="https://github.com/Wan-Video/Wan2.2.git"
+ARG WAN2_COMMIT="031a9be"
+
+FROM ubuntu:24.04 AS base
+
+# install depedencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    automake \
+    build-essential \
+    cmake \
+    freeglut3-dev \
+    gfortran \
+    git \
+    libgfortran5 \
+    libgl1 \
+    libgl1-mesa-dev \
+    libglib2.0-dev \
+    libglu1-mesa-dev \
+    libtool \
+    ninja-build \
+    patchelf \
+    python3 \
+    python3-dev \
+    python3-packaging \
+    python3-pip \
+    python3-venv \
+    wget \
+    xxd \
+    && rm -rf /var/lib/apt/lists/*
+
+# setup environment
+RUN python3 -m venv venv
+ENV PATH="/venv/bin:$PATH"
+RUN git config --global user.name "TheRock Builder" && \
+    git config --global user.email "builder@rocm.ai"
+
+FROM base AS build_rocm
+ARG THEROCK_COMMIT
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
+
+# install ROCm stack
+WORKDIR /app
+RUN git clone https://github.com/ROCm/TheRock.git && \
+    cd TheRock && \
+    git reset --hard ${THEROCK_COMMIT} && \
+    if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
+        echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
+        git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
+    fi && \
+    pip install -r requirements.txt && \
+    python build_tools/fetch_sources.py
+RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
+    -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
+    -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="gfx94X_gfx950_bundle" \
+    -DCMAKE_INSTALL_PREFIX=/opt/rocm && \
+    cmake --build /app/TheRock/build && \
+    cmake --install /app/TheRock/build
+RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && ldconfig
+RUN echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && ldconfig
+ENV PATH="/opt/rocm/bin:$PATH" \
+    ROCM_HOME=/opt/rocm \
+    ROCM_PATH=/opt/rocm \
+    HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
+
+FROM build_rocm AS build
+ARG TRITON_COMMIT
+ARG PYTORCH_COMMIT
+ARG PYTORCH_VISION_COMMIT
+# fetch sources
+WORKDIR /app/TheRock/external-builds/pytorch
+RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} && \
+    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/triton-lang/triton.git --repo-hashtag ${TRITON_COMMIT} --patchset nightly && \
+    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT}
+RUN mkdir /install
+# install triton
+RUN cd triton && \
+    pip install -r python/requirements.txt && \
+    pip wheel . --wheel-dir dist/ && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install pytorch
+RUN cd pytorch && \
+    pip install -r requirements.txt && \
+    USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
+    USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
+    PYTORCH_ROCM_ARCH="gfx942;gfx950" \
+    CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
+    LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
+    PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install vision
+RUN cd pytorch_vision && \
+    FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+
+FROM base AS core
+COPY --from=build /opt/rocm /opt/rocm
+COPY --from=build /install/*.whl /install/
+RUN python -m pip install \
+    --no-cache-dir \
+    /install/*.whl
+COPY docker/libkineto.conf /config/libkineto.conf
+RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && ldconfig
+RUN echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && ldconfig
+ENV PATH="/opt/rocm/bin:$PATH" \
+    ROCM_HOME=/opt/rocm \
+    ROCM_PATH=/opt/rocm \
+    HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode \
+    TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
+    KINETO_CONFIG="/config/libkineto.conf"
+
+FROM core AS private-deps
+
+WORKDIR /app/external
+# build opt_groupnorm
+COPY src/opt_groupnorm opt_groupnorm/
+RUN pip install setuptools && \
+    cd opt_groupnorm && \
+    MAX_JOBS=${MAX_JOBS} pip wheel --no-build-isolation . --wheel-dir dist/
+
+FROM core AS deps
+ARG AITER_COMMIT
+ARG LONGCONTEXTATTENTION_COMMIT
+ARG DIFFUSERS_COMMIT
+ARG ACCELERATE_COMMIT
+ARG XDIT_COMMIT
+ARG AO_COMMIT
+
+# setup
+WORKDIR /app/external
+COPY ./src/patches /patches
+# install opt_groupnorm
+COPY --from=private-deps /app/external/opt_groupnorm/dist/*.whl /install/opt_groupnorm/
+RUN pip install /install/opt_groupnorm/*.whl
+# install aiter
+RUN git clone https://github.com/ROCm/aiter.git && \
+    cd aiter && \
+    git reset --hard ${AITER_COMMIT} && \
+    git submodule update --init --recursive && \
+    python setup.py develop
+# install yunchang
+RUN git clone https://github.com/feifeibear/long-context-attention.git && \
+    cd long-context-attention && \
+    git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
+    pip install -e .
+# install diffusers
+RUN git clone https://github.com/huggingface/diffusers.git && \
+    cd diffusers && \
+    git reset --hard ${DIFFUSERS_COMMIT} && \
+    pip install -e ".[torch]"
+# install accelerate
+RUN git clone https://github.com/huggingface/accelerate.git && \
+    cd accelerate && \
+    pip install -e .
+# install xfuser
+RUN git clone https://github.com/xdit-project/xDiT.git && \
+    cd xDiT && \
+    git reset --hard ${XDIT_COMMIT} && \
+    pip freeze | grep numpy > constraints.txt && \
+    pip install -c constraints.txt -e .
+# install torchao
+RUN git clone https://github.com/pytorch/ao.git && \
+    cd ao && \
+    git reset --hard ${AO_COMMIT} && \
+    git apply /patches/ao.patch && \
+    pip install -e . --no-build-isolation
+# cleanup
+RUN rm -fr /patches
+
+FROM deps AS hunyuanvideo
+
+WORKDIR /app/Hunyuanvideo
+COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/RUN.md
+COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
+COPY src/xDiT/ci/huvideo_utils.py /app/Hunyuanvideo/huvideo_utils.py
+COPY src/xDiT/ci/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
+
+FROM deps AS flux
+WORKDIR /app/Flux
+COPY src/flux/ci/README.md /app/Flux/RUN.md
+COPY src/flux/flux_utils.py /app/Flux/flux_utils.py
+COPY src/flux/flux_example.py /app/Flux/run.py
+COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
+COPY src/flux/requirements.txt /app/Flux/requirements.txt
+
+FROM deps AS wan2.1
+ARG WAN1_REPO
+ARG WAN1_COMMIT
+
+WORKDIR /app
+RUN pip install "peft>=0.17.0" && \
+    git clone ${WAN1_REPO} Wan2.1 && \
+    cd Wan2.1 && \
+    git reset --hard ${WAN1_COMMIT} && \
+    sed -i '/^flash_attn/d' requirements.txt && \
+    sed -i '/^torch/d' requirements.txt && \
+    sed -i '/^torchvision/d' requirements.txt
+COPY src/wan_2_1/ci/README.md /app/Wan2.1/RUN.md
+COPY src/wan_2_1/scripts/wan_i2v.py /app/Wan2.1/run.py
+COPY src/wan_2_1/scripts/list_*.py /app/Wan2.1/
+COPY src/wan_2_1/scripts/timer.py /app/Wan2.1/
+COPY src/wan_2_1/patches /patches
+RUN git -C ./Wan2.1 apply /patches/image2video.patch && \
+    git -C ./Wan2.1 apply /patches/supported_sizes.patch && \
+    git -C ./Wan2.1 apply /patches/fsdp.patch && \
+    git -C ./Wan2.1 apply /patches/attention.patch && \
+    git -C ./Wan2.1 apply /patches/rmsnorm.patch && \
+    git -C ./Wan2.1 apply /patches/xdit_context_parallel.patch
+
+FROM deps AS wan2.2
+ARG WAN2_REPO
+ARG WAN2_COMMIT
+
+WORKDIR /app
+RUN pip install "peft>=0.17.0" && \
+    git clone ${WAN2_REPO} Wan2.2 && \
+    cd Wan2.2 && \
+    git reset --hard ${WAN2_COMMIT} && \
+    sed -i '/^flash_attn/d' requirements.txt && \
+    sed -i '/^torch/d' requirements.txt && \
+    sed -i '/^torchvision/d' requirements.txt
+COPY src/wan_2_2/ci/README.md /app/Wan2.2/RUN.md
+COPY src/wan_2_2/scripts/wan_i2v.py /app/Wan2.2/run.py
+COPY src/wan_2_1/scripts/list_*.py /app/Wan2.2/
+COPY src/wan_2_1/scripts/timer.py /app/Wan2.2/
+COPY src/wan_2_1/patches /patches
+RUN git -C ./Wan2.2 apply /patches/attention.patch && \
+    patch -d ./Wan2.2 -p1 < /patches/fsdp.patch 
+COPY src/wan_2_2/patches /patches
+RUN git -C ./Wan2.2 apply /patches/image2video.patch && \
+    git -C ./Wan2.2 apply /patches/supported_sizes.patch && \
+    git -C ./Wan2.2 apply /patches/rmsnorm.patch
+
+FROM deps AS final
+
+WORKDIR /app
+COPY src/xDiT/ci/run.hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
+COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
+COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
+COPY --from=flux /app/Flux /app/Flux
+RUN cd /app/Flux && \
+    pip install --no-cache-dir -r requirements.txt
+COPY src/wan_2_1/ci/run.sh /app/.ci/run.wan_2_1.sh
+COPY --from=wan2.1 /app/Wan2.1 /app/Wan2.1
+RUN cd /app/Wan2.1 && \
+    pip install --no-cache-dir -r requirements.txt
+COPY src/wan_2_2/ci/run.sh /app/.ci/run.wan_2_2.sh
+COPY --from=wan2.2 /app/Wan2.2 /app/Wan2.2
+RUN cd /app/Wan2.2 && \
+    pip install --no-cache-dir -r requirements.txt
+COPY .ci/run.sh /app/.ci/run.sh
+# use shared MIOpen databases
+COPY ./data/miopen/userdb /miopen_userdb
+ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
