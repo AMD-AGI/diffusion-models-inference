@@ -1,0 +1,21 @@
+diff --git a/yunchang/kernels/attention.py b/yunchang/kernels/attention.py
+index 8489e44..78a5406 100644
+--- a/yunchang/kernels/attention.py
++++ b/yunchang/kernels/attention.py
+@@ -20,6 +20,8 @@ from yunchang.globals import HAS_FLASH_ATTN, HAS_FLASH_ATTN_HOPPER, HAS_FLASHINF
+ if HAS_AITER:
+     import aiter
+     from aiter import flash_attn_func as flash_attn_func_aiter
++    import os
++    HOW_V3_BF16_CVT = int(os.environ.get("HOW_V3_BF16_CVT", "2"))
+ 
+ if HAS_FLASH_ATTN:
+     import flash_attn
+@@ -297,6 +299,7 @@ def flash_attn_forward_aiter(q, k, v,
+         window_size=window_size,
+         alibi_slopes = alibi_slopes,
+         return_lse=True,
++        how_v3_bf16_cvt=HOW_V3_BF16_CVT
+     )
+ 
+     return block_out, block_lse
