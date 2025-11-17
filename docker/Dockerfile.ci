@@ -57,12 +57,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # setup environment
 RUN python3 -m venv venv
 ENV PATH="/venv/bin:$PATH"
-RUN git config --global user.name "TheRock Builder" && \
-    git config --global user.email "builder@rocm.ai"
 
 FROM base AS build_rocm
 ARG THEROCK_COMMIT
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
+
+RUN git config --global user.name "TheRock Builder" && \
+    git config --global user.email "builder@rocm.ai"
 
 # install ROCm stack
 WORKDIR /app
