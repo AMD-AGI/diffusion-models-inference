@@ -8,7 +8,7 @@
 
 # deps image arguments
 ARG GPU_ARCH=""
-ARG FLASHATTENTION_COMMIT="5c1627a"
+ARG FLASHATTENTION_COMMIT="5d2cd3b"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="40528e9"
 ARG ACCELERATE_COMMIT="34c1779"
@@ -54,7 +54,6 @@ RUN if [[ -n "$GPU_ARCH" ]]; then \
             python setup.py install; \
         elif [ "$GPU_ARCH" = "blackwell" ]; then \
             cd flash_attn/cute && \
-            git apply /patches-private/flash_attn_interface.patch && \
             pip install -e .; \
         else \
             echo "invalid GPU_ARCH ${GPU_ARCH}"; \
