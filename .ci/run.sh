@@ -2,8 +2,8 @@
 
 scripts=(
     "/app/.ci/run.hunyuanvideo.sh"
-    "/app/.ci/run.wan_2_1.sh"
-    "/app/.ci/run.wan_2_2.sh"
+    "/app/.ci/run.wan2.1.sh"
+    "/app/.ci/run.wan2.2.sh"
     "/app/.ci/run.flux.sh"
 )
 

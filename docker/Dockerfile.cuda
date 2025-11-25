@@ -12,13 +12,8 @@ ARG FLASHATTENTION_COMMIT="5d2cd3b"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="40528e9"
 ARG ACCELERATE_COMMIT="34c1779"
-ARG XDIT_COMMIT="83978b5"
+ARG XDIT_COMMIT="ccba9d5"
 ARG AO_COMMIT="8b72284"
-# workload specific arguments
-ARG WAN1_REPO="https://github.com/Wan-Video/Wan2.1.git"
-ARG WAN1_COMMIT="204f899"
-ARG WAN2_REPO="https://github.com/Wan-Video/Wan2.2.git"
-ARG WAN2_COMMIT="031a9be"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
 FROM ${BASE_IMAGE} AS core
@@ -111,62 +106,14 @@ COPY src/flux/flux_example.py /app/Flux/run.py
 COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
 COPY src/flux/requirements.txt /app/Flux/requirements.txt
 
-FROM deps AS wan2.1
-ARG GPU_ARCH
-ARG WAN1_REPO
-ARG WAN1_COMMIT
+FROM deps AS wan
+WORKDIR /app/Wan
+COPY src/wan_xdit/ci/README.md /app/Wan/RUN.md
+COPY src/wan_xdit/wan_utils.py /app/Wan/wan_utils.py
+COPY src/wan_xdit/wan_example.py /app/Wan/run.py
+COPY src/wan_xdit/assets/i2v_input.JPG /app/Wan/i2v_input.JPG
+COPY src/wan_xdit/requirements.txt /app/Wan/requirements.txt
 
-WORKDIR /app
-RUN pip install "peft>=0.17.0" && \
-    git clone ${WAN1_REPO} Wan2.1 && \
-    cd Wan2.1 && \
-    git reset --hard ${WAN1_COMMIT} && \
-    sed -i '/^flash_attn/d' requirements.txt && \
-    sed -i '/^torch/d' requirements.txt && \
-    sed -i '/^torchvision/d' requirements.txt
-COPY src/wan_2_1/ci/README.md /app/Wan2.1/RUN.md
-COPY src/wan_2_1/scripts/wan_i2v.py /app/Wan2.1/run.py
-COPY src/wan_2_1/scripts/list_*.py /app/Wan2.1/
-COPY src/wan_2_1/scripts/timer.py /app/Wan2.1/
-COPY src/wan_2_1/patches /patches
-RUN git -C ./Wan2.1 apply /patches/image2video.patch && \
-    git -C ./Wan2.1 apply /patches/supported_sizes.patch && \
-    git -C ./Wan2.1 apply /patches/fsdp.patch && \
-    git -C ./Wan2.1 apply /patches/cuda_clip.patch && \
-    git -C ./Wan2.1 apply /patches/cuda_prompt_extend.patch && \
-    git -C ./Wan2.1 apply /patches/cuda_attention.patch && \
-    if [ "$GPU_ARCH" = "hopper" ]; then \
-        git -C ./Wan2.1 apply /patches/cuda_fav3_xdit_context_parallel.patch; \
-    elif [ "$GPU_ARCH" = "blackwell" ]; then \
-        git -C ./Wan2.1 apply /patches/cuda_fav4_xdit_context_parallel.patch; \
-    else \
-        git -C ./Wan2.1 apply /patches/cuda_torch_xdit_context_parallel.patch; \
-    fi
-
-FROM deps AS wan2.2
-ARG WAN2_REPO
-ARG WAN2_COMMIT
-
-WORKDIR /app
-RUN pip install "peft>=0.17.0" && \
-    git clone ${WAN2_REPO} Wan2.2 && \
-    cd Wan2.2 && \
-    git reset --hard ${WAN2_COMMIT} && \
-    sed -i '/^flash_attn/d' requirements.txt && \
-    sed -i '/^torch/d' requirements.txt && \
-    sed -i '/^torchvision/d' requirements.txt
-COPY src/wan_2_2/ci/README.md /app/Wan2.2/RUN.md
-COPY src/wan_2_2/scripts/wan_i2v.py /app/Wan2.2/run.py
-COPY src/wan_2_1/scripts/list_*.py /app/Wan2.2/
-COPY src/wan_2_1/scripts/timer.py /app/Wan2.2/
-COPY src/wan_2_1/patches /patches
-RUN patch -d ./Wan2.2 -p1 < /patches/fsdp.patch 
-COPY src/wan_2_2/patches /patches
-RUN git -C ./Wan2.2 apply /patches/image2video.patch && \
-    git -C ./Wan2.2 apply /patches/supported_sizes.patch && \
-    git -C ./Wan2.2 apply /patches/cuda_attention.patch && \
-    git -C ./Wan2.2 apply /patches/cuda_ulysses.patch && \
-    git -C ./Wan2.2 apply /patches/cuda_prompt_extend.patch
 
 FROM deps AS final
 
@@ -177,12 +124,9 @@ COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
 COPY --from=flux /app/Flux /app/Flux
 RUN cd /app/Flux && \
     pip install --no-cache-dir -r requirements.txt
-COPY src/wan_2_1/ci/run.sh /app/.ci/run.wan_2_1.sh
-COPY --from=wan2.1 /app/Wan2.1 /app/Wan2.1
-RUN cd /app/Wan2.1 && \
-    pip install --no-cache-dir -r requirements.txt
-COPY src/wan_2_2/ci/run.sh /app/.ci/run.wan_2_2.sh
-COPY --from=wan2.2 /app/Wan2.2 /app/Wan2.2
-RUN cd /app/Wan2.2 && \
+COPY src/wan_xdit/ci/run.wan2.1.sh /app/.ci/run.wan2.1.sh
+COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
+COPY --from=wan /app/Wan /app/Wan
+RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY .ci/run.sh /app/.ci/run.sh

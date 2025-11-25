@@ -19,13 +19,8 @@ ARG AITER_COMMIT="de14bec0ca5a9de94e10f5cad4dc1541ac558689"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="40528e9"
 ARG ACCELERATE_COMMIT="34c1779"
-ARG XDIT_COMMIT="83978b5"
+ARG XDIT_COMMIT="ccba9d5"
 ARG AO_COMMIT="8b72284"
-# workload specific arguments
-ARG WAN1_REPO="https://github.com/Wan-Video/Wan2.1.git"
-ARG WAN1_COMMIT="204f899"
-ARG WAN2_REPO="https://github.com/Wan-Video/Wan2.2.git"
-ARG WAN2_COMMIT="031a9be"
 
 FROM ubuntu:24.04 AS base
 
@@ -192,7 +187,6 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     pip freeze | grep numpy > constraints.txt && \
-    git apply /patches/xDiT_usp_aiter_round_mode.patch && \
     pip install -c constraints.txt -e .
 # install torchao
 RUN git clone https://github.com/pytorch/ao.git && \
@@ -219,53 +213,13 @@ COPY src/flux/flux_example.py /app/Flux/run.py
 COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
 COPY src/flux/requirements.txt /app/Flux/requirements.txt
 
-FROM deps AS wan2.1
-ARG WAN1_REPO
-ARG WAN1_COMMIT
-
-WORKDIR /app
-RUN pip install "peft>=0.17.0" && \
-    git clone ${WAN1_REPO} Wan2.1 && \
-    cd Wan2.1 && \
-    git reset --hard ${WAN1_COMMIT} && \
-    sed -i '/^flash_attn/d' requirements.txt && \
-    sed -i '/^torch/d' requirements.txt && \
-    sed -i '/^torchvision/d' requirements.txt
-COPY src/wan_2_1/ci/README.md /app/Wan2.1/RUN.md
-COPY src/wan_2_1/scripts/wan_i2v.py /app/Wan2.1/run.py
-COPY src/wan_2_1/scripts/list_*.py /app/Wan2.1/
-COPY src/wan_2_1/scripts/timer.py /app/Wan2.1/
-COPY src/wan_2_1/patches /patches
-RUN git -C ./Wan2.1 apply /patches/image2video.patch && \
-    git -C ./Wan2.1 apply /patches/supported_sizes.patch && \
-    git -C ./Wan2.1 apply /patches/fsdp.patch && \
-    git -C ./Wan2.1 apply /patches/attention.patch && \
-    git -C ./Wan2.1 apply /patches/rmsnorm.patch && \
-    git -C ./Wan2.1 apply /patches/xdit_context_parallel.patch
-
-FROM deps AS wan2.2
-ARG WAN2_REPO
-ARG WAN2_COMMIT
-
-WORKDIR /app
-RUN pip install "peft>=0.17.0" && \
-    git clone ${WAN2_REPO} Wan2.2 && \
-    cd Wan2.2 && \
-    git reset --hard ${WAN2_COMMIT} && \
-    sed -i '/^flash_attn/d' requirements.txt && \
-    sed -i '/^torch/d' requirements.txt && \
-    sed -i '/^torchvision/d' requirements.txt
-COPY src/wan_2_2/ci/README.md /app/Wan2.2/RUN.md
-COPY src/wan_2_2/scripts/wan_i2v.py /app/Wan2.2/run.py
-COPY src/wan_2_1/scripts/list_*.py /app/Wan2.2/
-COPY src/wan_2_1/scripts/timer.py /app/Wan2.2/
-COPY src/wan_2_1/patches /patches
-RUN git -C ./Wan2.2 apply /patches/attention.patch && \
-    patch -d ./Wan2.2 -p1 < /patches/fsdp.patch 
-COPY src/wan_2_2/patches /patches
-RUN git -C ./Wan2.2 apply /patches/image2video.patch && \
-    git -C ./Wan2.2 apply /patches/supported_sizes.patch && \
-    git -C ./Wan2.2 apply /patches/rmsnorm.patch
+FROM deps AS wan
+WORKDIR /app/Wan
+COPY src/wan_xdit/ci/README.md /app/Wan/RUN.md
+COPY src/wan_xdit/wan_utils.py /app/Wan/wan_utils.py
+COPY src/wan_xdit/wan_example.py /app/Wan/run.py
+COPY src/wan_xdit/assets/i2v_input.JPG /app/Wan/i2v_input.JPG
+COPY src/wan_xdit/requirements.txt /app/Wan/requirements.txt
 
 FROM deps AS final
 
@@ -276,13 +230,10 @@ COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
 COPY --from=flux /app/Flux /app/Flux
 RUN cd /app/Flux && \
     pip install --no-cache-dir -r requirements.txt
-COPY src/wan_2_1/ci/run.sh /app/.ci/run.wan_2_1.sh
-COPY --from=wan2.1 /app/Wan2.1 /app/Wan2.1
-RUN cd /app/Wan2.1 && \
-    pip install --no-cache-dir -r requirements.txt
-COPY src/wan_2_2/ci/run.sh /app/.ci/run.wan_2_2.sh
-COPY --from=wan2.2 /app/Wan2.2 /app/Wan2.2
-RUN cd /app/Wan2.2 && \
+COPY src/wan_xdit/ci/run.wan2.1.sh /app/.ci/run.wan2.1.sh
+COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
+COPY --from=wan /app/Wan /app/Wan
+RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY .ci/run.sh /app/.ci/run.sh
 # use shared MIOpen databases
