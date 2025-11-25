@@ -5,6 +5,7 @@ scripts=(
     "/app/.ci/run.wan2.1.sh"
     "/app/.ci/run.wan2.2.sh"
     "/app/.ci/run.flux.sh"
+    "/app/.ci/run.stablediffusion_3_5.sh"
 )
 
 if [ -n "${BENCHMARK_LIST}" ]; then # Check if BENCHMARK_LIST is used to override default benchmarks
