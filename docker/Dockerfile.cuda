@@ -105,6 +105,7 @@ COPY src/flux/flux_utils.py /app/Flux/flux_utils.py
 COPY src/flux/flux_example.py /app/Flux/run.py
 COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
 COPY src/flux/requirements.txt /app/Flux/requirements.txt
+COPY src/flux/cat.png /app/Flux/cat.png
 
 FROM deps AS wan
 WORKDIR /app/Wan
@@ -121,6 +122,7 @@ WORKDIR /app
 COPY src/xDiT/ci/run.hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
 COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
 COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
+COPY src/flux/ci/run.flux.kontext.sh /app/.ci/run.flux.kontext.sh
 COPY --from=flux /app/Flux /app/Flux
 RUN cd /app/Flux && \
     pip install --no-cache-dir -r requirements.txt
