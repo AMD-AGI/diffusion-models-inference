@@ -6,6 +6,7 @@ scripts=(
     "/app/.ci/run.wan2.2.sh"
     "/app/.ci/run.flux.sh"
     "/app/.ci/run.flux.kontext.sh"
+    "/app/.ci/run.flux2.sh"
     "/app/.ci/run.stablediffusion_3_5.sh"
 )
 
