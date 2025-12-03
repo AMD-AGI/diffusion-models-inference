@@ -92,7 +92,6 @@ RUN rm -fr /patches
 RUN rm -fr /patches-private
 
 FROM deps AS hunyuanvideo
-
 WORKDIR /app/Hunyuanvideo
 COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/RUN.md
 COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
@@ -107,6 +106,12 @@ COPY src/flux/flux_example.py /app/Flux/run.py
 COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
 COPY src/flux/requirements.txt /app/Flux/requirements.txt
 
+FROM deps AS stablediffusion3.5
+WORKDIR /app/StableDiffusion3.5
+COPY src/SD_3_5/ci/README.md /app/StableDiffusion3.5/RUN.md
+COPY src/SD_3_5/scripts/sd3_utils.py /app/StableDiffusion3.5/sd3_utils.py
+COPY src/SD_3_5/scripts/sd3_example.py /app/StableDiffusion3.5/run.py
+
 FROM deps AS wan
 WORKDIR /app/Wan
 COPY src/wan_xdit/ci/README.md /app/Wan/RUN.md
@@ -114,7 +119,6 @@ COPY src/wan_xdit/wan_utils.py /app/Wan/wan_utils.py
 COPY src/wan_xdit/wan_example.py /app/Wan/run.py
 COPY src/wan_xdit/assets/i2v_input.JPG /app/Wan/i2v_input.JPG
 COPY src/wan_xdit/requirements.txt /app/Wan/requirements.txt
-
 
 FROM deps AS final
 
@@ -125,6 +129,8 @@ COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
 COPY --from=flux /app/Flux /app/Flux
 RUN cd /app/Flux && \
     pip install --no-cache-dir -r requirements.txt
+COPY src/SD_3_5/ci/run.stablediffusion_3_5.sh /app/.ci/run.stablediffusion_3_5.sh
+COPY --from=stablediffusion3.5 /app/StableDiffusion3.5 /app/StableDiffusion3.5
 COPY src/wan_xdit/ci/run.wan2.1.sh /app/.ci/run.wan2.1.sh
 COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
 COPY --from=wan /app/Wan /app/Wan
