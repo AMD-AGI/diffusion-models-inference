@@ -139,3 +139,5 @@ COPY --from=wan /app/Wan /app/Wan
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY .ci/run.sh /app/.ci/run.sh
+# apex causes rms_forward_affine crash in SD3.5 and numpy>2 a runtime error in Hunyuanvideo
+RUN pip uninstall apex && pip install "numpy<2"
