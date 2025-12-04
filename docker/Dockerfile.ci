@@ -237,6 +237,7 @@ COPY src/xDiT/ci/run.hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
 COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
 COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
 COPY src/flux/ci/run.flux.kontext.sh /app/.ci/run.flux.kontext.sh
+COPY src/flux/ci/run.flux2.sh /app/.ci/run.flux2.sh
 COPY --from=flux /app/Flux /app/Flux
 RUN cd /app/Flux && \
     pip install --no-cache-dir -r requirements.txt
