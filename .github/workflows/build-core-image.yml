@@ -12,11 +12,11 @@ on:
       runner:
         description: "Runner label"
         required: false
-        default: "self-hosted"
+        default: "build-only"
 jobs:
   build-xdit-core:
     name: Build xDiT core image
-    runs-on: ${{ github.event.inputs.runner || 'self-hosted' }}
+    runs-on: ${{ github.event.inputs.runner || 'build-only' }}
     timeout-minutes: 540
     steps:
       - name: Check out repository
