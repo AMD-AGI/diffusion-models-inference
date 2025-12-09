@@ -39,3 +39,8 @@ for script in "${scripts[@]}"; do
         exit 1
     fi
 done
+
+if [ -f "/app/.ci/quality_check.sh" ]; then
+    echo "Running quality checks"
+    bash /app/.ci/quality_check.sh
+fi
