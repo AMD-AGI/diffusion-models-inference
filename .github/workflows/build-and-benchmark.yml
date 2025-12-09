@@ -1,0 +1,442 @@
+name: Build and Benchmark xDiT
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_branch:
+        description: 'Git branch to build from'
+        required: true
+        default: 'main'
+      image_tag_suffix:
+        description: 'Custom tag suffix for built images'
+        required: false
+        default: ''
+      additional_tag:
+        description: 'Additional tag for the final image'
+        required: false
+        default: ''
+      use_prebuilt_untuned:
+        description: 'Skip core and untuned image builds'
+        type: boolean
+        required: false
+        default: false
+      prebuilt_untuned_image_tag:
+        description: 'Tag of prebuilt untuned image'
+        required: false
+        default: ''
+      benchmark_list:
+        description: 'Comma-separated list of benchmarks (hunyuanvideo,wan_2_1,wan_2_2,flux)'
+        required: false
+        default: ''
+      benchmark_only:
+        description: 'Skip everything except benchmarking'
+        type: boolean
+        required: false
+        default: false
+      benchmark_image_tag:
+        description: 'Tag of tuned image for benchmark-only mode'
+        required: false
+        default: ''
+      mi300_enabled:
+        description: 'Enable MI300 optimization and benchmarking'
+        type: boolean
+        required: false
+        default: true
+      mi300_runner:
+        description: 'Runner label for MI300'
+        required: false
+        default: 'mi300'
+      mi308_enabled:
+        description: 'Enable MI308 optimization and benchmarking'
+        type: boolean
+        required: false
+        default: false
+      mi308_runner:
+        description: 'Runner label for MI308'
+        required: false
+        default: 'mi308'
+      mi325_enabled:
+        description: 'Enable MI325 optimization and benchmarking'
+        type: boolean
+        required: false
+        default: false
+      mi325_runner:
+        description: 'Runner label for MI325'
+        required: false
+        default: 'mi325'
+      mi350_enabled:
+        description: 'Enable MI350 optimization and benchmarking'
+        type: boolean
+        required: false
+        default: false
+      mi350_runner:
+        description: 'Runner label for MI350'
+        required: false
+        default: 'mi350'
+      mi355_enabled:
+        description: 'Enable MI355 optimization and benchmarking'
+        type: boolean
+        required: false
+        default: true
+      mi355_runner:
+        description: 'Runner label for MI355'
+        required: false
+        default: 'mi355'
+
+env:
+  CORE_IMAGE: amdsiloai/pytorch-xdit-core
+  STAGING_IMAGE: amdsiloai/pytorch-xdit-staging
+
+jobs:
+  validate-and-build-core:
+    name: Validate parameters and build core image
+    runs-on: self-hosted
+    outputs:
+      image_tag: ${{ steps.generate_tag.outputs.tag }}
+      core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
+      staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
+      any_arch_enabled: ${{ steps.check_archs.outputs.any_enabled }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_branch }}
+      
+      - name: Generate image tag
+        id: generate_tag
+        run: |         
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          if [ -n "${{ inputs.image_tag_suffix }}" ]; then
+            IMAGE_TAG="${IMAGE_TAG}-${{ inputs.image_tag_suffix }}"
+          fi
+          echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "staging_image_with_tag=${{ env.STAGING_IMAGE }}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          
+          # Store tags in artifact as JSON
+          mkdir -p build-metadata
+          cat > build-metadata/tags.json << EOF
+          {
+            "image_tag": "${IMAGE_TAG}",
+            "core_image_with_tag": "${{ env.CORE_IMAGE }}:${IMAGE_TAG}",
+            "staging_image_with_tag": "${{ env.STAGING_IMAGE }}:${IMAGE_TAG}"
+          }
+          EOF
+      
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-build-metadata
+          path: build-metadata/
+      
+      - name: Check architectures
+        id: check_archs
+        run: |
+          ANY_ENABLED=false
+          if [ "${{ inputs.mi300_enabled }}" = "true" ] || \
+             [ "${{ inputs.mi308_enabled }}" = "true" ] || \
+             [ "${{ inputs.mi325_enabled }}" = "true" ] || \
+             [ "${{ inputs.mi350_enabled }}" = "true" ] || \
+             [ "${{ inputs.mi355_enabled }}" = "true" ]; then
+            ANY_ENABLED=true
+          fi
+          echo "any_enabled=${ANY_ENABLED}" >> $GITHUB_OUTPUT
+      
+      - name: Validate parameters
+        run: |
+          if [ "${{ steps.check_archs.outputs.any_enabled }}" = "false" ]; then
+            echo "Error: No architectures enabled"
+            exit 1
+          fi
+          if [ "${{ inputs.use_prebuilt_untuned }}" = "true" ] && [ -z "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
+            echo "Error: USE_PREBUILT_UNTUNED enabled but no PREBUILT_UNTUNED_IMAGE_TAG specified"
+            exit 1
+          fi
+          if [ "${{ inputs.benchmark_only }}" = "true" ] && [ -z "${{ inputs.benchmark_image_tag }}" ]; then
+            echo "Error: BENCHMARK_ONLY enabled but no BENCHMARK_IMAGE_TAG specified"
+            exit 1
+          fi
+      
+      - name: Log in to Docker Hub
+        if: ${{ !inputs.benchmark_only }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+      
+      - name: Set up Docker Buildx
+        if: ${{ !inputs.benchmark_only }}
+        uses: docker/setup-buildx-action@v3
+        with:
+          cleanup: false
+      
+      - name: Check if prebuilt image exists
+        if: ${{ !inputs.benchmark_only && inputs.use_prebuilt_untuned }}
+        id: check_prebuilt
+        run: |
+          if docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build core image
+        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        uses: docker/build-push-action@v5
+        env:
+          BUILDKIT_PROGRESS: plain
+        with:
+          file: docker/Dockerfile.ci
+          context: .
+          target: core
+          push: true
+          tags: ${{ steps.generate_tag.outputs.core_image_with_tag }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+      
+      - name: Extract version information
+        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        run: |
+          mkdir -p versions
+          git rev-parse HEAD > versions/repository.txt
+          docker create --name core ${{ steps.generate_tag.outputs.core_image_with_tag }}
+          docker cp core:/opt/rocm/share/therock/ versions/ || true
+          docker rm core
+      
+      - name: Upload version artifacts
+        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-versions
+          path: versions/**
+      
+      - name: Build untuned image
+        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        uses: docker/build-push-action@v5
+        env:
+          BUILDKIT_PROGRESS: plain
+        with:
+          file: docker/Dockerfile.ci
+          context: .
+          push: true
+          tags: ${{ steps.generate_tag.outputs.staging_image_with_tag }}-temp
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+      
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: ''
+          containers: ''
+
+  generate-matrix:
+    name: Generate architecture matrix
+    needs: validate-and-build-core
+    runs-on: ubuntu-latest
+    if: ${{ needs.validate-and-build-core.outputs.any_arch_enabled == 'true' }}
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate matrix
+        id: set-matrix
+        run: |
+          MATRIX_JSON='{"include":['
+          FIRST=true
+          
+          # MI300
+          if [ "${{ inputs.mi300_enabled }}" = "true" ]; then
+            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"${{ inputs.mi300_runner }}\"}"
+            FIRST=false
+          fi
+          
+          # MI308
+          if [ "${{ inputs.mi308_enabled }}" = "true" ]; then
+            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi308\",\"runner\":\"${{ inputs.mi308_runner }}\"}"
+            FIRST=false
+          fi
+          
+          # MI325
+          if [ "${{ inputs.mi325_enabled }}" = "true" ]; then
+            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"${{ inputs.mi325_runner }}\"}"
+            FIRST=false
+          fi
+          
+          # MI350
+          if [ "${{ inputs.mi350_enabled }}" = "true" ]; then
+            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi350\",\"runner\":\"${{ inputs.mi350_runner }}\"}"
+            FIRST=false
+          fi
+          
+          # MI355
+          if [ "${{ inputs.mi355_enabled }}" = "true" ]; then
+            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"${{ inputs.mi355_runner }}\"}"
+            FIRST=false
+          fi
+          
+          MATRIX_JSON="${MATRIX_JSON}]}"
+          echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+          echo "Generated matrix: ${MATRIX_JSON}"
+
+  tune-and-benchmark:
+    name: ${{ matrix.arch }} tuning and benchmarking
+    needs: [validate-and-build-core, generate-matrix]
+    runs-on: ${{ matrix.runner }}
+    if: ${{ always() && needs.validate-and-build-core.outputs.any_arch_enabled == 'true' && !cancelled() && (!failure() || inputs.benchmark_only) }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_branch }}
+          
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      - name: Load build metadata
+        id: metadata
+        uses: ./.github/actions/load-build-metadata
+        with:
+          run_number: ${{ github.run_number }}
+      
+      - name: Determine image to use
+        id: image
+        run: |
+          if [ "${{ inputs.benchmark_only }}" = "true" ]; then
+            echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.use_prebuilt_untuned }}" = "true" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+            echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "used_image=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Pull image
+        run: docker pull ${{ steps.image.outputs.used_image }}
+      
+      - name: Run MIOpen tuning
+        if: ${{ !inputs.benchmark_only }}
+        uses: ./.github/actions/run-miopen-tuning
+        with:
+          image: ${{ steps.image.outputs.used_image }}
+          arch: ${{ matrix.arch }}
+      
+      - name: Upload MIOpen tuning results
+        if: ${{ !inputs.benchmark_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
+          path: data/miopen/userdb/gfx*
+      
+      - name: Run benchmarks
+        uses: ./.github/actions/run-benchmarks
+        with:
+          image: ${{ steps.image.outputs.used_image }}
+          arch: ${{ matrix.arch }}
+          benchmark_list: ${{ inputs.benchmark_list }}
+          benchmark_only: ${{ inputs.benchmark_only }}
+          hf_token: ${{ secrets.HF_TOKEN }}
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
+          path: benchmarks/${{ matrix.arch }}/**
+      
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: '${{ steps.image.outputs.used_image }}'
+          containers: 'xdit-bench miopen-tune'
+
+  build-final:
+    name: Build final tuned image
+    needs: [validate-and-build-core, tune-and-benchmark]
+    runs-on: self-hosted
+    if: ${{ !inputs.benchmark_only && !cancelled() && !failure() }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_branch }}
+      
+      - name: Load build metadata
+        id: metadata
+        uses: ./.github/actions/load-build-metadata
+        with:
+          run_number: ${{ github.run_number }}
+      
+      - name: Download all MIOpen artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ github.run_number }}-miopen-*
+          merge-multiple: true
+          path: data/miopen/userdb
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          cleanup: false
+      
+      - name: Determine untuned image
+        id: untuned
+        run: |
+          if [ "${{ inputs.use_prebuilt_untuned }}" = "true" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+            echo "tag=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Pull untuned image
+        run: docker pull ${{ steps.untuned.outputs.tag }} || true
+      
+      - name: Build final tuned image
+        uses: docker/build-push-action@v5
+        env:
+          BUILDKIT_PROGRESS: plain
+        with:
+          file: docker/Dockerfile.ci
+          context: .
+          push: true
+          tags: ${{ steps.metadata.outputs.staging_image_with_tag }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+          cache-from: ${{ steps.untuned.outputs.tag }}
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      - name: Tag with additional tag
+        if: ${{ inputs.additional_tag != '' }}
+        run: |
+          docker tag ${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ inputs.additional_tag }}
+          docker push ${{ env.STAGING_IMAGE }}:${{ inputs.additional_tag }}
+      
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}'
+          containers: 'core'
