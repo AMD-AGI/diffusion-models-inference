@@ -21,6 +21,7 @@ ARG DIFFUSERS_COMMIT="6bf668c"
 ARG ACCELERATE_COMMIT="b521400"
 ARG XDIT_COMMIT="8b491ff"
 ARG AO_COMMIT="8b72284"
+ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
 FROM ubuntu:24.04 AS base
 
@@ -151,6 +152,7 @@ ARG DIFFUSERS_COMMIT
 ARG ACCELERATE_COMMIT
 ARG XDIT_COMMIT
 ARG AO_COMMIT
+ARG ARBITER_COMMIT
 
 # setup
 WORKDIR /app/external
@@ -196,6 +198,23 @@ RUN git clone https://github.com/pytorch/ao.git && \
     git reset --hard ${AO_COMMIT} && \
     git apply /patches/ao.patch && \
     pip install -e . --no-build-isolation
+# install arbiter
+RUN git clone https://github.com/fal-ai/arbiter.git && \
+    cd arbiter && \
+    git reset --hard ${ARBITER_COMMIT} && \
+    # too strict torch version, drop dependency
+    sed -i '/numpy/d' pyproject.toml && \
+    # the requested pyiqa version depends on transformers==4.37.2 which we cannot use
+    sed -i '/pyiqa/d' pyproject.toml && \
+    # numba dependency is not used
+    sed -i '/numba/d' pyproject.toml && \
+    # facexlib is not used
+    sed -i '/facexlib/d' pyproject.toml && \
+    # drop llvmlite
+    sed -i '/llvmlite/d' pyproject.toml && \
+    # to be sure, pin numpy and transformers to their current versions
+    pip freeze | grep -E 'numpy|transformers' > constraints.txt && \
+    pip install --no-cache-dir -c constraints.txt -e .
 # cleanup
 RUN rm -fr /patches
 
@@ -249,6 +268,9 @@ COPY --from=wan /app/Wan /app/Wan
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY .ci/run.sh /app/.ci/run.sh
+COPY .ci/quality_check.sh /app/.ci/quality_check.sh
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
 ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
+# add quality references of workloads
+ADD references/ /app/references/
