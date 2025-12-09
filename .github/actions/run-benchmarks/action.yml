@@ -1,0 +1,59 @@
+name: Run Benchmarks
+description: Run xDiT benchmarks for a specific architecture
+
+inputs:
+  image:
+    description: 'Docker image to use for benchmarking'
+    required: true
+  arch:
+    description: 'Architecture name (mi300, mi308, mi325, mi350, mi355)'
+    required: true
+  benchmark_list:
+    description: 'Comma-separated list of benchmarks to run'
+    required: false
+    default: ''
+  benchmark_only:
+    description: 'Whether running in benchmark-only mode'
+    required: false
+    default: 'false'
+  hf_token:
+    description: 'HuggingFace token for model downloads'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Create benchmark output directory
+      shell: bash
+      run: mkdir -p $GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}
+    
+    - name: Run benchmarks
+      shell: bash
+      run: |
+        MIOPEN_USER_DB_PATH_ENV=""
+        if [ "${{ inputs.benchmark_only }}" != "true" ]; then
+          MIOPEN_USER_DB_PATH_ENV="-e MIOPEN_USER_DB_PATH=/app/diffusion-models-inference/data/miopen/userdb"
+        fi
+        
+        docker run \
+          --cap-add=SYS_PTRACE \
+          --security-opt seccomp=unconfined \
+          --user root \
+          --device=/dev/kfd \
+          --device=/dev/dri \
+          --group-add video \
+          --ipc=host \
+          --network host \
+          --rm \
+          --privileged \
+          --shm-size 128G \
+          --name xdit-bench \
+          --mount type=bind,src="$GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}",dst=/outputs \
+          --mount type=bind,src="$(pwd)",dst=/app/diffusion-models-inference \
+          $MIOPEN_USER_DB_PATH_ENV \
+          -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+          -e OMP_NUM_THREADS=16 \
+          -e HF_TOKEN=${{ inputs.hf_token }} \
+          -e BENCHMARK_LIST="${{ inputs.benchmark_list }}" \
+          ${{ inputs.image }} \
+          bash -c "/app/.ci/run.sh"

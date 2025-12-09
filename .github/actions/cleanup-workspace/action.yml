@@ -1,0 +1,46 @@
+name: 'Cleanup Workspace'
+description: 'Cleans up Docker resources and workspace files'
+inputs:
+  images:
+    description: 'Space-separated list of Docker images to remove'
+    required: false
+    default: ''
+  containers:
+    description: 'Space-separated list of Docker containers to remove'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Remove containers
+      if: ${{ inputs.containers != '' }}
+      shell: bash
+      run: |
+        for container in ${{ inputs.containers }}; do
+          echo "Removing container: $container"
+          docker rm -f $container || true
+        done
+    
+    - name: Remove images
+      if: ${{ inputs.images != '' }}
+      shell: bash
+      run: |
+        for image in ${{ inputs.images }}; do
+          echo "Removing image: $image"
+          docker rmi -f $image || true
+        done
+    
+    - name: Prune Docker images
+      shell: bash
+      run: docker image prune -f || true
+    
+    - name: Clean workspace
+      shell: bash
+      run: |
+        sudo rm -rf ${{ github.workspace }}/* || true
+    
+    - name: Show GPU status
+      shell: bash
+      run: |
+        amd-smi || true
+        rocm-smi || true
