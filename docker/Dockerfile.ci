@@ -17,9 +17,9 @@ ARG PYTORCH_VISION_COMMIT="f5c6c2ec6490455e86f67b2a25c10390d60a27f7"
 # deps image arguments
 ARG AITER_COMMIT="de14bec0ca5a9de94e10f5cad4dc1541ac558689"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
-ARG DIFFUSERS_COMMIT="6bf668c"
+ARG DIFFUSERS_COMMIT="a1f36ee"
 ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="8b491ff"
+ARG XDIT_COMMIT="adf2681"
 ARG AO_COMMIT="8b72284"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -249,6 +249,12 @@ COPY src/wan_xdit/wan_example.py /app/Wan/run.py
 COPY src/wan_xdit/assets/i2v_input.JPG /app/Wan/i2v_input.JPG
 COPY src/wan_xdit/requirements.txt /app/Wan/requirements.txt
 
+FROM deps AS z_image
+WORKDIR /app/Z-Image
+COPY src/z_image/ci/README.md /app/Z-Image/RUN.md
+COPY src/z_image/z_image_utils.py /app/Z-Image/z_image_utils.py
+COPY src/z_image/z_image_example.py /app/Z-Image/run.py
+
 FROM deps AS final
 
 WORKDIR /app
@@ -267,6 +273,8 @@ COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
 COPY --from=wan /app/Wan /app/Wan
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
+COPY --from=z_image /app/Z-Image /app/Z-Image
+COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
 COPY .ci/run.sh /app/.ci/run.sh
 COPY .ci/quality_check.sh /app/.ci/quality_check.sh
 # use shared MIOpen databases
