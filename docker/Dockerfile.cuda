@@ -10,9 +10,9 @@
 ARG GPU_ARCH=""
 ARG FLASHATTENTION_COMMIT="5d2cd3b"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
-ARG DIFFUSERS_COMMIT="6bf668c"
+ARG DIFFUSERS_COMMIT="a1f36ee"
 ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="8b491ff"
+ARG XDIT_COMMIT="adf2681"
 ARG AO_COMMIT="8b72284"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
@@ -123,6 +123,12 @@ COPY src/wan_xdit/wan_example.py /app/Wan/run.py
 COPY src/wan_xdit/assets/i2v_input.JPG /app/Wan/i2v_input.JPG
 COPY src/wan_xdit/requirements.txt /app/Wan/requirements.txt
 
+FROM deps AS zimage
+WORKDIR /app/Z-Image
+COPY src/z_image/ci/README.md /app/Z-Image/RUN.md
+COPY src/z_image/z_image_utils.py /app/Z-Image/z_image_utils.py
+COPY src/z_image/z_image_example.py /app/Z-Image/run.py
+
 FROM deps AS final
 
 WORKDIR /app
@@ -139,6 +145,8 @@ COPY --from=stablediffusion3.5 /app/StableDiffusion3.5 /app/StableDiffusion3.5
 COPY src/wan_xdit/ci/run.wan2.1.sh /app/.ci/run.wan2.1.sh
 COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
 COPY --from=wan /app/Wan /app/Wan
+COPY --from=zimage /app/Z-Image /app/Z-Image
+COPY src/z_image/ci/run.zimage.sh /app/.ci/run.zimage.sh
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY .ci/run.sh /app/.ci/run.sh
