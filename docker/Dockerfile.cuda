@@ -123,7 +123,7 @@ COPY src/wan_xdit/wan_example.py /app/Wan/run.py
 COPY src/wan_xdit/assets/i2v_input.JPG /app/Wan/i2v_input.JPG
 COPY src/wan_xdit/requirements.txt /app/Wan/requirements.txt
 
-FROM deps AS zimage
+FROM deps AS z_image
 WORKDIR /app/Z-Image
 COPY src/z_image/ci/README.md /app/Z-Image/RUN.md
 COPY src/z_image/z_image_utils.py /app/Z-Image/z_image_utils.py
@@ -145,8 +145,8 @@ COPY --from=stablediffusion3.5 /app/StableDiffusion3.5 /app/StableDiffusion3.5
 COPY src/wan_xdit/ci/run.wan2.1.sh /app/.ci/run.wan2.1.sh
 COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
 COPY --from=wan /app/Wan /app/Wan
-COPY --from=zimage /app/Z-Image /app/Z-Image
-COPY src/z_image/ci/run.zimage.sh /app/.ci/run.zimage.sh
+COPY --from=z_image /app/Z-Image /app/Z-Image
+COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY .ci/run.sh /app/.ci/run.sh
