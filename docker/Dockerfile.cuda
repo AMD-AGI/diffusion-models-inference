@@ -81,6 +81,7 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
     git apply /patches-private/xfuser_base_pipeline.patch && \
     git apply /patches-private/xfuser_ring_flash_attn.patch && \
     git apply /patches-private/xfuser_usp.patch && \
+    git apply /patches-private/xfuser_runtime_state.patch && \
     git apply /patches/xfuser_joint_attn_processor2_0_usp.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .

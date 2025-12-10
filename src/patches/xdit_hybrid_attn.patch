@@ -1,0 +1,180 @@
+diff --git a/xfuser/core/distributed/runtime_state.py b/xfuser/core/distributed/runtime_state.py
+index 6b6f486..8551f7a 100644
+--- a/xfuser/core/distributed/runtime_state.py
++++ b/xfuser/core/distributed/runtime_state.py
+@@ -157,6 +165,51 @@ class DiTRuntimeState(RuntimeState):
+                 backbone_inner_dim=pipeline.transformer.config.num_attention_heads
+                 * pipeline.transformer.config.attention_head_dim,
+             )
++        self.use_hybrid_fp8_attn = False
++        self.use_fp8_attn = False
++
++    def check_fp8_availability(self, use_fp8_attn: bool, use_hybrid_fp8_attn: bool):
++        if (use_fp8_attn or use_hybrid_fp8_attn):
++            if envs.PACKAGES_CHECKER.packages_info["has_aiter"]:
++                try:
++                    from aiter import flash_attn_fp8_pertensor_func
++                except ImportError:
++                    raise RuntimeError("aiter fp8 flash attention is not available")
++
++                if self.parallel_config.sp_config.ring_degree > 1:
++                    raise RuntimeError(
++                        "Fp8 attention is not supported with ring flash attention"
++                    )
++            else:
++                raise RuntimeError(
++                    "Only AITER is currently supported for fp8 attention."
++                )
++
++        if (use_fp8_attn and use_hybrid_fp8_attn):
++            raise RuntimeError("Choose either fp8 attention or hybrid fp8 attention, not both.")
++
++    def increment_step_counter(self):
++        """
++        Keep track of the current denoising step, and set fp8 flag based on the current step.
++        Used for hybrid fp8 attention, when toggling between bf16 and fp8 is needed.
++        When the entire denoising process is over, the step counter is reset to 0.
++        """
++        if self.use_hybrid_fp8_attn:
++            self.use_fp8_attn = self.fp8_decision_vector[self.step_counter]
++            self.step_counter += 1
++            if self.step_counter >= self.total_steps:
++                self.step_counter = 0
++
++    def set_hybrid_attn_parameters(self, fp8_decision_vector: torch.Tensor):
++        """
++        Set the parameters for hybrid fp8 attention.
++        fp8_decision_vector: A boolean tensor of length equal to the total number of denoising steps.
++        Each element indicates whether to use fp8 attention (True) or bf16 attention (False).
++        """
++        self.fp8_decision_vector = fp8_decision_vector
++        self.total_steps = len(fp8_decision_vector)
++        self.step_counter = 0
++        self.use_hybrid_fp8_attn = True
+ 
+     def set_input_parameters(
+         self,
+diff --git a/xfuser/model_executor/layers/usp.py b/xfuser/model_executor/layers/usp.py
+index 744ac13..cf3f1ba 100644
+--- a/xfuser/model_executor/layers/usp.py
++++ b/xfuser/model_executor/layers/usp.py
+@@ -22,6 +22,7 @@ from xfuser.core.distributed import (
+ from packaging.version import parse
+ from xfuser.envs import PACKAGES_CHECKER
+ from xfuser.core.cache_manager.cache_manager import get_cache_manager
++from xfuser.core.distributed import get_runtime_state
+ env_info = PACKAGES_CHECKER.get_packages_info()
+ HAS_FLASH_ATTN = env_info["has_flash_attn"]
+ if HAS_FLASH_ATTN:
+@@ -50,21 +51,11 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
+             "dropout_p": dropout_p,
+             "is_causal": is_causal,
+         }
+-        if HAS_AITER:
+-            out, *_ = _templated_ring_attention(
+-                PROCESS_GROUP.RING_PG,
+-                1,
+-                _aiter_attn_call,
+-                query,
+-                key,
+-                value,
+-                **kwargs,
+-            )
+-        elif HAS_FLASH_ATTN:
++        if HAS_AITER or HAS_FLASH_ATTN:
+             out, *_ = _templated_ring_attention(
+                 PROCESS_GROUP.RING_PG,
+                 1,
+-                _flash_attn_call,
++                _aiter_bf16_attn_call if HAS_AITER else _flash_attn_call,
+                 query,
+                 key,
+                 value,
+@@ -94,7 +85,7 @@ def ring_attn(query, key, value, dropout_p=0.0, is_causal=False):
+             out, *_ = _templated_ring_attention(
+                 PROCESS_GROUP.RING_PG,
+                 1,
+-                _aiter_attn_call,
++                _aiter_bf16_attn_call,
+                 query,
+                 key,
+                 value,
+@@ -135,6 +126,16 @@ def _maybe_wait(tensor: torch.Tensor) -> torch.Tensor:
+         return tensor.wait()
+     return tensor
+ 
++def _check_if_use_fp8_attn():
++    use_fp8_attn = False
++    try:
++        use_fp8_attn = get_runtime_state().use_fp8_attn
++    except:
++        pass
++    if not HAS_AITER and use_fp8_attn:
++        raise RuntimeError("FP8 attention requested but AITER is not available.")
++    return use_fp8_attn
++
+ 
+ def _sdpa_all_to_all_single(x):
+     x_shape = x.shape
+@@ -174,8 +175,30 @@ def _ft_c_output_all_to_all(x):
+     x = x.reshape(world_size, s // world_size, b, -1, d).permute(2, 0, 3, 1, 4).reshape(b, -1, s // world_size, d)
+     return x
+ 
++def _aiter_fp8_attn_call(query, key, value, dropout_p, is_causal):
++    """
++    Performs the necessary tensor permutes and
++    then calls attention through AITER
++    """
++    query = torch.permute(query, [0, 2, 1, 3]).contiguous()
++    key = torch.permute(key, [0, 2, 1, 3]).contiguous()
++    value = torch.permute(value, [0, 2, 1, 3]).contiguous()
++
++    softmax_lse = None
++    quant_dtype = aiter.dtypes.fp8
++    # Descale not yet supported in AITER.
++    quant_q, _ = aiter.per_tensor_quant(query, scale=torch.tensor(1, device=query.device), quant_dtype=quant_dtype)
++    quant_k, _ = aiter.per_tensor_quant(key, scale=torch.tensor(1, device=key.device), quant_dtype=quant_dtype)
++    quant_v, _ = aiter.per_tensor_quant(value, scale=torch.tensor(1, device=value.device), quant_dtype=quant_dtype)
++    torch._dynamo.graph_break() # Without this line, fp8 call will crash due to q and k dont have the same dtype, which is not true.
++    output = aiter.flash_attn_fp8_pertensor_func(
++        quant_q, quant_k, quant_v,
++        causal=is_causal,
++    )
++    output = torch.permute(output, [0, 2, 1, 3])
++    return output, softmax_lse
+ 
+-def _aiter_attn_call(query, key, value, dropout_p, is_causal):
++def _aiter_bf16_attn_call(query, key, value, dropout_p, is_causal):
+     """
+     Performs the necessary tensor permutes and
+     then calls attention through AITER
+@@ -183,6 +206,7 @@ def _aiter_attn_call(query, key, value, dropout_p, is_causal):
+     query = torch.permute(query, [0, 2, 1, 3]).contiguous()
+     key = torch.permute(key, [0, 2, 1, 3]).contiguous()
+     value = torch.permute(value, [0, 2, 1, 3]).contiguous()
++
+     attn_kwargs = {
+         "dropout_p": dropout_p,
+         "causal": is_causal,
+@@ -205,6 +229,7 @@ def _flash_attn_call(query, key, value, dropout_p, is_causal):
+     Performs the necessary tensor permutes and
+     then calls attention through flash_attn
+     """
++
+     query = torch.permute(query, [0, 2, 1, 3])
+     key = torch.permute(key, [0, 2, 1, 3])
+     value = torch.permute(value, [0, 2, 1, 3])
+@@ -223,8 +248,12 @@ def _attention(query, key, value, dropout_p, is_causal):
+     """
+     Calls the correct attention mechanism based on the available libraries
+     """
++    use_fp8_attn = _check_if_use_fp8_attn()
+     if HAS_AITER:
+-        output, _ = _aiter_attn_call(query, key, value, dropout_p, is_causal)
++        if use_fp8_attn:
++            output, _ = _aiter_fp8_attn_call(query, key, value, dropout_p, is_causal)
++        else:
++            output, _ = _aiter_bf16_attn_call(query, key, value, dropout_p, is_causal)
+         return output
+     elif HAS_FLASH_ATTN:
+         output, _ = _flash_attn_call(query, key, value, dropout_p, is_causal)
