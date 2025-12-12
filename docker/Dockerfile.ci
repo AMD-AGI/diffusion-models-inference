@@ -7,13 +7,13 @@
 #
 
 # core image arguments
-ARG THEROCK_COMMIT="3e3f834ff81aa91b0dc721bb1aa2d3206b7d50c4"
+ARG THEROCK_COMMIT="1728a81e5cd97ff366dc04e2517cf53774d53501"
 # Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
 # This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
-ARG TRITON_COMMIT="7416ffcb92cdbe98d9f97e4e6f95247e46dfc9fd"
-ARG PYTORCH_COMMIT="73adac05d13babb75410c3e033fdce57aa16881a"
-ARG PYTORCH_VISION_COMMIT="f5c6c2ec6490455e86f67b2a25c10390d60a27f7"
+ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
+ARG PYTORCH_COMMIT="91be249cee02ddd0b31f98438ca1b82d10e13dc4"
+ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
 # deps image arguments
 ARG AITER_COMMIT="de14bec0ca5a9de94e10f5cad4dc1541ac558689"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
@@ -28,8 +28,10 @@ FROM ubuntu:24.04 AS base
 # install depedencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     automake \
+    bison \
     build-essential \
     cmake \
+    flex \
     freeglut3-dev \
     gfortran \
     git \
@@ -46,6 +48,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-packaging \
     python3-pip \
     python3-venv \
+    texinfo \
     wget \
     xxd \
     && rm -rf /var/lib/apt/lists/*
@@ -78,9 +81,14 @@ RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DCMAKE_INSTALL_PREFIX=/opt/rocm && \
     cmake --build /app/TheRock/build && \
     cmake --install /app/TheRock/build
+# FIXME: the next line is a hack to get missing `hip` directory in the installation.
+#       This is fixed upstream by https://github.com/ROCm/rocm-systems/pull/2232 
+#       the hack should be removed when the fix is part of rocm-systems submodule 
+#       commit of TheRock.
+RUN cp -R /app/TheRock/rocm-systems/projects/rocprofiler-compute/src/hip /opt/rocm/libexec/rocprofiler-compute/
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && ldconfig
 RUN echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && ldconfig
-ENV PATH="/opt/rocm/bin:$PATH" \
+ENV PATH="/opt/rocm/bin:/opt/rocm/libexec/rocprofiler-compute:$PATH" \
     ROCM_HOME=/opt/rocm \
     ROCM_PATH=/opt/rocm \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
@@ -91,8 +99,8 @@ ARG PYTORCH_COMMIT
 ARG PYTORCH_VISION_COMMIT
 # fetch sources
 WORKDIR /app/TheRock/external-builds/pytorch
-RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/pytorch/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} && \
-    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/triton-lang/triton.git --repo-hashtag ${TRITON_COMMIT} --patchset nightly && \
+RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} && \
+    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} && \
     python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT}
 RUN mkdir /install
 # install triton
@@ -129,7 +137,7 @@ RUN python -m pip install \
 COPY docker/libkineto.conf /config/libkineto.conf
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && ldconfig
 RUN echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && ldconfig
-ENV PATH="/opt/rocm/bin:$PATH" \
+ENV PATH="/opt/rocm/bin:/opt/rocm/libexec/rocprofiler-compute:$PATH" \
     ROCM_HOME=/opt/rocm \
     ROCM_PATH=/opt/rocm \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode \
@@ -216,6 +224,8 @@ RUN git clone https://github.com/fal-ai/arbiter.git && \
     # to be sure, pin numpy and transformers to their current versions
     pip freeze | grep -E 'numpy|transformers' > constraints.txt && \
     pip install --no-cache-dir -c constraints.txt -e .
+# rocprofiler-compute runtime deps
+RUN pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt
 # cleanup
 RUN rm -fr /patches
 
