@@ -15,6 +15,15 @@ on:
         description: 'Additional tag for the final image'
         required: false
         default: ''
+      use_prebuilt_core:
+        description: 'Skip core image build'
+        type: boolean
+        required: false
+        default: false
+      prebuilt_core_image_tag:
+        description: 'Tag of prebuilt core image'
+        required: false
+        default: ''
       use_prebuilt_untuned:
         description: 'Skip core and untuned image builds'
         type: boolean
@@ -153,6 +162,10 @@ jobs:
             echo "Error: No architectures enabled"
             exit 1
           fi
+          if [ "${{ inputs.use_prebuilt_core }}" = "true" ] && [ -z "${{ inputs.prebuilt_core_image_tag }}" ]; then
+            echo "Error: USE_PREBUILT_CORE enabled but no PREBUILT_CORE_IMAGE_TAG specified"
+            exit 1
+          fi
           if [ "${{ inputs.use_prebuilt_untuned }}" = "true" ] && [ -z "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
             echo "Error: USE_PREBUILT_UNTUNED enabled but no PREBUILT_UNTUNED_IMAGE_TAG specified"
             exit 1
@@ -185,8 +198,18 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
       
+      - name: Check if prebuilt core image exists
+        if: ${{ !inputs.benchmark_only && inputs.use_prebuilt_core }}
+        id: check_prebuilt_core
+        run: |
+          if docker manifest inspect ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }} > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Build core image
-        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_core || steps.check_prebuilt_core.outputs.exists == 'false') && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
         uses: docker/build-push-action@v5
         env:
           BUILDKIT_PROGRESS: plain
@@ -201,7 +224,7 @@ jobs:
             BUILDKIT_STEP_LOG_MAX_SIZE=104857600
       
       - name: Extract version information
-        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_core || steps.check_prebuilt_core.outputs.exists == 'false') && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
         run: |
           mkdir -p versions
           git rev-parse HEAD > versions/repository.txt
@@ -210,11 +233,15 @@ jobs:
           docker rm core
       
       - name: Upload version artifacts
-        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_core || steps.check_prebuilt_core.outputs.exists == 'false') && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}-versions
           path: versions/**
+      
+      - name: Pull prebuilt core image
+        if: ${{ !inputs.benchmark_only && inputs.use_prebuilt_core && steps.check_prebuilt_core.outputs.exists == 'true' && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        run: docker pull ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}
       
       - name: Build untuned image
         if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
@@ -229,6 +256,7 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+          cache-from: ${{ inputs.use_prebuilt_core && steps.check_prebuilt_core.outputs.exists == 'true' && format('{0}:{1}', env.CORE_IMAGE, inputs.prebuilt_core_image_tag) || '' }}
       
       - name: Cleanup
         if: always()
