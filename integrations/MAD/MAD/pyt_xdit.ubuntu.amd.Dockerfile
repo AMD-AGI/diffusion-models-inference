@@ -24,7 +24,7 @@
 # SOFTWARE.
 #
 #################################################################################
-ARG BASE_DOCKER=amdsiloai/pytorch-xdit:v25.12
+ARG BASE_DOCKER=amdsiloai/pytorch-xdit:v25.13
 FROM ${BASE_DOCKER} AS base
 
 RUN apt-get update && apt install -y lshw && rm -rf /var/lib/apt/lists/*
