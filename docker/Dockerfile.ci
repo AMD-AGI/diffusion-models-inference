@@ -19,7 +19,7 @@ ARG AITER_COMMIT="de14bec0ca5a9de94e10f5cad4dc1541ac558689"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="a1f36ee"
 ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="adf2681"
+ARG XDIT_COMMIT="7ed13e9bd2f90a563439afbd305330857f7380bf"
 ARG AO_COMMIT="8b72284"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -203,7 +203,9 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
     git reset --hard ${XDIT_COMMIT} && \
     pip freeze | grep numpy > constraints.txt && \
     git apply /patches/xfuser_joint_attn_processor2_0_usp.patch && \
-    git apply /patches/xdit_hybrid_attn.patch && \
+    git apply /patches/xfuser_attention_backend.patch && \
+    git apply /patches/xfuser_runtime_state.patch && \
+    git apply /patches/xfuser_usp.patch && \
     pip install -c constraints.txt -e .
 # install torchao
 RUN git clone https://github.com/pytorch/ao.git && \
