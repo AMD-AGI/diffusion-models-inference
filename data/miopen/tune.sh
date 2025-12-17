@@ -6,7 +6,7 @@ HOST_UID=${HOST_UID:-$(id -u)}
 
 # set repository root directory
 WORKDIR=$(pwd)
-ROOTDIR="${ROOT_DIR:-/app/diffusion-models-inference}"
+ROOTDIR="${ROOTDIR:-/app/diffusion-models-inference}"
 
 # set MIOpen ENVs
 MIOPEN_USER_DB_PATH=${MIOPEN_USER_DB_PATH:-$ROOTDIR/data/miopen/userdb}
