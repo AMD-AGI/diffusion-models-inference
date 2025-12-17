@@ -7,12 +7,11 @@
 #
 
 # deps image arguments
-ARG GPU_ARCH=""
 ARG FLASHATTENTION_COMMIT="5d2cd3b"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="a1f36ee"
 ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="adf2681"
+ARG XDIT_COMMIT="7ed13e9bd2f90a563439afbd305330857f7380bf"
 ARG AO_COMMIT="8b72284"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
@@ -26,7 +25,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 FROM core AS deps
-ARG GPU_ARCH
 ARG FLASHATTENTION_COMMIT
 ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
@@ -39,21 +37,12 @@ WORKDIR /app/external
 COPY src/patches /patches
 COPY src/patches-private /patches-private
 # install flash-attention
-RUN if [[ -n "$GPU_ARCH" ]]; then \
-        pip uninstall -y flash-attn; \
-        git clone https://github.com/Dao-AILab/flash-attention.git && \
-        cd flash-attention && \
-        git reset --hard ${FLASHATTENTION_COMMIT}; \
-        if [ "$GPU_ARCH" = "hopper" ]; then \
-            cd hopper && \
-            python setup.py install; \
-        elif [ "$GPU_ARCH" = "blackwell" ]; then \
-            cd flash_attn/cute && \
-            pip install -e .; \
-        else \
-            echo "invalid GPU_ARCH ${GPU_ARCH}"; \
-        fi \
-    fi
+RUN pip uninstall -y flash_attn && \
+    git clone https://github.com/Dao-AILab/flash-attention.git && \
+    cd flash-attention && \
+    git reset --hard ${FLASHATTENTION_COMMIT} && \
+    (cd hopper && python setup.py install) && \
+    (cd flash_attn/cute && pip install -e .)
 # install yunchang
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
@@ -76,13 +65,10 @@ RUN git clone https://github.com/huggingface/accelerate.git && \
 RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches-private/xfuser_envs.patch && \
-    git apply /patches-private/xfuser_attention_processor.patch && \
-    git apply /patches-private/xfuser_base_pipeline.patch && \
-    git apply /patches-private/xfuser_ring_flash_attn.patch && \
-    git apply /patches-private/xfuser_usp.patch && \
-    git apply /patches-private/xfuser_runtime_state.patch && \
     git apply /patches/xfuser_joint_attn_processor2_0_usp.patch && \
+    git apply /patches/xfuser_attention_backend.patch && \
+    git apply /patches/xfuser_runtime_state.patch && \
+    git apply /patches/xfuser_usp.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # install torchao
