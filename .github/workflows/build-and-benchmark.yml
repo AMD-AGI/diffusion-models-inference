@@ -38,8 +38,8 @@ on:
         type: boolean
         required: false
         default: true
-      benchmark_list:
-        description: 'Comma-separated list of benchmarks (hunyuanvideo,wan_2_1,wan_2_2,flux)'
+      benchmark_flags:
+        description: 'Flags used to filter benchmarks, leave empty to run all. Example, to run only release benchmarks: --tag release'
         required: false
         default: ''
       benchmark_only:
@@ -379,7 +379,7 @@ jobs:
         with:
           image: ${{ steps.image.outputs.used_image }}
           arch: ${{ matrix.arch }}
-          benchmark_list: ${{ inputs.benchmark_list }}
+          benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: ${{ inputs.benchmark_only }}
           hf_token: ${{ secrets.HF_TOKEN }}
       

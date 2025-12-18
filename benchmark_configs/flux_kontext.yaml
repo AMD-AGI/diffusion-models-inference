@@ -1,0 +1,71 @@
+- name: flux_kontext.default
+  tags: [release, mad, lucid, instinct]
+  model: black-forest-labs/FLUX.1-Kontext-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 30
+    max_sequence_length: 512
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    img_file_path: /app/Flux/cat.png
+    model_type: flux_kontext
+    guidance_scale: 2.5
+    num_repetitions: 25
+    attention_backend: aiter
+
+- name: flux_kontext.default.hopper
+  tags: [lucid, hopper]
+  model: black-forest-labs/FLUX.1-Kontext-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 30
+    max_sequence_length: 512
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    img_file_path: /app/Flux/cat.png
+    model_type: flux_kontext
+    guidance_scale: 2.5
+    num_repetitions: 25
+    attention_backend: cudnn
+
+- name: flux_kontext.default.blackwell
+  tags: [lucid, blackwell]
+  model: black-forest-labs/FLUX.1-Kontext-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 30
+    max_sequence_length: 512
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    img_file_path: /app/Flux/cat.png
+    model_type: flux_kontext
+    guidance_scale: 2.5
+    num_repetitions: 25
+    attention_backend: cudnn

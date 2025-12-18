@@ -8,8 +8,8 @@ inputs:
   arch:
     description: 'Architecture name (mi300, mi308, mi325, mi350, mi355)'
     required: true
-  benchmark_list:
-    description: 'Comma-separated list of benchmarks to run'
+  benchmark_flags:
+    description: 'Flags used to filter benchmarks, leave empty to run all. Example, to run only release benchmarks: --tag release'
     required: false
     default: ''
   benchmark_only:
@@ -55,6 +55,6 @@ runs:
           -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
           -e OMP_NUM_THREADS=16 \
           -e HF_TOKEN=${{ inputs.hf_token }} \
-          -e BENCHMARK_LIST="${{ inputs.benchmark_list }}" \
+          -e BENCHMARK_FLAGS="${{ inputs.benchmark_flags }}" \
           ${{ inputs.image }} \
-          bash -c "/app/.ci/run.sh"
+          sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && /app/.ci/quality_check.sh'

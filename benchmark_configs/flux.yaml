@@ -1,0 +1,395 @@
+- name: flux.default
+  tags: [release, instinct]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: aiter
+
+- name: flux.default.hopper
+  tags: [hopper]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: cudnn
+
+- name: flux.default.blackwell
+  tags: [blackwell]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: cudnn
+
+- name: flux.usp
+  tags: [release, mad, lucid, instinct]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: aiter
+
+- name: flux.usp.hopper
+  tags: [lucid, hopper]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: cudnn
+
+- name: flux.usp.blackwell
+  tags: [lucid, blackwell]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: cudnn
+
+- name: flux.single_gpu
+  tags: [release, instinct]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 1
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 1
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: aiter
+
+- name: flux.single_gpu.hopper
+  tags: [hopper]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 1
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 1
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: cudnn
+
+- name: flux.single_gpu.blackwell
+  tags: [blackwell]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 1
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 1
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 50
+    attention_backend: cudnn
+
+- name: flux.default_2k
+  tags: [release, instinct]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: aiter
+
+- name: flux.default_2k.hopper
+  tags: [hopper]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: cudnn
+
+- name: flux.default_2k.blackwell
+  tags: [blackwell]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: cudnn
+
+- name: flux.usp_2k
+  tags: [release, mad, lucid, instinct]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: aiter
+
+- name: flux.usp_2k.hopper
+  tags: [lucid, hopper]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: cudnn
+
+- name: flux.usp_2k.blackwell
+  tags: [lucid, blackwell]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 8
+  runner: torchrun
+  entrypoint: /app/Flux/run_usp.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: cudnn
+
+- name: flux.single_gpu_2k
+  tags: [release, instinct]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 1
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 1
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: aiter
+
+- name: flux.single_gpu_2k.hopper
+  tags: [hopper]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 1
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 1
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: cudnn
+
+- name: flux.single_gpu_2k.blackwell
+  tags: [blackwell]
+  model: black-forest-labs/FLUX.1-dev
+  revision: null
+  num_gpus: 1
+  runner: torchrun
+  entrypoint: /app/Flux/run.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_steps: 5
+    no_use_resolution_binning: True
+    ulysses_degree: 1
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_repetitions: 25
+    attention_backend: cudnn
