@@ -300,7 +300,8 @@ RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY --from=z_image /app/Z-Image /app/Z-Image
 COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
-COPY .ci/run.sh /app/.ci/run.sh
+COPY .ci/run.py /app/.ci/run.py
+COPY benchmark_configs/ /app/.ci/benchmark_configs/
 COPY .ci/quality_check.sh /app/.ci/quality_check.sh
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
