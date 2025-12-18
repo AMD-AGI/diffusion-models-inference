@@ -141,11 +141,14 @@ RUN cd pytorch_vision && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
 
-FROM rocm_only AS core
+FROM base AS install_torch_stack
 COPY --from=build_torch_stack /install/*.whl /install/
 RUN python -m pip install \
     --no-cache-dir \
     /install/*.whl
+
+FROM rocm_only AS core
+COPY --from=install_torch_stack /venv /venv
 COPY docker/libkineto.conf /config/libkineto.conf
 ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
     KINETO_CONFIG="/config/libkineto.conf"
@@ -274,7 +277,10 @@ COPY src/z_image/ci/README.md /app/Z-Image/RUN.md
 COPY src/z_image/z_image_utils.py /app/Z-Image/z_image_utils.py
 COPY src/z_image/z_image_example.py /app/Z-Image/run.py
 
-FROM deps AS final
+FROM core AS final
+# by copying from the deps stage we leave behind all cache and temporary files created during installation
+COPY --from=deps /venv /venv
+COPY --from=deps /app/external /app/external
 
 WORKDIR /app
 COPY src/xDiT/ci/run.hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
