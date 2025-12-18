@@ -73,7 +73,9 @@ RUN git clone https://github.com/ROCm/TheRock.git && \
 FROM base AS build_rocm
 COPY --from=setup_therock /app/TheRock /app/TheRock
 WORKDIR /app/TheRock
-RUN pip install -r requirements.txt && \
+# if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
+RUN pip install --no-cache-dir dvc[s3] && \
+    pip install -r requirements.txt && \
     python build_tools/fetch_sources.py
 RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
