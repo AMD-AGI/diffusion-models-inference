@@ -192,6 +192,8 @@ def _get_average_latency(file_path: Path) -> Optional[float]:
 def _save_mad_latency_metric(csv_output_path: str, experiment_name: str, latency: float):
     """Store results to MAD-formatted CSV"""
     csv_file_path = Path(csv_output_path)
+    csv_file_path.parent.mkdir(parents=True, exist_ok=True)
+
     file_exists = csv_file_path.exists()
 
     with open(csv_file_path, 'a', newline='') as csvfile:
@@ -319,17 +321,6 @@ def main():
                 for row in reader:
                     print(",".join(row))
         except Exception as e:
-            logger.error(e, stack_info=True, exc_info=True)
-
-    # Copy to ../results.csv, needed for MAD integration
-    if not args.dry_run:
-        try:
-            source_path = Path(args.csv_output_path)
-            destination_path = Path("../results.csv")
-            if source_path.exists():
-                shutil.copy(source_path, destination_path)
-                logger.info(f"Copied {source_path} to {destination_path}")
-        except:
             logger.error(e, stack_info=True, exc_info=True)
 
     if errors:
