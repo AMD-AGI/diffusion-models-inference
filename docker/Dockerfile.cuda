@@ -136,6 +136,7 @@ COPY --from=z_image /app/Z-Image /app/Z-Image
 COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
-COPY .ci/run.sh /app/.ci/run.sh
+COPY .ci/run.py /app/.ci/run.py
+COPY benchmark_configs/ /app/.ci/benchmark_configs/
 # apex causes rms_forward_affine crash in SD3.5 and numpy>2 a runtime error in Hunyuanvideo
 RUN pip uninstall -y apex && pip install "numpy<2"
