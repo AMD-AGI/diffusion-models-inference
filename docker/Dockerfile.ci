@@ -302,7 +302,7 @@ COPY --from=z_image /app/Z-Image /app/Z-Image
 COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
-COPY .ci/quality_check.sh /app/.ci/quality_check.sh
+COPY .ci/quality_check.py /app/.ci/quality_check.py
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
 ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
