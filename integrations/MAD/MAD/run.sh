@@ -59,7 +59,7 @@ done
 SCRIPT="/app/.ci/run.py"
 BENCHMARK_CONFIGS="/app/.ci/benchmark_configs"
 
-RESULTS_DIRECTORY="/outputs"
+CSV_OUTPUT_PATH="/outputs/results.csv"
 
 if [ ! -e $SCRIPT ]; then
     echo "'$SCRIPT' not found" >&2
@@ -74,10 +74,12 @@ export HSA_NO_SCRATCH_RECLAIM=1
 
 # run workload
 echo "Run configurations:"
-python3 $SCRIPT --tag mad --dry-run --results-directory ${RESULTS_DIRECTORY} ${BENCHMARK_CONFIGS}/${WORKLOAD}.yaml
-python3 $SCRIPT --tag mad --results-directory ${RESULTS_DIRECTORY} ${BENCHMARK_CONFIGS}/${WORKLOAD}.yaml
+python3 $SCRIPT --tag mad --dry-run ${BENCHMARK_CONFIGS}/${WORKLOAD}.yaml
+python3 $SCRIPT --tag mad --csv-output-path ${CSV_OUTPUT_PATH} ${BENCHMARK_CONFIGS}/${WORKLOAD}.yaml
 
 if [ $? -ne 0 ]; then
   echo "Failed to run workload" >&2
   exit 1
 fi
+
+cp ${CSV_OUTPUT_PATH} ../results.csv
