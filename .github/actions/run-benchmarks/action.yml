@@ -57,4 +57,5 @@ runs:
           -e HF_TOKEN=${{ inputs.hf_token }} \
           -e BENCHMARK_FLAGS="${{ inputs.benchmark_flags }}" \
           ${{ inputs.image }} \
-          sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && /app/.ci/quality_check.sh'
+          sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && \
+                 python3 /app/.ci/quality_check.py --reference-path /app/references --benchmark-output-path /outputs'
