@@ -1,7 +1,6 @@
 - name: wan2_1.default
   tags: [release, mad, lucid, instinct]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -22,7 +21,6 @@
 - name: wan2_1.default.hopper
   tags: [lucid, hopper]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -43,7 +41,6 @@
 - name: wan2_1.default.blackwell
   tags: [lucid, blackwell]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -64,7 +61,6 @@
 - name: wan2_1.10s
   tags: [release, mad, lucid, instinct]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -85,7 +81,6 @@
 - name: wan2_1.10s.hopper
   tags: [lucid, hopper]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -106,7 +101,6 @@
 - name: wan2_1.10s.blackwell
   tags: [lucid, blackwell]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -127,7 +121,6 @@
 - name: wan2_1.5s_fp8
   tags: [release, mad, lucid, instinct]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -148,7 +141,6 @@
 - name: wan2_1.5s_fp8.hopper
   tags: [lucid, hopper]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py
@@ -169,7 +161,6 @@
 - name: wan2_1.5s_fp8.blackwell
   tags: [lucid, blackwell]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Wan/run.py

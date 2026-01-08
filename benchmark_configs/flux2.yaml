@@ -1,7 +1,6 @@
 - name: flux2.default
   tags: [release, mad, lucid, instinct]
   model: black-forest-labs/FLUX.2-dev
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Flux/run_usp.py
@@ -25,7 +24,6 @@
 - name: flux2.default.hopper
   tags: [hopper]
   model: black-forest-labs/FLUX.2-dev
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Flux/run_usp.py
@@ -49,7 +47,6 @@
 - name: flux2.default.blackwell
   tags: [lucid, blackwell]
   model: black-forest-labs/FLUX.2-dev
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Flux/run_usp.py

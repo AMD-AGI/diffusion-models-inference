@@ -1,7 +1,6 @@
 - name: stablediffusion_3_5.default
   tags: [release, mad, lucid, instinct]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -18,7 +17,6 @@
 - name: stablediffusion_3_5.default.hopper
   tags: [lucid, hopper]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -35,7 +33,6 @@
 - name: stablediffusion_3_5.default.blackwell
   tags: [lucid, blackwell]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -52,7 +49,6 @@
 - name: stablediffusion_3_5.u2r4
   tags: [release, instinct]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -69,7 +65,6 @@
 - name: stablediffusion_3_5.u2r4.hopper
   tags: [hopper]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -86,7 +81,6 @@
 - name: stablediffusion_3_5.u2r4.blackwell
   tags: [blackwell]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -103,7 +97,6 @@
 - name: stablediffusion_3_5.single_gpu
   tags: [release, instinct]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 1
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -118,7 +111,6 @@
 - name: stablediffusion_3_5.single_gpu.hopper
   tags: [hopper]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 1
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
@@ -133,7 +125,6 @@
 - name: stablediffusion_3_5.single_gpu.blackwell
   tags: [blackwell]
   model: stabilityai/stable-diffusion-3.5-large
-  revision: null
   num_gpus: 1
   runner: torchrun
   entrypoint: /app/StableDiffusion3.5/run.py
