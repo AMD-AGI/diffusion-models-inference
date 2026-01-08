@@ -9,6 +9,7 @@ scripts=(
     "/app/.ci/run.flux2.sh"
     "/app/.ci/run.stablediffusion_3_5.sh"
     "/app/.ci/run.z_image_turbo.sh"
+    "/app/.ci/run.hunyuanvideo_1_5.sh"
 )
 
 if [ -n "${BENCHMARK_LIST}" ]; then # Check if BENCHMARK_LIST is used to override default benchmarks

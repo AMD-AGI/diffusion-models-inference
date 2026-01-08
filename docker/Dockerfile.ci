@@ -17,9 +17,9 @@ ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
 # deps image arguments
 ARG AITER_COMMIT="de14bec0ca5a9de94e10f5cad4dc1541ac558689"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
-ARG DIFFUSERS_COMMIT="a1f36ee"
+ARG DIFFUSERS_COMMIT="6708f5"
 ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="7ed13e9bd2f90a563439afbd305330857f7380bf"
+ARG XDIT_COMMIT="419fa3c"
 ARG AO_COMMIT="8b72284"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -84,8 +84,8 @@ RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     cmake --build /app/TheRock/build && \
     cmake --install /app/TheRock/build
 # FIXME: the next line is a hack to get missing `hip` directory in the installation.
-#       This is fixed upstream by https://github.com/ROCm/rocm-systems/pull/2232 
-#       the hack should be removed when the fix is part of rocm-systems submodule 
+#       This is fixed upstream by https://github.com/ROCm/rocm-systems/pull/2232
+#       the hack should be removed when the fix is part of rocm-systems submodule
 #       commit of TheRock.
 RUN cp -R /app/TheRock/rocm-systems/projects/rocprofiler-compute/src/hip /opt/rocm/libexec/rocprofiler-compute/
 
@@ -277,6 +277,12 @@ COPY src/z_image/ci/README.md /app/Z-Image/RUN.md
 COPY src/z_image/z_image_utils.py /app/Z-Image/z_image_utils.py
 COPY src/z_image/z_image_example.py /app/Z-Image/run.py
 
+FROM deps AS hunyuanvideo_1_5
+WORKDIR /app/Hunyuanvideo_1_5
+COPY src/hunyuanvideo_1_5/ci/README.md /app/Hunyuanvideo_1_5/RUN.md
+COPY src/hunyuanvideo_1_5/hunyuanvideo_1_5_utils.py /app/Hunyuanvideo_1_5/hunyuanvideo_1_5_utils.py
+COPY src/hunyuanvideo_1_5/hunyuanvideo_1_5_example.py /app/Hunyuanvideo_1_5/run.py
+
 FROM core AS final
 # by copying from the deps stage we leave behind all cache and temporary files created during installation
 COPY --from=deps /venv /venv
@@ -300,6 +306,8 @@ RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY --from=z_image /app/Z-Image /app/Z-Image
 COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
+COPY --from=hunyuanvideo_1_5 /app/Hunyuanvideo_1_5 /app/Hunyuanvideo_1_5
+COPY src/hunyuanvideo_1_5/ci/run.hunyuanvideo_1_5.sh /app/.ci/run.hunyuanvideo_1_5.sh
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
 COPY .ci/quality_check.py /app/.ci/quality_check.py

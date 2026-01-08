@@ -9,9 +9,9 @@
 # deps image arguments
 ARG FLASHATTENTION_COMMIT="5d2cd3b"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
-ARG DIFFUSERS_COMMIT="a1f36ee"
+ARG DIFFUSERS_COMMIT="6708f5"
 ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="7ed13e9bd2f90a563439afbd305330857f7380bf"
+ARG XDIT_COMMIT="419fa3c"
 ARG AO_COMMIT="8b72284"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
@@ -116,6 +116,12 @@ COPY src/z_image/ci/README.md /app/Z-Image/RUN.md
 COPY src/z_image/z_image_utils.py /app/Z-Image/z_image_utils.py
 COPY src/z_image/z_image_example.py /app/Z-Image/run.py
 
+FROM deps AS hunyuanvideo_1_5
+WORKDIR /app/Hunyuanvideo_1_5
+COPY src/hunyuanvideo_1_5/ci/README.md /app/Hunyuanvideo_1_5/RUN.md
+COPY src/hunyuanvideo_1_5/hunyuanvideo_1_5_utils.py /app/Hunyuanvideo_1_5/hunyuanvideo_1_5_utils.py
+COPY src/hunyuanvideo_1_5/hunyuanvideo_1_5_example.py /app/Hunyuanvideo_1_5/run.py
+
 FROM deps AS final
 
 WORKDIR /app
@@ -134,6 +140,8 @@ COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
 COPY --from=wan /app/Wan /app/Wan
 COPY --from=z_image /app/Z-Image /app/Z-Image
 COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
+COPY --from=hunyuanvideo_1_5 /app/Hunyuanvideo_1_5 /app/Hunyuanvideo_1_5
+COPY src/hunyuanvideo_1_5/ci/run.hunyuanvideo_1_5.sh /app/.ci/run.hunyuanvideo_1_5.sh
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY .ci/run.py /app/.ci/run.py
