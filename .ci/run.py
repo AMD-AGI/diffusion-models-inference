@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 class Experiment:
     name: str
     model: str
-    revision: str
     entrypoint: str
     runner: str
     num_gpus: int
     tags: List[str]
     args: Dict[str, Any]
+    revision: Optional[str] = None
 
 
 def _parse_args():

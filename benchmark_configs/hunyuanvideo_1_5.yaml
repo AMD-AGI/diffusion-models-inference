@@ -1,7 +1,6 @@
 - name: hunyuanvideo_1_5.default
   tags: [release, mad, lucid, instinct]
   model: hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v
-  revision: null
   num_gpus: 8
   runner: torchrun
   entrypoint: /app/Hunyuanvideo_1_5/run.py
