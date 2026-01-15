@@ -22,7 +22,7 @@
     attention_backend: aiter
 
 - name: flux2.default.hopper
-  tags: [hopper]
+  tags: [lucid, hopper]
   model: black-forest-labs/FLUX.2-dev
   num_gpus: 8
   runner: torchrun
