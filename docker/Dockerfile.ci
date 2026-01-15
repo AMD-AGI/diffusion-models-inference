@@ -92,6 +92,9 @@ RUN cp -R /app/TheRock/rocm-systems/projects/rocprofiler-compute/src/hip /opt/ro
 
 FROM base AS rocm_only
 COPY --from=build_rocm /opt/rocm /opt/rocm
+# Install amdsmi Python module
+RUN cd /opt/rocm/share/amd_smi && \
+    pip install --no-cache-dir .
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
     echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
     ldconfig
