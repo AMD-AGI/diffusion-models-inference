@@ -7,11 +7,11 @@
 #
 
 # deps image arguments
-ARG FLASHATTENTION_COMMIT="5d2cd3b"
+ARG FLASHATTENTION_COMMIT="fffabc3"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
 ARG DIFFUSERS_COMMIT="6708f5"
 ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="419fa3c"
+ARG XDIT_COMMIT="0a3d7a3"
 ARG AO_COMMIT="8b72284"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
@@ -41,6 +41,7 @@ RUN pip uninstall -y flash_attn && \
     git clone https://github.com/Dao-AILab/flash-attention.git && \
     cd flash-attention && \
     git reset --hard ${FLASHATTENTION_COMMIT} && \
+    python setup.py install && \
     (cd hopper && python setup.py install) && \
     (cd flash_attn/cute && pip install -e .)
 # install yunchang
@@ -65,10 +66,7 @@ RUN git clone https://github.com/huggingface/accelerate.git && \
 RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/xfuser_joint_attn_processor2_0_usp.patch && \
-    git apply /patches/xfuser_attention_backend.patch && \
-    git apply /patches/xfuser_runtime_state.patch && \
-    git apply /patches/xfuser_usp.patch && \
+    git apply /patches/xfuser_fp8_attn_graph_break.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # install torchao
