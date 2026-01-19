@@ -6,7 +6,7 @@
   entrypoint: /app/Flux/run_usp.py
   args:
     seed: 42
-    prompt Add a cool hat to the: cat
+    prompt: Add a cool hat to the cat
     height: 1024
     width: 1024
     num_inference_steps: 50
@@ -29,7 +29,7 @@
   entrypoint: /app/Flux/run_usp.py
   args:
     seed: 42
-    prompt Add a cool hat to the: cat
+    prompt: Add a cool hat to the cat
     height: 1024
     width: 1024
     num_inference_steps: 50
@@ -52,7 +52,7 @@
   entrypoint: /app/Flux/run_usp.py
   args:
     seed: 42
-    prompt Add a cool hat to the: cat
+    prompt: Add a cool hat to the cat
     height: 1024
     width: 1024
     num_inference_steps: 50
