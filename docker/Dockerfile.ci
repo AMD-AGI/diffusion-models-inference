@@ -213,6 +213,7 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
     git reset --hard ${XDIT_COMMIT} && \
     pip freeze | grep numpy > constraints.txt && \
     git apply /patches/xfuser_fp8_attn_graph_break.patch && \
+    git apply /patches/xfuser_wan_example.patch && \
     pip install -c constraints.txt -e .
 # install torchao
 RUN git clone https://github.com/pytorch/ao.git && \
