@@ -292,25 +292,16 @@ COPY --from=deps /venv /venv
 COPY --from=deps /app/external /app/external
 
 WORKDIR /app
-COPY src/xDiT/ci/run.hunyuanvideo.sh /app/.ci/run.hunyuanvideo.sh
 COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
-COPY src/flux/ci/run.flux.sh /app/.ci/run.flux.sh
-COPY src/flux/ci/run.flux.kontext.sh /app/.ci/run.flux.kontext.sh
-COPY src/flux/ci/run.flux2.sh /app/.ci/run.flux2.sh
 COPY --from=flux /app/Flux /app/Flux
 RUN cd /app/Flux && \
     pip install --no-cache-dir -r requirements.txt
-COPY src/SD_3_5/ci/run.stablediffusion_3_5.sh /app/.ci/run.stablediffusion_3_5.sh
 COPY --from=stablediffusion3.5 /app/StableDiffusion3.5 /app/StableDiffusion3.5
-COPY src/wan_xdit/ci/run.wan2.1.sh /app/.ci/run.wan2.1.sh
-COPY src/wan_xdit/ci/run.wan2.2.sh /app/.ci/run.wan2.2.sh
 COPY --from=wan /app/Wan /app/Wan
 RUN cd /app/Wan && \
     pip install --no-cache-dir -r requirements.txt
 COPY --from=z_image /app/Z-Image /app/Z-Image
-COPY src/z_image/ci/run.z_image_turbo.sh /app/.ci/run.z_image_turbo.sh
 COPY --from=hunyuanvideo_1_5 /app/Hunyuanvideo_1_5 /app/Hunyuanvideo_1_5
-COPY src/hunyuanvideo_1_5/ci/run.hunyuanvideo_1_5.sh /app/.ci/run.hunyuanvideo_1_5.sh
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
 COPY .ci/quality_check.py /app/.ci/quality_check.py
