@@ -51,26 +51,35 @@ on:
         description: 'Tag of tuned image for benchmark-only mode'
         required: false
         default: ''
+      allocator_id:
+        description: 'ID used for Allocator reservations'
+        required: false
+        default: ''
+      allocator_reservation_hours:
+        description: 'How many hours nodes are reserved for if Allocator is used'
+        required: false
+        default: '4'
       mi300_enabled:
-        description: 'Enable MI300 optimization and benchmarking'
+        description: 'Enable MI300'
         type: boolean
         required: false
         default: true
+      mi300_allocator:
+        description: 'Reserve MI300 from Allocator'
+        type: boolean
+        required: false
+        default: false
       mi300_runner:
         description: 'Runner label for MI300'
         required: false
         default: 'mi300'
-      mi308_enabled:
-        description: 'Enable MI308 optimization and benchmarking'
+      mi325_enabled:
+        description: 'Enable MI325'
         type: boolean
         required: false
         default: false
-      mi308_runner:
-        description: 'Runner label for MI308'
-        required: false
-        default: 'mi308'
-      mi325_enabled:
-        description: 'Enable MI325 optimization and benchmarking'
+      mi325_allocator:
+        description: 'Reserve MI325 from Allocator'
         type: boolean
         required: false
         default: false
@@ -78,20 +87,16 @@ on:
         description: 'Runner label for MI325'
         required: false
         default: 'mi325'
-      mi350_enabled:
-        description: 'Enable MI350 optimization and benchmarking'
-        type: boolean
-        required: false
-        default: false
-      mi350_runner:
-        description: 'Runner label for MI350'
-        required: false
-        default: 'mi350'
       mi355_enabled:
-        description: 'Enable MI355 optimization and benchmarking'
+        description: 'Enable MI355'
         type: boolean
         required: false
         default: true
+      mi355_allocator:
+        description: 'Reserve MI355 from Allocator'
+        type: boolean
+        required: false
+        default: false
       mi355_runner:
         description: 'Runner label for MI355'
         required: false
@@ -104,7 +109,7 @@ env:
 jobs:
   validate-and-build-core:
     name: Validate parameters and build core image
-    runs-on: self-hosted
+    runs-on: build-only
     outputs:
       image_tag: ${{ steps.generate_tag.outputs.tag }}
       core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
@@ -148,9 +153,7 @@ jobs:
         run: |
           ANY_ENABLED=false
           if [ "${{ inputs.mi300_enabled }}" = "true" ] || \
-             [ "${{ inputs.mi308_enabled }}" = "true" ] || \
              [ "${{ inputs.mi325_enabled }}" = "true" ] || \
-             [ "${{ inputs.mi350_enabled }}" = "true" ] || \
              [ "${{ inputs.mi355_enabled }}" = "true" ]; then
             ANY_ENABLED=true
           fi
@@ -173,6 +176,22 @@ jobs:
           if [ "${{ inputs.benchmark_only }}" = "true" ] && [ -z "${{ inputs.benchmark_image_tag }}" ]; then
             echo "Error: BENCHMARK_ONLY enabled but no BENCHMARK_IMAGE_TAG specified"
             exit 1
+          fi
+          if [ "${{ inputs.mi300_allocator }}" = "true" ] || \
+             [ "${{ inputs.mi325_allocator }}" = "true" ] || \
+             [ "${{ inputs.mi355_allocator }}" = "true" ]; then
+            if [ -z "${{ inputs.allocator_id }}" ]; then
+              echo "Error: Allocator enabled for at least one architecture but no ALLOCATOR_ID specified"
+              exit 1
+            fi
+            if [ -z "${{ inputs.allocator_reservation_hours }}" ]; then
+              echo "Error: Allocator enabled for at least one architecture but no ALLOCATOR_RESERVATION_HOURS specified"
+              exit 1
+            fi
+            if ! [[ "${{ inputs.allocator_reservation_hours }}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "Error: ALLOCATOR_RESERVATION_HOURS must be a positive integer"
+              exit 1
+            fi
           fi
       
       - name: Log in to Docker Hub
@@ -272,57 +291,125 @@ jobs:
     if: ${{ needs.validate-and-build-core.outputs.any_arch_enabled == 'true' }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      allocator_matrix: ${{ steps.set-matrix.outputs.allocator_matrix }}
     steps:
       - name: Generate matrix
         id: set-matrix
         run: |
           MATRIX_JSON='{"include":['
+          ALLOCATOR_MATRIX_JSON='{"include":['
           FIRST=true
+          ALLOCATOR_FIRST=true
           
           # MI300
           if [ "${{ inputs.mi300_enabled }}" = "true" ]; then
             if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"${{ inputs.mi300_runner }}\"}"
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"${{ inputs.mi300_runner }}\",\"allocator\":\"${{ inputs.mi300_allocator }}\"}"
             FIRST=false
-          fi
-          
-          # MI308
-          if [ "${{ inputs.mi308_enabled }}" = "true" ]; then
-            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi308\",\"runner\":\"${{ inputs.mi308_runner }}\"}"
-            FIRST=false
+            
+            if [ "${{ inputs.mi300_allocator }}" = "true" ]; then
+              if [ "$ALLOCATOR_FIRST" = "false" ]; then ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON},"; fi
+              ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"${{ inputs.mi300_runner }}\"}"
+              ALLOCATOR_FIRST=false
+            fi
           fi
           
           # MI325
           if [ "${{ inputs.mi325_enabled }}" = "true" ]; then
             if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"${{ inputs.mi325_runner }}\"}"
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"${{ inputs.mi325_runner }}\",\"allocator\":\"${{ inputs.mi325_allocator }}\"}"
             FIRST=false
-          fi
-          
-          # MI350
-          if [ "${{ inputs.mi350_enabled }}" = "true" ]; then
-            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi350\",\"runner\":\"${{ inputs.mi350_runner }}\"}"
-            FIRST=false
+            
+            if [ "${{ inputs.mi325_allocator }}" = "true" ]; then
+              if [ "$ALLOCATOR_FIRST" = "false" ]; then ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON},"; fi
+              ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"${{ inputs.mi325_runner }}\"}"
+              ALLOCATOR_FIRST=false
+            fi
           fi
           
           # MI355
           if [ "${{ inputs.mi355_enabled }}" = "true" ]; then
             if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"${{ inputs.mi355_runner }}\"}"
+            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"${{ inputs.mi355_runner }}\",\"allocator\":\"${{ inputs.mi355_allocator }}\"}"
             FIRST=false
+            
+            if [ "${{ inputs.mi355_allocator }}" = "true" ]; then
+              if [ "$ALLOCATOR_FIRST" = "false" ]; then ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON},"; fi
+              ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"${{ inputs.mi355_runner }}\"}"
+              ALLOCATOR_FIRST=false
+            fi
           fi
           
           MATRIX_JSON="${MATRIX_JSON}]}"
+          ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}]}"
           echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+          echo "allocator_matrix=${ALLOCATOR_MATRIX_JSON}" >> $GITHUB_OUTPUT
           echo "Generated matrix: ${MATRIX_JSON}"
+          echo "Generated Allocator reservation matrix: ${ALLOCATOR_MATRIX_JSON}"
+
+  allocate-allocator-resources:
+    name: Allocate Allocator resources for ${{ matrix.arch }}
+    needs: [validate-and-build-core, generate-matrix]
+    runs-on: jump-host
+    if: ${{ inputs.mi300_allocator == true || inputs.mi325_allocator == true || inputs.mi355_allocator == true }}
+    concurrency:
+      group: allocator-jump-host
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_branch }}
+
+      - name: Generate JIT config for ${{ matrix.arch }}
+        id: jit
+        uses: ./.github/actions/generate-jit-config
+        with:
+          arch: ${{ matrix.arch }}
+          runner: ${{ matrix.runner }}
+          run_number: ${{ github.run_number }}
+          repository: ${{ github.repository }}
+          gh_token: ${{ secrets.GH_PAT }}
+      
+      - name: Generate allocator configuration
+        id: allocator_config
+        uses: ./.github/actions/generate-allocator-config
+        with:
+          arch: ${{ matrix.arch }}
+          jitconfig: ${{ steps.jit.outputs.jitconfig }}
+          repository: ${{ github.repository }}
+      
+      - name: Allocate resources via Allocator
+        id: allocate
+        uses: ./.github/actions/allocate-allocator-resources
+        with:
+          arch: ${{ matrix.arch }}
+          runner: ${{ matrix.runner }}
+          allocator_id: ${{ inputs.allocator_id }}
+          allocator_reservation_hours: ${{ inputs.allocator_reservation_hours }}
+          amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
+          ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
+          run_number: ${{ github.run_number }}
+      
+      - name: Upload reservation metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-reservation-${{ matrix.arch }}
+          path: reservation-metadata/
 
   tune-and-benchmark:
     name: ${{ matrix.arch }} tuning and benchmarking
-    needs: [validate-and-build-core, generate-matrix]
+    needs: [validate-and-build-core, generate-matrix, allocate-allocator-resources]
     runs-on: ${{ matrix.runner }}
-    if: ${{ always() && needs.validate-and-build-core.outputs.any_arch_enabled == 'true' && !cancelled() && (!failure() || inputs.benchmark_only) }}
+    if: |
+      needs.validate-and-build-core.outputs.any_arch_enabled == 'true' && 
+      !cancelled() && 
+      (needs.allocate-allocator-resources.result == 'success' || needs.allocate-allocator-resources.result == 'skipped') &&
+      (!failure() || inputs.benchmark_only)
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
@@ -395,11 +482,47 @@ jobs:
         with:
           images: '${{ steps.image.outputs.used_image }}'
           containers: 'xdit-bench miopen-tune'
+      
+      - name: Cleanup Allocator resources
+        if: (always() || cancelled()) && matrix.allocator == 'true'
+        uses: ./.github/actions/cleanup-allocator
+        with:
+          arch: ${{ matrix.arch }}
+          runner: ${{ matrix.runner }}
+          repository: ${{ github.repository }}
+          run_number: ${{ github.run_number }}
+          gh_token: ${{ secrets.GH_PAT }}
+          amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
+          ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
+      
+      - name: Delete reservation artifact
+        if: (always() || cancelled()) && matrix.allocator == 'true'
+        shell: bash
+        run: |
+          ARTIFACT_NAME="${{ github.run_number }}-reservation-${{ matrix.arch }}"
+          echo "Deleting artifact: ${ARTIFACT_NAME}"
+          
+          # Get artifact ID
+          ARTIFACT_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=${ARTIFACT_NAME}" | \
+            jq -r '.artifacts[0].id')
+          
+          if [ -n "${ARTIFACT_ID}" ] && [ "${ARTIFACT_ID}" != "null" ]; then
+            echo "Found artifact ID: ${ARTIFACT_ID}, deleting..."
+            curl -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}"
+            echo "Artifact deleted"
+          else
+            echo "Artifact not found or already deleted"
+          fi
 
   build-final:
     name: Build final tuned image
     needs: [validate-and-build-core, tune-and-benchmark]
-    runs-on: self-hosted
+    runs-on: build-only
     if: ${{ !inputs.benchmark_only && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
@@ -475,3 +598,33 @@ jobs:
         with:
           images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}'
           containers: 'core'
+
+  cleanup-allocator-resources:
+    name: Cleanup Allocator resources for ${{ matrix.arch }}
+    needs: [generate-matrix, allocate-allocator-resources, tune-and-benchmark]
+    runs-on: jump-host
+    if: |
+      (always() || cancelled()) &&
+      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped') &&
+      (inputs.mi300_allocator == true || inputs.mi325_allocator == true || inputs.mi355_allocator == true)
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_branch }}
+      
+      - name: Cleanup Allocator resources
+        uses: ./.github/actions/cleanup-allocator
+        with:
+          arch: ${{ matrix.arch }}
+          runner: ${{ matrix.runner }}
+          repository: ${{ github.repository }}
+          run_number: ${{ github.run_number }}
+          gh_token: ${{ secrets.GH_PAT }}
+          amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
+          ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
+
+
