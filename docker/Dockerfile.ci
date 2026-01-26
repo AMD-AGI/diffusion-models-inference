@@ -14,6 +14,8 @@ ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
 ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
 ARG PYTORCH_COMMIT="91be249cee02ddd0b31f98438ca1b82d10e13dc4"
 ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
+ARG PYTORCH_AUDIO_COMMIT="e3c6ee2b6588b7cd27a84182de74bf12fe043831"
+ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
 # deps image arguments
 ARG AITER_COMMIT="7c0c84f"
 ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
@@ -107,6 +109,8 @@ FROM rocm_only AS build_torch_stack
 ARG TRITON_COMMIT
 ARG PYTORCH_COMMIT
 ARG PYTORCH_VISION_COMMIT
+ARG PYTORCH_AUDIO_COMMIT
+ARG PYTORCH_CODEC_COMMIT
 COPY --from=setup_therock /app/TheRock /app/TheRock
 
 # needed for HIPIFY commits created by the build process
@@ -118,7 +122,12 @@ WORKDIR /app/TheRock/external-builds/pytorch
 RUN pip install -r /app/TheRock/requirements.txt && \
     python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} && \
     python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} && \
-    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT}
+    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} && \
+    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/pytorch/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT}
+# fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
+RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
+    cd pytorch_codec && \
+    git reset --hard ${PYTORCH_CODEC_COMMIT}
 RUN mkdir /install
 # install triton
 RUN cd triton && \
@@ -144,6 +153,78 @@ RUN cd pytorch_vision && \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
+# install audio
+RUN cd pytorch_audio && \
+    PYTORCH_ROCM_ARCH="gfx942;gfx950" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install torchcodec
+RUN pip install --no-cache-dir pybind11 pybind11[global] && \
+    cd pytorch_codec && \
+    PYTORCH_ROCM_ARCH="gfx942;gfx950" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
+    python -m build --wheel -vvv --no-isolation -o dist && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+
+FROM ubuntu:24.04 AS ffmpeg_builder
+# Reference: https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
+# Install build depedencies, server use only
+RUN apt-get update -qq && apt-get -y install --no-install-recommends \
+    autoconf \
+    automake \
+    build-essential \
+    ca-certificates \
+    cmake \
+    git-core \
+    libaom-dev \
+    libass-dev \
+    libdav1d-dev \
+    libfreetype6-dev \
+    libgnutls28-dev \
+    libmp3lame-dev \
+    libtool \
+    libunistring-dev \
+    libvorbis-dev \
+    meson \
+    ninja-build \
+    pkg-config \
+    texinfo \
+    wget \
+    yasm \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# See https://ffmpeg.org/releases/ for valid choices of FFMPEG_VERSION
+ARG FFMPEG_VERSION="7.1.3"
+ENV FFMPEG_BUILD_DIR=/ffmpeg/build
+ENV FFMPEG_SRC_DIR=/ffmpeg/src
+ENV FFMPEG_BIN_DIR=/ffmpeg/bin
+RUN mkdir -p ${FFMPEG_BUILD_DIR} ${FFMPEG_SRC_DIR}
+WORKDIR ${FFMPEG_SRC_DIR}
+# Never set --enable-gpl or --enagle-nonfree to maintain non-GPL license compliance!
+RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
+    tar xjvf ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
+    cd ffmpeg-${FFMPEG_VERSION} && \
+    PATH="$FFMPEG_BIN_DIR:$PATH" PKG_CONFIG_PATH="$FFMPEG_BUILD_DIR/lib/pkgconfig" ./configure \
+    --prefix="$FFMPEG_BUILD_DIR" \
+    --pkg-config-flags="--static" \
+    --extra-cflags="-I$FFMPEG_BUILD_DIR/include" \
+    --extra-ldflags="-L$FFMPEG_BUILD_DIR/lib" \
+    --extra-libs="-lpthread -lm" \
+    --ld="g++" \
+    --bindir="$FFMPEG_BIN_DIR" \
+    --enable-gnutls \
+    --enable-libaom \
+    --enable-libass \
+    --enable-libdav1d \
+    --enable-libfreetype \
+    --enable-libmp3lame \
+    --enable-libvorbis \
+    --enable-shared && \
+    PATH="$FFMPEG_BIN_DIR:$PATH" make -j$(($(nproc)-1)) && \
+    make install && \
+    hash -r
 
 FROM base AS install_torch_stack
 COPY --from=build_torch_stack /install/*.whl /install/
@@ -153,6 +234,28 @@ RUN python -m pip install \
 
 FROM rocm_only AS core
 COPY --from=install_torch_stack /venv /venv
+# torchcodec: install FFmpeg and runtime dependencies
+RUN apt-get update -qq && apt-get -y install --no-install-recommends \
+  libaom3 \
+  libass9 \
+  libdav1d7 \
+  libfreetype6 \
+  libgnutls30 \
+  libmp3lame0 \
+  libvorbis0a \
+  libvorbisenc2 \
+  && rm -rf /var/lib/apt/lists/*
+
+# Copy built FFmpeg artifacts from the builder stage
+COPY --from=ffmpeg_builder /ffmpeg/bin /usr/local/bin
+COPY --from=ffmpeg_builder /ffmpeg/build/lib /usr/local/lib
+COPY --from=ffmpeg_builder /ffmpeg/build/include /usr/local/include
+COPY --from=ffmpeg_builder /ffmpeg/build/share /usr/local/share
+
+# Update library cache
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
+    ldconfig
+
 COPY docker/libkineto.conf /config/libkineto.conf
 ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
     KINETO_CONFIG="/config/libkineto.conf"
