@@ -471,6 +471,7 @@ jobs:
           hf_token: ${{ secrets.HF_TOKEN }}
       
       - name: Upload benchmark results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
