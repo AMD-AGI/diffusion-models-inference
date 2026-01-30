@@ -343,6 +343,9 @@ RUN git clone https://github.com/fal-ai/arbiter.git && \
     pip install --no-cache-dir -c constraints.txt -e .
 # rocprofiler-compute runtime deps
 RUN pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt
+# hotfix: transformers<5.0.0 required
+RUN pip uninstall -y transformers && pip install --no-cache-dir "transformers==4.57.6"
+
 # cleanup
 RUN rm -fr /patches
 
