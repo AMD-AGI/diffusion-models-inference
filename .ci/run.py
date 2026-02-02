@@ -6,6 +6,7 @@ import os
 import json
 import sys
 import csv
+import shlex
 import shutil
 from pathlib import Path
 from dataclasses import asdict, dataclass, field
@@ -144,11 +145,13 @@ def _run_experiment(exp: Experiment, cmd: List[str], dry_run: bool, benchmark_ou
     """Runs a single experiment."""
 
     if dry_run:
-        logger.info(f"[dry-run] Running command: {cmd}")
+        logger.info(f"[dry-run] Running command: {shlex.join([str(part) for part in cmd])}")
         return True
 
     benchmark_output_directory.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    env = os.environ.copy()
+    env["TQDM_DISABLE"] = "1"
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     with open(f'{benchmark_output_directory}/stdout.txt', 'w') as f:
         f.write(result.stdout)
     with open(f'{benchmark_output_directory}/stderr.txt', 'w') as f:
