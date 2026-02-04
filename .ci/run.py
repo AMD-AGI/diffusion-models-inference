@@ -4,17 +4,16 @@ import logging
 import yaml
 import os
 import json
+import importlib.util
 import sys
 import csv
 import shlex
-import shutil
 from pathlib import Path
-from dataclasses import asdict, dataclass, field
-from typing import List, Dict, Any, Tuple, Optional
+from dataclasses import asdict, dataclass
+from typing import List, Dict, Any, Optional
 import subprocess
 
 from huggingface_hub import snapshot_download, scan_cache_dir
-from huggingface_hub.utils import HfHubHTTPError, RepositoryNotFoundError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,15 +23,16 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class Experiment:
     name: str
-    model: str
-    entrypoint: str
-    runner: str
-    num_gpus: int
     tags: List[str]
+    runner: str
+    model: str
     args: Dict[str, Any]
+    entrypoint: Optional[str] = None
+    num_gpus: Optional[int] = None
     revision: Optional[str] = None
 
 
@@ -104,6 +104,10 @@ def _parse_args():
         help="YAML config files containing experiment definitions",
     )
     return parser.parse_args()
+
+
+def _is_python_script(path: str) -> bool:
+    return Path(path).is_file() and Path(path).suffix == ".py"
 
 
 def _filter_experiments_by_name(experiments: List[Experiment], names: List[str]) -> List[Experiment]:
@@ -181,10 +185,7 @@ def _get_average_latency(file_path: Path) -> Optional[float]:
             with open(file_path, 'r') as f:
                 data = json.load(f)
 
-            pipe_times = [entry['pipe_time'] for entry in data]
-
-            average = sum(pipe_times) / len(pipe_times)
-
+            average = sum(data) / len(data)
         except Exception as e:
             logger.error(f"Failed to compute average latency from {file_path}: {e}")
             return None
@@ -209,12 +210,47 @@ def _save_mad_latency_metric(csv_output_path: str, experiment_name: str, latency
 
 
 def command(e: Experiment, override_args: dict) -> List[str]:
-    cmd = [e.runner]
 
-    if e.runner == "torchrun":
-        cmd.extend(["--nproc_per_node", str(e.num_gpus)])
+    if e.runner == "xdit":
+        if e.entrypoint is not None:
+            raise ValueError("entrypoint is not supported for xdit runner")
+        cmd = ["xdit"]
+        if e.num_gpus is not None:
+            cmd.append(f"--nproc_per_node={e.num_gpus}")
+    elif e.entrypoint is not None and _is_python_script(e.entrypoint):
+        # is Python script
+        if e.runner == "torchrun":
+            if e.num_gpus is None:
+                raise ValueError("num_gpus is required for torchrun runner")
+            cmd = [
+                "torchrun",
+                f"--nproc_per_node={e.num_gpus}", 
+                e.entrypoint
+            ]
+        else:
+            cmd = [e.runner, e.entrypoint]
+    else:
+        # is Python module
+        if e.entrypoint is None or importlib.util.find_spec(e.entrypoint) is None:
+            raise ValueError(f"Module {e.entrypoint} not found")
 
-    cmd.append(e.entrypoint)
+        if e.runner == "torchrun":
+            if e.num_gpus is None:
+                raise ValueError("num_gpus is required for torchrun runner")
+            cmd = [
+                sys.executable,
+                "-m",
+                "torch.distributed.run",
+                f"--nproc_per_node={e.num_gpus}",
+                "-m",
+                e.entrypoint
+            ]
+        else:
+            cmd = [
+                sys.executable,
+                "-m",
+                e.entrypoint
+            ]
 
     cmd.extend(["--model", e.model])
 
@@ -228,6 +264,10 @@ def command(e: Experiment, override_args: dict) -> List[str]:
         if isinstance(value, bool):
             if value:
                 cmd.append(flag)
+            continue
+        if isinstance(value, list):
+            if value:
+                cmd.extend([flag, " ".join(value)])
             continue
 
         cmd.append(flag)
@@ -287,7 +327,7 @@ def main():
             
             logger.info(f"Running Experiment {i}/{len(exps)}: {exp.name}. See {benchmark_output_directory}/stdout.txt for stdout logs.")
 
-            cmd = command(exp, override_args) + ["--benchmark-output-directory", benchmark_output_directory]
+            cmd = command(exp, override_args) + ["--output-directory", benchmark_output_directory]
 
             if not _run_experiment(exp, cmd, args.dry_run, benchmark_output_directory):
                 msg = f"Experiment {exp.name} failed to complete. Reason: Failed to run command: {cmd}. See {benchmark_output_directory}/stderr.txt for stderr logs."
@@ -296,7 +336,7 @@ def main():
                 continue
 
             if not args.dry_run:
-                latency_output_filepath = Path(benchmark_output_directory) / "timing.json" # benchmark scripts are expected to write latencies to "timing.json"
+                latency_output_filepath = Path(benchmark_output_directory) / "timings.json" # benchmark scripts are expected to write latencies to "timings.json"
                 avg_latency = _get_average_latency(latency_output_filepath)
                 if not avg_latency:
                     msg = f"Experiment {exp.name} failed to complete. Reason: Failed to compute average latency from output files. See logs for more details."

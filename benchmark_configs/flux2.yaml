@@ -1,9 +1,7 @@
 - name: flux2.default
   tags: [release, mad, lucid, instinct]
   model: black-forest-labs/FLUX.2-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
+  runner: xdit
   args:
     seed: 42
     prompt: Add a cool hat to the cat
@@ -11,22 +9,18 @@
     width: 1024
     num_inference_steps: 50
     max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
+    warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    img_file_paths: /app/Flux/cat.png
-    model_type: flux2
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
-    num_repetitions: 25
+    num_iterations: 25
     attention_backend: aiter
 
 - name: flux2.default.hopper
   tags: [lucid, hopper]
   model: black-forest-labs/FLUX.2-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
+  runner: xdit
   args:
     seed: 42
     prompt: Add a cool hat to the cat
@@ -34,22 +28,18 @@
     width: 1024
     num_inference_steps: 50
     max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
+    warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    img_file_paths: /app/Flux/cat.png
-    model_type: flux2
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
-    num_repetitions: 25
+    num_iterations: 25
     attention_backend: cudnn
 
 - name: flux2.default.blackwell
   tags: [lucid, blackwell]
   model: black-forest-labs/FLUX.2-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
+  runner: xdit
   args:
     seed: 42
     prompt: Add a cool hat to the cat
@@ -57,84 +47,70 @@
     width: 1024
     num_inference_steps: 50
     max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
+    warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    img_file_paths: /app/Flux/cat.png
-    model_type: flux2
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
-    num_repetitions: 25
+    num_iterations: 25
     attention_backend: cudnn
 
-- name: flux2.fp8gemm
-  tags: [release, mad, lucid, instinct]
-  model: black-forest-labs/FLUX.2-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
-    use_fp8_gemms: True
-    ulysses_degree: 8
-    use_torch_compile: True
-    img_file_paths: /app/Flux/cat.png
-    model_type: flux2
-    guidance_scale: 4.0
-    num_repetitions: 25
-    attention_backend: aiter
+#- name: flux2.fp8gemm
+#  tags: [release, mad, lucid, instinct]
+#  model: black-forest-labs/FLUX.2-dev
+#  runner: xdit
+#  args:
+#    seed: 42
+#    prompt: Add a cool hat to the cat
+#    height: 1024
+#    width: 1024
+#    num_inference_steps: 50
+#    max_sequence_length: 512
+#    warmup_calls: 5
+#    use_fp8_gemms: True
+#    ulysses_degree: 8
+#    use_torch_compile: True
+#    input_images: /app/data/flux_cat.png
+#    guidance_scale: 4.0
+#    num_iterations: 25
+#    attention_backend: aiter
 
-- name: flux2.fp8gemm.hopper
-  tags: [lucid, hopper]
-  model: black-forest-labs/FLUX.2-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
-    use_fp8_gemms: True
-    ulysses_degree: 8
-    use_torch_compile: True
-    img_file_paths: /app/Flux/cat.png
-    model_type: flux2
-    guidance_scale: 4.0
-    num_repetitions: 25
-    attention_backend: flash_3
+#- name: flux2.fp8gemm.hopper
+#  tags: [lucid, hopper]
+#  model: black-forest-labs/FLUX.2-dev
+#  runner: xdit
+#  args:
+#    seed: 42
+#    prompt: Add a cool hat to the cat
+#    height: 1024
+#    width: 1024
+#    num_inference_steps: 50
+#    max_sequence_length: 512
+#    warmup_calls: 5
+#    use_fp8_gemms: True
+#    ulysses_degree: 8
+#    use_torch_compile: True
+#    input_images: /app/data/flux_cat.png
+#    guidance_scale: 4.0
+#    num_iterations: 25
+#    attention_backend: flash_3
 
-- name: flux2.fp8gemm.blackwell
-  tags: [lucid, blackwell]
-  model: black-forest-labs/FLUX.2-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
-    use_fp8_gemms: True
-    ulysses_degree: 8
-    use_torch_compile: True
-    img_file_paths: /app/Flux/cat.png
-    model_type: flux2
-    guidance_scale: 4.0
-    num_repetitions: 25
-    attention_backend: cudnn
+#- name: flux2.fp8gemm.blackwell
+#  tags: [lucid, blackwell]
+#  model: black-forest-labs/FLUX.2-dev
+#  runner: xdit
+#  args:
+#    seed: 42
+#    prompt: Add a cool hat to the cat
+#    height: 1024
+#    width: 1024
+#    num_inference_steps: 50
+#    max_sequence_length: 512
+#    warmup_calls: 5
+#    use_fp8_gemms: True
+#    ulysses_degree: 8
+#    use_torch_compile: True
+#    input_images: /app/data/flux_cat.png
+#    guidance_scale: 4.0
+#    num_iterations: 25
+#    attention_backend: cudnn

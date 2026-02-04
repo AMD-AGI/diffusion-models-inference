@@ -1,9 +1,7 @@
 - name: z_image_turbo.default
   tags: [release, mad, lucid, instinct]
   model: Tongyi-MAI/Z-Image-Turbo
-  num_gpus: 2
-  runner: torchrun
-  entrypoint: /app/Z-Image/run.py
+  runner: xdit
   args:
     seed: 42
     prompt: A crowded beach
@@ -13,15 +11,13 @@
     ulysses_degree: 2
     use_torch_compile: True
     guidance_scale: 0.0
-    num_repetitions: 50
+    num_iterations: 50
     attention_backend: aiter
 
 - name: z_image_turbo.default.hopper
   tags: [lucid, hopper]
   model: Tongyi-MAI/Z-Image-Turbo
-  num_gpus: 2
-  runner: torchrun
-  entrypoint: /app/Z-Image/run.py
+  runner: xdit
   args:
     seed: 42
     prompt: A crowded beach
@@ -31,15 +27,13 @@
     ulysses_degree: 2
     use_torch_compile: True
     guidance_scale: 0.0
-    num_repetitions: 50
+    num_iterations: 50
     attention_backend: flash_3
 
 - name: z_image_turbo.default.blackwell
   tags: [lucid, blackwell]
   model: Tongyi-MAI/Z-Image-Turbo
-  num_gpus: 2
-  runner: torchrun
-  entrypoint: /app/Z-Image/run.py
+  runner: xdit
   args:
     seed: 42
     prompt: A crowded beach
@@ -49,5 +43,5 @@
     ulysses_degree: 2
     use_torch_compile: True
     guidance_scale: 0.0
-    num_repetitions: 50
+    num_iterations: 50
     attention_backend: cudnn
