@@ -11,26 +11,12 @@ on:
         description: 'Custom tag suffix for built images'
         required: false
         default: ''
-      additional_tag:
-        description: 'Additional tag for the final image'
-        required: false
-        default: ''
-      use_prebuilt_core:
-        description: 'Skip core image build'
-        type: boolean
-        required: false
-        default: false
       prebuilt_core_image_tag:
-        description: 'Tag of prebuilt core image'
+        description: 'Prebuilt core image tag (skips core build)'
         required: false
         default: ''
-      use_prebuilt_untuned:
-        description: 'Skip core and untuned image builds'
-        type: boolean
-        required: false
-        default: false
       prebuilt_untuned_image_tag:
-        description: 'Tag of prebuilt untuned image'
+        description: 'Prebuilt untuned image tag (skips core and untuned builds)'
         required: false
         default: ''
       quality_check:
@@ -42,79 +28,83 @@ on:
         description: 'Flags used to filter benchmarks, leave empty to run all. Example, to run only release benchmarks: --tag release'
         required: false
         default: ''
-      benchmark_only:
-        description: 'Skip everything except benchmarking'
-        type: boolean
-        required: false
-        default: false
       benchmark_image_tag:
         description: 'Tag of tuned image for benchmark-only mode'
         required: false
         default: ''
       allocator_id:
-        description: 'ID used for Allocator reservations'
+        description: 'Allocator reservation ID'
         required: false
         default: ''
       allocator_reservation_hours:
-        description: 'How many hours nodes are reserved for if Allocator is used'
+        description: 'Allocator reservation length in hours'
         required: false
         default: '4'
-      mi300_enabled:
-        description: 'Enable MI300'
-        type: boolean
-        required: false
-        default: true
-      mi300_allocator:
-        description: 'Reserve MI300 from Allocator'
+      mi300_allocator_reserve:
+        description: 'MI300 reserve from Allocator'
         type: boolean
         required: false
         default: false
+      mi300_is_allocator_node:
+        description: 'MI300 runner is a Standard runner'
+        type: boolean
+        required: false
+      mi300_is_allocator_pool:
+        description: 'MI300 runner is a Standard runner'
+        type: boolean
+        required: false
       mi300_runner:
-        description: 'Runner label for MI300'
+        description: 'MI300 runner (label or node/pool name)'
         required: false
-        default: 'mi300'
-      mi325_enabled:
-        description: 'Enable MI325'
+        default: ''
+      mi325_allocator_reserve:
+        description: 'MI325 reserve from Allocator'
         type: boolean
         required: false
         default: false
-      mi325_allocator:
-        description: 'Reserve MI325 from Allocator'
+      mi325_is_allocator_node:
+        description: 'MI325 runner is a Standard runner'
         type: boolean
         required: false
-        default: false
+      mi325_is_allocator_pool:
+        description: 'MI325 runner is a Standard runner'
+        type: boolean
+        required: false
       mi325_runner:
-        description: 'Runner label for MI325'
+        description: 'MI325 runner (label or node/pool name)'
         required: false
-        default: 'mi325'
-      mi355_enabled:
-        description: 'Enable MI355'
-        type: boolean
-        required: false
-        default: true
-      mi355_allocator:
-        description: 'Reserve MI355 from Allocator'
+        default: ''
+      mi355_allocator_reserve:
+        description: 'MI355 reserve from Allocator'
         type: boolean
         required: false
         default: false
-      mi355_runner:
-        description: 'Runner label for MI355'
+      mi355_is_allocator_node:
+        description: 'MI355 runner is a Standard runner'
+        type: boolean
         required: false
-        default: 'mi355'
+      mi355_is_allocator_pool:
+        description: 'MI355 runner is a Standard runner'
+        type: boolean
+        required: false
+      mi355_runner:
+        description: 'MI355 runner (label or node/pool name)'
+        required: false
+        default: ''
 
 env:
   CORE_IMAGE: amdsiloai/pytorch-xdit-core
   STAGING_IMAGE: amdsiloai/pytorch-xdit-staging
 
 jobs:
-  validate-and-build-core:
-    name: Validate parameters and build core image
+  validate:
+    name: Validate inputs
     runs-on: build-only
     outputs:
+      any_arch_enabled: ${{ steps.check-archs.outputs.any_enabled }}
       image_tag: ${{ steps.generate_tag.outputs.tag }}
       core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
-      any_arch_enabled: ${{ steps.check_archs.outputs.any_enabled }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -131,55 +121,28 @@ jobs:
           echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "staging_image_with_tag=${{ env.STAGING_IMAGE }}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          
-          # Store tags in artifact as JSON
-          mkdir -p build-metadata
-          cat > build-metadata/tags.json << EOF
-          {
-            "image_tag": "${IMAGE_TAG}",
-            "core_image_with_tag": "${{ env.CORE_IMAGE }}:${IMAGE_TAG}",
-            "staging_image_with_tag": "${{ env.STAGING_IMAGE }}:${IMAGE_TAG}"
-          }
-          EOF
-      
-      - name: Upload build metadata
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.run_number }}-build-metadata
-          path: build-metadata/
       
       - name: Check architectures
-        id: check_archs
+        id: check-archs
         run: |
           ANY_ENABLED=false
-          if [ "${{ inputs.mi300_enabled }}" = "true" ] || \
-             [ "${{ inputs.mi325_enabled }}" = "true" ] || \
-             [ "${{ inputs.mi355_enabled }}" = "true" ]; then
+          if [ -n "${{ inputs.mi300_runner }}" ] || \
+             [ -n "${{ inputs.mi325_runner }}" ] || \
+             [ -n "${{ inputs.mi355_runner }}" ]; then
             ANY_ENABLED=true
           fi
           echo "any_enabled=${ANY_ENABLED}" >> $GITHUB_OUTPUT
-      
-      - name: Validate parameters
-        run: |
-          if [ "${{ steps.check_archs.outputs.any_enabled }}" = "false" ]; then
+          
+          if [ "$ANY_ENABLED" = "false" ]; then
             echo "Error: No architectures enabled"
             exit 1
           fi
-          if [ "${{ inputs.use_prebuilt_core }}" = "true" ] && [ -z "${{ inputs.prebuilt_core_image_tag }}" ]; then
-            echo "Error: USE_PREBUILT_CORE enabled but no PREBUILT_CORE_IMAGE_TAG specified"
-            exit 1
-          fi
-          if [ "${{ inputs.use_prebuilt_untuned }}" = "true" ] && [ -z "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
-            echo "Error: USE_PREBUILT_UNTUNED enabled but no PREBUILT_UNTUNED_IMAGE_TAG specified"
-            exit 1
-          fi
-          if [ "${{ inputs.benchmark_only }}" = "true" ] && [ -z "${{ inputs.benchmark_image_tag }}" ]; then
-            echo "Error: BENCHMARK_ONLY enabled but no BENCHMARK_IMAGE_TAG specified"
-            exit 1
-          fi
-          if [ "${{ inputs.mi300_allocator }}" = "true" ] || \
-             [ "${{ inputs.mi325_allocator }}" = "true" ] || \
-             [ "${{ inputs.mi355_allocator }}" = "true" ]; then
+      
+      - name: Validate Allocator parameters
+        run: |
+          if [ "${{ inputs.mi300_allocator_reserve }}" = "true" ] || \
+             [ "${{ inputs.mi325_allocator_reserve }}" = "true" ] || \
+             [ "${{ inputs.mi355_allocator_reserve }}" = "true" ]; then
             if [ -z "${{ inputs.allocator_id }}" ]; then
               echo "Error: Allocator enabled for at least one architecture but no ALLOCATOR_ID specified"
               exit 1
@@ -193,42 +156,138 @@ jobs:
               exit 1
             fi
           fi
+
+          if [ "${{ inputs.mi300_is_allocator_node }}" = "true" ] && [ "${{ inputs.mi300_is_allocator_pool }}" = "true" ]; then
+            echo "Error: MI300 cannot be both a Standard runner and pool simultaneously"
+            exit 1
+          fi
+          if [ "${{ inputs.mi325_is_allocator_node }}" = "true" ] && [ "${{ inputs.mi325_is_allocator_pool }}" = "true" ]; then
+            echo "Error: MI325 cannot be both a Standard runner and pool simultaneously"
+            exit 1
+          fi
+          if [ "${{ inputs.mi355_is_allocator_node }}" = "true" ] && [ "${{ inputs.mi355_is_allocator_pool }}" = "true" ]; then
+            echo "Error: MI355 cannot be both a Standard runner and pool simultaneously"
+            exit 1
+          fi
+
+          if [ "${{ inputs.mi300_allocator_reserve }}" = "true" ] && [ "${{ inputs.mi300_is_allocator_pool }}" = "true" ]; then
+            echo "Error: MI300 cannot reserve a Standard runner (only nodes can be reserved)"
+            exit 1
+          fi
+          if [ "${{ inputs.mi325_allocator_reserve }}" = "true" ] && [ "${{ inputs.mi325_is_allocator_pool }}" = "true" ]; then
+            echo "Error: MI325 cannot reserve a Standard runner (only nodes can be reserved)"
+            exit 1
+          fi
+          if [ "${{ inputs.mi355_allocator_reserve }}" = "true" ] && [ "${{ inputs.mi355_is_allocator_pool }}" = "true" ]; then
+            echo "Error: MI355 cannot reserve a Standard runner (only nodes can be reserved)"
+            exit 1
+          fi
+      
+      - name: Validate benchmark image exists
+        if: ${{ inputs.benchmark_image_tag != '' }}
+        run: |
+          echo "Checking if benchmark image exists: ${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }}"
+          if ! docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }} > /dev/null 2>&1; then
+            echo "Error: Benchmark image ${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }} does not exist"
+            exit 1
+          fi
+          echo "Benchmark image verified"
+      
+      - name: Validate prebuilt untuned image exists
+        if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image_tag == '' }}
+        run: |
+          echo "Checking if prebuilt untuned image exists: ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}"
+          if ! docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+            echo "Error: Prebuilt untuned image ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} does not exist"
+            exit 1
+          fi
+          echo "Prebuilt untuned image verified"
+      
+      - name: Validate prebuilt core image exists
+        if: ${{ inputs.prebuilt_core_image_tag != '' && inputs.prebuilt_untuned_image_tag == '' && inputs.benchmark_image_tag == '' }}
+        run: |
+          echo "Checking if prebuilt core image exists: ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}"
+          if ! docker manifest inspect ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }} > /dev/null 2>&1; then
+            echo "Error: Prebuilt core image ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }} does not exist"
+            exit 1
+          fi
+          echo "Prebuilt core image verified"
+      
+      - name: Store build metadata
+        run: |
+          mkdir -p build-metadata
+          cat > build-metadata/tags.json << EOF
+          {
+            "image_tag": "${{ steps.generate_tag.outputs.tag }}",
+            "core_image_with_tag": "${{ steps.generate_tag.outputs.core_image_with_tag }}",
+            "staging_image_with_tag": "${{ steps.generate_tag.outputs.staging_image_with_tag }}"
+          }
+          EOF
+      
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-build-metadata
+          path: build-metadata/
+      
+      - name: Extract version information
+        run: |
+          mkdir -p versions
+          git rev-parse HEAD > versions/repository.txt
+          if docker manifest inspect ${{ steps.generate_tag.outputs.core_image_with_tag }} > /dev/null 2>&1; then
+            docker pull ${{ steps.generate_tag.outputs.core_image_with_tag }}
+            docker create --name core ${{ steps.generate_tag.outputs.core_image_with_tag }}
+            docker cp core:/opt/rocm/share/therock/ versions/ || true
+            docker rm core
+          else
+            echo "Core image does not exist yet, skipping docker extraction"
+          fi
+      
+      - name: Upload version artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-versions
+          path: versions/**
+      
+      - name: Write summary
+        uses: ./.github/actions/write-workflow-summary
+        with:
+          title: 'Workflow Configuration'
+          tables: |
+            {
+              "Workflow Inputs": ${{ toJSON(inputs) }},
+              "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
+              "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
+            }
+
+  build-core:
+    name: Build core and untuned images
+    needs: [validate]
+    runs-on: build-only
+    if: ${{ inputs.benchmark_image_tag == '' && inputs.prebuilt_untuned_image_tag == '' }}
+    outputs:
+      image_tag: ${{ needs.validate.outputs.image_tag }}
+      core_image_with_tag: ${{ needs.validate.outputs.core_image_with_tag }}
+      staging_image_with_tag: ${{ needs.validate.outputs.staging_image_with_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_branch }}
       
       - name: Log in to Docker Hub
-        if: ${{ !inputs.benchmark_only }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
           password: ${{ secrets.DOCKERHUB_OAT }}
       
       - name: Set up Docker Buildx
-        if: ${{ !inputs.benchmark_only }}
         uses: docker/setup-buildx-action@v3
         with:
           cleanup: false
       
-      - name: Check if prebuilt image exists
-        if: ${{ !inputs.benchmark_only && inputs.use_prebuilt_untuned }}
-        id: check_prebuilt
-        run: |
-          if docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Check if prebuilt core image exists
-        if: ${{ !inputs.benchmark_only && inputs.use_prebuilt_core }}
-        id: check_prebuilt_core
-        run: |
-          if docker manifest inspect ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }} > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-      
       - name: Build core image
-        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_core || steps.check_prebuilt_core.outputs.exists == 'false') && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        if: ${{ inputs.prebuilt_core_image_tag == '' }}
         uses: docker/build-push-action@v5
         env:
           BUILDKIT_PROGRESS: plain
@@ -237,33 +296,16 @@ jobs:
           context: .
           target: core
           push: true
-          tags: ${{ steps.generate_tag.outputs.core_image_with_tag }}
+          tags: ${{ needs.validate.outputs.core_image_with_tag }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             BUILDKIT_STEP_LOG_MAX_SIZE=104857600
       
-      - name: Extract version information
-        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_core || steps.check_prebuilt_core.outputs.exists == 'false') && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
-        run: |
-          mkdir -p versions
-          git rev-parse HEAD > versions/repository.txt
-          docker create --name core ${{ steps.generate_tag.outputs.core_image_with_tag }}
-          docker cp core:/opt/rocm/share/therock/ versions/ || true
-          docker rm core
-      
-      - name: Upload version artifacts
-        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_core || steps.check_prebuilt_core.outputs.exists == 'false') && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.run_number }}-versions
-          path: versions/**
-      
       - name: Pull prebuilt core image
-        if: ${{ !inputs.benchmark_only && inputs.use_prebuilt_core && steps.check_prebuilt_core.outputs.exists == 'true' && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
+        if: ${{ inputs.prebuilt_core_image_tag != '' }}
         run: docker pull ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}
       
       - name: Build untuned image
-        if: ${{ !inputs.benchmark_only && (!inputs.use_prebuilt_untuned || steps.check_prebuilt.outputs.exists == 'false') }}
         uses: docker/build-push-action@v5
         env:
           BUILDKIT_PROGRESS: plain
@@ -271,11 +313,11 @@ jobs:
           file: docker/Dockerfile.ci
           context: .
           push: true
-          tags: ${{ steps.generate_tag.outputs.staging_image_with_tag }}-temp
+          tags: ${{ needs.validate.outputs.staging_image_with_tag }}-temp
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             BUILDKIT_STEP_LOG_MAX_SIZE=104857600
-          cache-from: ${{ inputs.use_prebuilt_core && steps.check_prebuilt_core.outputs.exists == 'true' && format('{0}:{1}', env.CORE_IMAGE, inputs.prebuilt_core_image_tag) || '' }}
+          cache-from: ${{ inputs.prebuilt_core_image_tag != '' && format('{0}:{1}', env.CORE_IMAGE, inputs.prebuilt_core_image_tag) || '' }}
       
       - name: Cleanup
         if: always()
@@ -286,72 +328,36 @@ jobs:
 
   generate-matrix:
     name: Generate architecture matrix
-    needs: validate-and-build-core
+    needs: [validate]
     runs-on: ubuntu-latest
-    if: ${{ needs.validate-and-build-core.outputs.any_arch_enabled == 'true' }}
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      allocator_matrix: ${{ steps.set-matrix.outputs.allocator_matrix }}
+      matrix: ${{ steps.generate.outputs.matrix }}
+      allocator_matrix: ${{ steps.generate.outputs.allocator_matrix }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_branch }}
+      
       - name: Generate matrix
-        id: set-matrix
-        run: |
-          MATRIX_JSON='{"include":['
-          ALLOCATOR_MATRIX_JSON='{"include":['
-          FIRST=true
-          ALLOCATOR_FIRST=true
-          
-          # MI300
-          if [ "${{ inputs.mi300_enabled }}" = "true" ]; then
-            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"${{ inputs.mi300_runner }}\",\"allocator\":\"${{ inputs.mi300_allocator }}\"}"
-            FIRST=false
-            
-            if [ "${{ inputs.mi300_allocator }}" = "true" ]; then
-              if [ "$ALLOCATOR_FIRST" = "false" ]; then ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON},"; fi
-              ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"${{ inputs.mi300_runner }}\"}"
-              ALLOCATOR_FIRST=false
-            fi
-          fi
-          
-          # MI325
-          if [ "${{ inputs.mi325_enabled }}" = "true" ]; then
-            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"${{ inputs.mi325_runner }}\",\"allocator\":\"${{ inputs.mi325_allocator }}\"}"
-            FIRST=false
-            
-            if [ "${{ inputs.mi325_allocator }}" = "true" ]; then
-              if [ "$ALLOCATOR_FIRST" = "false" ]; then ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON},"; fi
-              ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"${{ inputs.mi325_runner }}\"}"
-              ALLOCATOR_FIRST=false
-            fi
-          fi
-          
-          # MI355
-          if [ "${{ inputs.mi355_enabled }}" = "true" ]; then
-            if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-            MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"${{ inputs.mi355_runner }}\",\"allocator\":\"${{ inputs.mi355_allocator }}\"}"
-            FIRST=false
-            
-            if [ "${{ inputs.mi355_allocator }}" = "true" ]; then
-              if [ "$ALLOCATOR_FIRST" = "false" ]; then ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON},"; fi
-              ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"${{ inputs.mi355_runner }}\"}"
-              ALLOCATOR_FIRST=false
-            fi
-          fi
-          
-          MATRIX_JSON="${MATRIX_JSON}]}"
-          ALLOCATOR_MATRIX_JSON="${ALLOCATOR_MATRIX_JSON}]}"
-          echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
-          echo "allocator_matrix=${ALLOCATOR_MATRIX_JSON}" >> $GITHUB_OUTPUT
-          echo "Generated matrix: ${MATRIX_JSON}"
-          echo "Generated Allocator reservation matrix: ${ALLOCATOR_MATRIX_JSON}"
+        id: generate
+        uses: ./.github/actions/generate-architecture-matrix
+        with:
+          workflow_inputs: ${{ toJSON(inputs) }}
+      
+      - name: Write matrix summary
+        uses: ./.github/actions/write-workflow-summary
+        with:
+          title: 'Architecture Matrix'
+          code: |
+            {
+              "Matrix Configuration": ${{ toJSON(fromJSON(steps.generate.outputs.matrix)) }}
+            }
 
   allocate-allocator-resources:
     name: Allocate Allocator resources for ${{ matrix.arch }}
-    needs: [validate-and-build-core, generate-matrix]
+    needs: [generate-matrix]
     runs-on: jump-host
-    if: ${{ inputs.mi300_allocator == true || inputs.mi325_allocator == true || inputs.mi355_allocator == true }}
     concurrency:
       group: allocator-jump-host
       cancel-in-progress: false
@@ -388,7 +394,10 @@ jobs:
         uses: ./.github/actions/allocate-allocator-resources
         with:
           arch: ${{ matrix.arch }}
-          runner: ${{ matrix.runner }}
+          runner_or_pool: ${{ matrix.runner }}
+          is_allocator_node: ${{ matrix.is_allocator_node }}
+          is_allocator_pool: ${{ matrix.is_allocator_pool }}
+          allocator_reserve: ${{ matrix.allocator_reserve }}
           allocator_id: ${{ inputs.allocator_id }}
           allocator_reservation_hours: ${{ inputs.allocator_reservation_hours }}
           amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
@@ -403,13 +412,15 @@ jobs:
 
   tune-and-benchmark:
     name: ${{ matrix.arch }} tuning and benchmarking
-    needs: [validate-and-build-core, generate-matrix, allocate-allocator-resources]
+    needs: [validate, generate-matrix, allocate-allocator-resources, build-core]
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout }}
     if: |
-      needs.validate-and-build-core.outputs.any_arch_enabled == 'true' && 
+      needs.validate.outputs.any_arch_enabled == 'true' && 
       !cancelled() && 
       (needs.allocate-allocator-resources.result == 'success' || needs.allocate-allocator-resources.result == 'skipped') &&
-      (!failure() || inputs.benchmark_only)
+      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped') &&
+      (!failure() || inputs.benchmark_image_tag != '')
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
@@ -428,6 +439,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_OAT }}
 
       - name: Load build metadata
+        if: ${{ inputs.benchmark_image_tag == '' }}
         id: metadata
         uses: ./.github/actions/load-build-metadata
         with:
@@ -436,9 +448,9 @@ jobs:
       - name: Determine image to use
         id: image
         run: |
-          if [ "${{ inputs.benchmark_only }}" = "true" ]; then
+          if [ -n "${{ inputs.benchmark_image_tag }}" ]; then
             echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }}" >> $GITHUB_OUTPUT
-          elif [ "${{ inputs.use_prebuilt_untuned }}" = "true" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+          elif [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
             echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
           else
             echo "used_image=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
@@ -448,14 +460,14 @@ jobs:
         run: docker pull ${{ steps.image.outputs.used_image }}
       
       - name: Run MIOpen tuning
-        if: ${{ !inputs.benchmark_only }}
+        if: ${{ inputs.benchmark_image_tag == '' }}
         uses: ./.github/actions/run-miopen-tuning
         with:
           image: ${{ steps.image.outputs.used_image }}
           arch: ${{ matrix.arch }}
       
       - name: Upload MIOpen tuning results
-        if: ${{ !inputs.benchmark_only }}
+        if: ${{ inputs.benchmark_image_tag == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
@@ -467,7 +479,7 @@ jobs:
           image: ${{ steps.image.outputs.used_image }}
           arch: ${{ matrix.arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
-          benchmark_only: ${{ inputs.benchmark_only }}
+          benchmark_only: ${{ inputs.benchmark_image_tag != '' }}
           hf_token: ${{ secrets.HF_TOKEN }}
       
       - name: Upload benchmark results
@@ -479,52 +491,46 @@ jobs:
       
       - name: Cleanup
         if: always()
+        continue-on-error: true
         uses: ./.github/actions/cleanup-workspace
         with:
           images: '${{ steps.image.outputs.used_image }}'
           containers: 'xdit-bench miopen-tune'
       
       - name: Cleanup Allocator resources
-        if: (always() || cancelled()) && matrix.allocator == 'true'
+        if: (always() || cancelled()) && matrix.allocator_reserve == 'true'
+        continue-on-error: true
         uses: ./.github/actions/cleanup-allocator
         with:
           arch: ${{ matrix.arch }}
-          runner: ${{ matrix.runner }}
-          repository: ${{ github.repository }}
           run_number: ${{ github.run_number }}
-          gh_token: ${{ secrets.GH_PAT }}
           amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
           ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
       
+      - name: Delete JIT runner
+        if: (always() || cancelled()) && (matrix.is_allocator_node == 'true' || matrix.is_allocator_pool == 'true')
+        continue-on-error: true
+        uses: ./.github/actions/delete-jit-runner
+        with:
+          runner: ${{ matrix.runner }}
+          repository: ${{ github.repository }}
+          gh_token: ${{ secrets.GH_PAT }}
+      
       - name: Delete reservation artifact
-        if: (always() || cancelled()) && matrix.allocator == 'true'
-        shell: bash
-        run: |
-          ARTIFACT_NAME="${{ github.run_number }}-reservation-${{ matrix.arch }}"
-          echo "Deleting artifact: ${ARTIFACT_NAME}"
-          
-          # Get artifact ID
-          ARTIFACT_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=${ARTIFACT_NAME}" | \
-            jq -r '.artifacts[0].id')
-          
-          if [ -n "${ARTIFACT_ID}" ] && [ "${ARTIFACT_ID}" != "null" ]; then
-            echo "Found artifact ID: ${ARTIFACT_ID}, deleting..."
-            curl -X DELETE \
-              -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}"
-            echo "Artifact deleted"
-          else
-            echo "Artifact not found or already deleted"
-          fi
+        if: (always() || cancelled()) && matrix.allocator_reserve == 'true'
+        continue-on-error: true
+        uses: ./.github/actions/delete-reservation-artifact
+        with:
+          arch: ${{ matrix.arch }}
+          run_number: ${{ github.run_number }}
+          repository: ${{ github.repository }}
+          gh_token: ${{ secrets.GH_PAT }}
 
   build-final:
     name: Build final tuned image
-    needs: [validate-and-build-core, tune-and-benchmark]
+    needs: [validate, build-core, tune-and-benchmark]
     runs-on: build-only
-    if: ${{ !inputs.benchmark_only && !cancelled() && !failure() }}
+    if: ${{ inputs.benchmark_image_tag == '' && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -536,7 +542,7 @@ jobs:
         uses: ./.github/actions/load-build-metadata
         with:
           run_number: ${{ github.run_number }}
-      
+
       - name: Download all MIOpen artifacts
         uses: actions/download-artifact@v4
         with:
@@ -558,7 +564,7 @@ jobs:
       - name: Determine untuned image
         id: untuned
         run: |
-          if [ "${{ inputs.use_prebuilt_untuned }}" = "true" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+          if [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
             echo "tag=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
           else
             echo "tag=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
@@ -581,18 +587,6 @@ jobs:
             BUILDKIT_STEP_LOG_MAX_SIZE=104857600
           cache-from: ${{ steps.untuned.outputs.tag }}
       
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
-          password: ${{ secrets.DOCKERHUB_OAT }}
-
-      - name: Tag with additional tag
-        if: ${{ inputs.additional_tag != '' }}
-        run: |
-          docker tag ${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ inputs.additional_tag }}
-          docker push ${{ env.STAGING_IMAGE }}:${{ inputs.additional_tag }}
-      
       - name: Cleanup
         if: always()
         uses: ./.github/actions/cleanup-workspace
@@ -606,8 +600,7 @@ jobs:
     runs-on: jump-host
     if: |
       (always() || cancelled()) &&
-      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped') &&
-      (inputs.mi300_allocator == true || inputs.mi325_allocator == true || inputs.mi355_allocator == true)
+      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped')
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix) }}
@@ -618,14 +611,19 @@ jobs:
           ref: ${{ inputs.git_branch }}
       
       - name: Cleanup Allocator resources
+        if: matrix.allocator_reserve == 'true'
         uses: ./.github/actions/cleanup-allocator
         with:
           arch: ${{ matrix.arch }}
-          runner: ${{ matrix.runner }}
-          repository: ${{ github.repository }}
           run_number: ${{ github.run_number }}
-          gh_token: ${{ secrets.GH_PAT }}
           amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
           ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
+      
+      - name: Delete JIT runner
+        uses: ./.github/actions/delete-jit-runner
+        with:
+          runner: ${{ matrix.runner }}
+          repository: ${{ github.repository }}
+          gh_token: ${{ secrets.GH_PAT }}
 
 

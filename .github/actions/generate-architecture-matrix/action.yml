@@ -1,0 +1,100 @@
+name: 'Generate Architecture Matrix'
+description: 'Generates matrix configuration for enabled architectures'
+inputs:
+  workflow_inputs:
+    description: 'JSON string of all workflow inputs'
+    required: true
+
+outputs:
+  matrix:
+    description: 'Full matrix JSON for all architectures'
+    value: ${{ steps.generate.outputs.matrix }}
+  allocator_matrix:
+    description: 'Matrix JSON for Allocator-enabled architectures'
+    value: ${{ steps.generate.outputs.allocator_matrix }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate matrix
+      id: generate
+      shell: bash
+      run: |
+        # Parse inputs from JSON
+        MI300_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_runner // ""')
+        MI300_IS_ALLOCATOR_NODE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_is_allocator_node // "false"')
+        MI300_IS_ALLOCATOR_POOL=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_is_allocator_pool // "false"')
+        MI300_ALLOCATOR_RESERVE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_allocator_reserve // "false"')
+        
+        MI325_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_runner // ""')
+        MI325_IS_ALLOCATOR_NODE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_is_allocator_node // "false"')
+        MI325_IS_ALLOCATOR_POOL=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_is_allocator_pool // "false"')
+        MI325_ALLOCATOR_RESERVE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_allocator_reserve // "false"')
+        
+        MI355_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_runner // ""')
+        MI355_IS_ALLOCATOR_NODE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_is_allocator_node // "false"')
+        MI355_IS_ALLOCATOR_POOL=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_is_allocator_pool // "false"')
+        MI355_ALLOCATOR_RESERVE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_allocator_reserve // "false"')
+        
+        ALLOCATOR_RESERVE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.allocator_reserve // "false"')
+        ALLOCATOR_RESERVATION_HOURS=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.allocator_reservation_hours // "4"')
+        
+        MATRIX_JSON='{"include":['
+        FIRST=true
+        
+        # MI300
+        if [ -n "$MI300_RUNNER" ]; then
+          # Calculate timeout: reservation hours * 60 (if using Allocator with reservation), 2880 min (48h for Allocator without reservation), or 480 min (8h default)
+          if [ "$MI300_ALLOCATOR_RESERVE" = "true" ] && [ "$ALLOCATOR_RESERVE" = "true" ] && [ "$MI300_IS_ALLOCATOR_POOL" != "true" ] && [ "$MI300_IS_ALLOCATOR_NODE" = "true" ]; then
+            TIMEOUT=$(($ALLOCATOR_RESERVATION_HOURS * 60))
+          elif [ "$MI300_IS_ALLOCATOR_NODE" = "true" ] || [ "$MI300_IS_ALLOCATOR_POOL" = "true" ]; then
+            TIMEOUT=2880
+          else
+            TIMEOUT=480
+          fi
+          
+          if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"$MI300_RUNNER\",\"is_allocator_node\":\"$MI300_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI300_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI300_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
+          FIRST=false
+        fi
+        
+        # MI325
+        if [ -n "$MI325_RUNNER" ]; then
+          # Calculate timeout
+          if [ "$MI325_ALLOCATOR_RESERVE" = "true" ] && [ "$ALLOCATOR_RESERVE" = "true" ] && [ "$MI325_IS_ALLOCATOR_POOL" != "true" ] && [ "$MI325_IS_ALLOCATOR_NODE" = "true" ]; then
+            TIMEOUT=$(($ALLOCATOR_RESERVATION_HOURS * 60))
+          elif [ "$MI325_IS_ALLOCATOR_NODE" = "true" ] || [ "$MI325_IS_ALLOCATOR_POOL" = "true" ]; then
+            TIMEOUT=2880
+          else
+            TIMEOUT=480
+          fi
+          
+          if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"$MI325_RUNNER\",\"is_allocator_node\":\"$MI325_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI325_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI325_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
+          FIRST=false
+        fi
+        
+        # MI355
+        if [ -n "$MI355_RUNNER" ]; then
+          # Calculate timeout
+          if [ "$MI355_ALLOCATOR_RESERVE" = "true" ] && [ "$ALLOCATOR_RESERVE" = "true" ] && [ "$MI355_IS_ALLOCATOR_POOL" != "true" ] && [ "$MI355_IS_ALLOCATOR_NODE" = "true" ]; then
+            TIMEOUT=$(($ALLOCATOR_RESERVATION_HOURS * 60))
+          elif [ "$MI355_IS_ALLOCATOR_NODE" = "true" ] || [ "$MI355_IS_ALLOCATOR_POOL" = "true" ]; then
+            TIMEOUT=2880
+          else
+            TIMEOUT=480
+          fi
+          
+          if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
+          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"$MI355_RUNNER\",\"is_allocator_node\":\"$MI355_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI355_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI355_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
+          FIRST=false
+        fi
+        
+        MATRIX_JSON="${MATRIX_JSON}]}"
+        echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+        echo "Generated matrix: ${MATRIX_JSON}"
+        
+        # Generate allocator matrix by filtering the full matrix
+        ALLOCATOR_MATRIX_JSON=$(echo "${MATRIX_JSON}" | jq -c '{include: [.include[] | select(.is_allocator_node == "true" or .is_allocator_pool == "true")]}')
+        echo "allocator_matrix=${ALLOCATOR_MATRIX_JSON}" >> $GITHUB_OUTPUT
+        echo "Generated allocator matrix: ${ALLOCATOR_MATRIX_JSON}"
