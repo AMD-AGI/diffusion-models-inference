@@ -1,137 +1,110 @@
 - name: stablediffusion_3_5.default
   tags: [release, mad, lucid, instinct]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     pipefusion_parallel_degree: 4
     use_cfg_parallel: True
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: aiter
 
 - name: stablediffusion_3_5.default.hopper
   tags: [lucid, hopper]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     pipefusion_parallel_degree: 4
     use_cfg_parallel: True
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.default.blackwell
   tags: [lucid, blackwell]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     pipefusion_parallel_degree: 4
     use_cfg_parallel: True
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.u2r4
   tags: [release, instinct]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     ulysses_degree: 2
     ring_degree: 4
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: aiter
 
 - name: stablediffusion_3_5.u2r4.hopper
   tags: [hopper]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     ulysses_degree: 2
     ring_degree: 4
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.u2r4.blackwell
   tags: [blackwell]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     ulysses_degree: 2
     ring_degree: 4
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.single_gpu
   tags: [release, instinct]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 1
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: aiter
 
 - name: stablediffusion_3_5.single_gpu.hopper
   tags: [hopper]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 1
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.single_gpu.blackwell
   tags: [blackwell]
   model: stabilityai/stable-diffusion-3.5-large
-  num_gpus: 1
-  runner: torchrun
-  entrypoint: /app/StableDiffusion3.5/run.py
+  runner: xdit
   args:
     prompt: A capybara holding a sign that reads Hello World
-    num_repetitions: 50
+    num_iterations: 50
     num_inference_steps: 28
     use_torch_compile: True
-    dtype: torch.float16
     attention_backend: cudnn

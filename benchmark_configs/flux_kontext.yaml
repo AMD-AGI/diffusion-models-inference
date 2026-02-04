@@ -1,9 +1,7 @@
 - name: flux_kontext.default
   tags: [release, mad, lucid, instinct]
   model: black-forest-labs/FLUX.1-Kontext-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
+  runner: xdit
   args:
     seed: 42
     prompt: Add a cool hat to the cat
@@ -11,22 +9,18 @@
     width: 1024
     num_inference_steps: 30
     max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
+    warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    img_file_path: /app/Flux/cat.png
-    model_type: flux_kontext
+    input_images: /app/data/flux_cat.png
     guidance_scale: 2.5
-    num_repetitions: 25
+    num_iterations: 25
     attention_backend: aiter
 
 - name: flux_kontext.default.hopper
   tags: [lucid, hopper]
   model: black-forest-labs/FLUX.1-Kontext-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
+  runner: xdit
   args:
     seed: 42
     prompt: Add a cool hat to the cat
@@ -34,22 +28,18 @@
     width: 1024
     num_inference_steps: 30
     max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
+    warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    img_file_path: /app/Flux/cat.png
-    model_type: flux_kontext
+    input_images: /app/data/flux_cat.png
     guidance_scale: 2.5
-    num_repetitions: 25
+    num_iterations: 25
     attention_backend: cudnn
 
 - name: flux_kontext.default.blackwell
   tags: [lucid, blackwell]
   model: black-forest-labs/FLUX.1-Kontext-dev
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Flux/run_usp.py
+  runner: xdit
   args:
     seed: 42
     prompt: Add a cool hat to the cat
@@ -57,12 +47,10 @@
     width: 1024
     num_inference_steps: 30
     max_sequence_length: 512
-    warmup_steps: 5
-    no_use_resolution_binning: True
+    warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    img_file_path: /app/Flux/cat.png
-    model_type: flux_kontext
+    input_images: /app/data/flux_cat.png
     guidance_scale: 2.5
-    num_repetitions: 25
+    num_iterations: 25
     attention_backend: cudnn

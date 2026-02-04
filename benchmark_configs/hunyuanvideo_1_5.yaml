@@ -1,9 +1,7 @@
 - name: hunyuanvideo_1_5.default
   tags: [release, mad, lucid, instinct]
   model: hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Hunyuanvideo_1_5/run.py
+  runner: xdit
   args:
     prompt: In the large cage, two puppies were wagging their tails at each other.
     task: t2v
@@ -12,7 +10,7 @@
     seed: 1168860793
     num_frames: 129
     num_inference_steps: 50
-    num_repetitions: 1
+    num_iterations: 1
     ulysses_degree: 8
     enable_tiling: True
     enable_slicing: True
@@ -22,9 +20,7 @@
 - name: hunyuanvideo_1_5.default.hopper
   tags: [lucid, hopper]
   model: hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Hunyuanvideo_1_5/run.py
+  runner: xdit
   args:
     prompt: In the large cage, two puppies were wagging their tails at each other.
     task: t2v
@@ -33,7 +29,7 @@
     seed: 1168860793
     num_frames: 129
     num_inference_steps: 50
-    num_repetitions: 1
+    num_iterations: 1
     ulysses_degree: 8
     enable_tiling: True
     enable_slicing: True
@@ -43,9 +39,7 @@
 - name: hunyuanvideo_1_5.default.blackwell
   tags: [lucid, blackwell]
   model: hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v
-  num_gpus: 8
-  runner: torchrun
-  entrypoint: /app/Hunyuanvideo_1_5/run.py
+  runner: xdit
   args:
     prompt: In the large cage, two puppies were wagging their tails at each other.
     task: t2v
@@ -54,7 +48,7 @@
     seed: 1168860793
     num_frames: 129
     num_inference_steps: 50
-    num_repetitions: 1
+    num_iterations: 1
     ulysses_degree: 8
     enable_tiling: True
     enable_slicing: True

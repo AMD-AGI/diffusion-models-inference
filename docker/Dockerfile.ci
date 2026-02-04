@@ -18,10 +18,10 @@ ARG PYTORCH_AUDIO_COMMIT="e3c6ee2b6588b7cd27a84182de74bf12fe043831"
 ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
 # deps image arguments
 ARG AITER_COMMIT="7c0c84f"
-ARG LONGCONTEXTATTENTION_COMMIT="2c9b712"
-ARG DIFFUSERS_COMMIT="6708f5"
-ARG ACCELERATE_COMMIT="b521400"
-ARG XDIT_COMMIT="0a3d7a358d1d9871e3743c296dde58b4eeb572ce"
+ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
+ARG DIFFUSERS_COMMIT="2c669e8"
+ARG ACCELERATE_COMMIT="b7f2212"
+ARG XDIT_COMMIT="82efe0b"
 ARG AO_COMMIT="8b72284"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -260,15 +260,6 @@ COPY docker/libkineto.conf /config/libkineto.conf
 ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
     KINETO_CONFIG="/config/libkineto.conf"
 
-FROM core AS private-deps
-
-WORKDIR /app/external
-# build opt_groupnorm
-COPY src/opt_groupnorm opt_groupnorm/
-RUN pip install setuptools && \
-    cd opt_groupnorm && \
-    MAX_JOBS=${MAX_JOBS} pip wheel --no-build-isolation . --wheel-dir dist/
-
 FROM core AS deps
 ARG AITER_COMMIT
 ARG LONGCONTEXTATTENTION_COMMIT
@@ -281,9 +272,6 @@ ARG ARBITER_COMMIT
 # setup
 WORKDIR /app/external
 COPY ./src/patches /patches
-# install opt_groupnorm
-COPY --from=private-deps /app/external/opt_groupnorm/dist/*.whl /install/opt_groupnorm/
-RUN pip install /install/opt_groupnorm/*.whl
 # install aiter
 RUN pip install pandas
 RUN git clone https://github.com/ROCm/aiter.git && \
@@ -310,14 +298,6 @@ RUN git clone https://github.com/huggingface/accelerate.git && \
     cd accelerate && \
     git reset --hard ${ACCELERATE_COMMIT} && \
     pip install -e .
-# install xfuser
-RUN git clone https://github.com/xdit-project/xDiT.git && \
-    cd xDiT && \
-    git reset --hard ${XDIT_COMMIT} && \
-    pip freeze | grep numpy > constraints.txt && \
-    git apply /patches/xfuser_fp8_attn_graph_break.patch && \
-    git apply /patches/xfuser_wan_example.patch && \
-    pip install -c constraints.txt -e .
 # install torchao
 RUN git clone https://github.com/pytorch/ao.git && \
     cd ao && \
@@ -341,73 +321,34 @@ RUN git clone https://github.com/fal-ai/arbiter.git && \
     # to be sure, pin numpy and transformers to their current versions
     pip freeze | grep -E 'numpy|transformers' > constraints.txt && \
     pip install --no-cache-dir -c constraints.txt -e .
+# install xfuser
+WORKDIR /app
+RUN git clone https://github.com/xdit-project/xDiT.git && \
+    cd xDiT && \
+    git reset --hard ${XDIT_COMMIT} && \
+    pip freeze | grep numpy > constraints.txt && \
+    pip install -c constraints.txt -e .
 # rocprofiler-compute runtime deps
 RUN pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt
-# hotfix: transformers<5.0.0 required
+# hotfix: until diffusers installs ftfy
+RUN pip install ftfy
+# hotfix: transformers<5.0.0 required for good output quality
 RUN pip uninstall -y transformers && pip install --no-cache-dir "transformers==4.57.6"
 
 # cleanup
 RUN rm -fr /patches
 
-FROM deps AS hunyuanvideo
-
-WORKDIR /app/Hunyuanvideo
-COPY src/xDiT/ci/README_huvideo.md /app/Hunyuanvideo/RUN.md
-COPY src/xDiT/ci/video_descriptions.csv /app/Hunyuanvideo/video_descriptions.csv
-COPY src/xDiT/ci/huvideo_utils.py /app/Hunyuanvideo/huvideo_utils.py
-COPY src/xDiT/ci/hunyuan_video_usp_example_custom.py /app/Hunyuanvideo/run.py
-
-FROM deps AS flux
-WORKDIR /app/Flux
-COPY src/flux/ci/README.md /app/Flux/RUN.md
-COPY src/flux/flux_utils.py /app/Flux/flux_utils.py
-COPY src/flux/flux_example.py /app/Flux/run.py
-COPY src/flux/flux_usp_example.py /app/Flux/run_usp.py
-COPY src/flux/requirements.txt /app/Flux/requirements.txt
-COPY src/flux/cat.png /app/Flux/cat.png
-
-FROM deps AS stablediffusion3.5
-WORKDIR /app/StableDiffusion3.5
-COPY src/SD_3_5/ci/README.md /app/StableDiffusion3.5/RUN.md
-COPY src/SD_3_5/scripts/sd3_utils.py /app/StableDiffusion3.5/sd3_utils.py
-COPY src/SD_3_5/scripts/sd3_example.py /app/StableDiffusion3.5/run.py
-
-FROM deps AS wan
-WORKDIR /app/Wan
-COPY src/wan_xdit/ci/README.md /app/Wan/RUN.md
-COPY src/wan_xdit/wan_utils.py /app/Wan/wan_utils.py
-COPY src/wan_xdit/wan_example.py /app/Wan/run.py
-COPY src/wan_xdit/assets/i2v_input.JPG /app/Wan/i2v_input.JPG
-COPY src/wan_xdit/requirements.txt /app/Wan/requirements.txt
-
-FROM deps AS z_image
-WORKDIR /app/Z-Image
-COPY src/z_image/ci/README.md /app/Z-Image/RUN.md
-COPY src/z_image/z_image_utils.py /app/Z-Image/z_image_utils.py
-COPY src/z_image/z_image_example.py /app/Z-Image/run.py
-
-FROM deps AS hunyuanvideo_1_5
-WORKDIR /app/Hunyuanvideo_1_5
-COPY src/hunyuanvideo_1_5/ci/README.md /app/Hunyuanvideo_1_5/RUN.md
-COPY src/hunyuanvideo_1_5/hunyuanvideo_1_5_utils.py /app/Hunyuanvideo_1_5/hunyuanvideo_1_5_utils.py
-COPY src/hunyuanvideo_1_5/hunyuanvideo_1_5_example.py /app/Hunyuanvideo_1_5/run.py
-
 FROM core AS final
 # by copying from the deps stage we leave behind all cache and temporary files created during installation
 COPY --from=deps /venv /venv
-COPY --from=deps /app/external /app/external
+COPY --from=deps /app /app
 
 WORKDIR /app
-COPY --from=hunyuanvideo /app/Hunyuanvideo /app/Hunyuanvideo
-COPY --from=flux /app/Flux /app/Flux
-RUN cd /app/Flux && \
-    pip install --no-cache-dir -r requirements.txt
-COPY --from=stablediffusion3.5 /app/StableDiffusion3.5 /app/StableDiffusion3.5
-COPY --from=wan /app/Wan /app/Wan
-RUN cd /app/Wan && \
-    pip install --no-cache-dir -r requirements.txt
-COPY --from=z_image /app/Z-Image /app/Z-Image
-COPY --from=hunyuanvideo_1_5 /app/Hunyuanvideo_1_5 /app/Hunyuanvideo_1_5
+# copy assets
+COPY src/flux/cat.png /app/data/flux_cat.png
+COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+# copy instructions and CI prerequisites
+COPY docs/pytorch-xdit/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
 COPY .ci/quality_check.py /app/.ci/quality_check.py
