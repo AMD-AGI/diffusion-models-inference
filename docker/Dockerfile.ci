@@ -334,7 +334,8 @@ RUN pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requi
 RUN pip install ftfy
 # hotfix: transformers<5.0.0 required for good output quality
 RUN pip uninstall -y transformers && pip install --no-cache-dir "transformers==4.57.6"
-
+# hotfix: transformers needs protobuf
+RUN pip install --no-cache-dir "protobuf==6.33.5"
 # cleanup
 RUN rm -fr /patches
 
