@@ -357,6 +357,7 @@ jobs:
   allocate-allocator-resources:
     name: Allocate Allocator resources for ${{ matrix.arch }}
     needs: [generate-matrix]
+    if: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null }}
     runs-on: jump-host
     concurrency:
       group: allocator-jump-host
@@ -600,7 +601,8 @@ jobs:
     runs-on: jump-host
     if: |
       (always() || cancelled()) &&
-      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped')
+      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped') &&
+      fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix) }}
