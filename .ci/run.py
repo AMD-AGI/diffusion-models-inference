@@ -267,7 +267,7 @@ def command(e: Experiment, override_args: dict) -> List[str]:
             continue
         if isinstance(value, list):
             if value:
-                cmd.extend([flag, " ".join(value)])
+                cmd.extend([flag] + [str(v) for v in value])
             continue
 
         cmd.append(flag)
