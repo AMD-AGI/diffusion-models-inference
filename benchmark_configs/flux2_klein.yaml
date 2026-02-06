@@ -1,0 +1,50 @@
+- name: flux2_klein.default
+  tags: [release, mad, lucid, instinct]
+  model: black-forest-labs/FLUX.2-klein-9B
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A spectacular sunset over the ocean
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 1.0
+    num_iterations: 25
+    attention_backend: aiter
+
+- name: flux2_klein.default.hopper
+  tags: [lucid, hopper]
+  model: black-forest-labs/FLUX.2-klein-9B
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A spectacular sunset over the ocean
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 1.0
+    num_iterations: 25
+    attention_backend: cudnn
+
+- name: flux2_klein.default.blackwell
+  tags: [lucid, blackwell]
+  model: black-forest-labs/FLUX.2-klein-9B
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A spectacular sunset over the ocean
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 1.0
+    num_iterations: 25
+    attention_backend: cudnn
