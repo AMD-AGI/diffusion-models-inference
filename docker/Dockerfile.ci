@@ -19,9 +19,9 @@ ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
 # deps image arguments
 ARG AITER_COMMIT="42ae0ad0fa39504a6b44235174fbcfb20e49ae38"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG DIFFUSERS_COMMIT="2c669e8"
+ARG DIFFUSERS_COMMIT="a3dcd9"
 ARG ACCELERATE_COMMIT="b7f2212"
-ARG XDIT_COMMIT="b354ab40c75a6837e0f6fb2e50df6b33b2db111b"
+ARG XDIT_COMMIT="635fc29"
 ARG AO_COMMIT="8b72284"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -290,7 +290,6 @@ RUN git clone https://github.com/feifeibear/long-context-attention.git && \
 RUN git clone https://github.com/huggingface/diffusers.git && \
     cd diffusers && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
-    git apply /patches/diffusers_aiter_available.patch && \
     pip install -e ".[torch]" && \
     rm scripts/convert_vq_diffusion_to_diffusers.py
 # install accelerate

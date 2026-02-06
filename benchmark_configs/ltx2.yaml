@@ -1,0 +1,47 @@
+- name: ltx2.default
+  tags: [release, mad, lucid, instinct]
+  model: Lightricks/LTX-2
+  runner: xdit
+  args:
+    seed: 42
+    prompt: "Cinematic action packed shot. The man says silently: \"We need to run.\". The camera zooms in on his mouth then immediately screams: \"NOW!\". The camera zooms back out, he turns around and bolts it."
+    height: 1088
+    width: 1920
+    num_inference_steps: 40
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 4.0
+    num_iterations: 1
+    attention_backend: aiter
+
+- name: ltx2.default.hopper
+  tags: [lucid, hopper]
+  model: Lightricks/LTX-2
+  runner: xdit
+  args:
+    seed: 42
+    prompt: "Cinematic action packed shot. The man says silently: \"We need to run.\". The camera zooms in on his mouth then immediately screams: \"NOW!\". The camera zooms back out, he turns around and bolts it."
+    height: 1088
+    width: 1920
+    num_inference_steps: 40
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 4.0
+    num_iterations: 1
+    attention_backend: flash_3
+
+- name: ltx2.default.blackwell
+  tags: [lucid, blackwell]
+  model: Lightricks/LTX-2
+  runner: xdit
+  args:
+    seed: 42
+    prompt: "Cinematic action packed shot. The man says silently: \"We need to run.\". The camera zooms in on his mouth then immediately screams: \"NOW!\". The camera zooms back out, he turns around and bolts it."
+    height: 1088
+    width: 1920
+    num_inference_steps: 40
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 4.0
+    num_iterations: 1
+    attention_backend: flash_4
