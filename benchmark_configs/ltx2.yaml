@@ -1,5 +1,5 @@
 - name: ltx2.default
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: Lightricks/LTX-2
   runner: xdit
   args:
@@ -14,8 +14,8 @@
     num_iterations: 1
     attention_backend: aiter
 
-- name: ltx2.default.hopper
-  tags: [lucid, hopper]
+- name: ltx2.default.hopper.h200
+  tags: [lucid, hopper, h200]
   model: Lightricks/LTX-2
   runner: xdit
   args:
@@ -31,7 +31,7 @@
     attention_backend: flash_3
 
 - name: ltx2.default.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: Lightricks/LTX-2
   runner: xdit
   args:

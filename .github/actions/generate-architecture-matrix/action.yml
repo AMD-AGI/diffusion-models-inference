@@ -54,7 +54,7 @@ runs:
           fi
           
           if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"runner\":\"$MI300_RUNNER\",\"is_allocator_node\":\"$MI300_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI300_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI300_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
+          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"gfx_arch\":\"gfx942\",\"runner\":\"$MI300_RUNNER\",\"is_allocator_node\":\"$MI300_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI300_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI300_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
           FIRST=false
         fi
         
@@ -70,7 +70,7 @@ runs:
           fi
           
           if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"runner\":\"$MI325_RUNNER\",\"is_allocator_node\":\"$MI325_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI325_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI325_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
+          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"gfx_arch\":\"gfx942\",\"runner\":\"$MI325_RUNNER\",\"is_allocator_node\":\"$MI325_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI325_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI325_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
           FIRST=false
         fi
         
@@ -86,7 +86,7 @@ runs:
           fi
           
           if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"runner\":\"$MI355_RUNNER\",\"is_allocator_node\":\"$MI355_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI355_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI355_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
+          MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"gfx_arch\":\"gfx950\",\"runner\":\"$MI355_RUNNER\",\"is_allocator_node\":\"$MI355_IS_ALLOCATOR_NODE\",\"is_allocator_pool\":\"$MI355_IS_ALLOCATOR_POOL\",\"allocator_reserve\":\"$MI355_ALLOCATOR_RESERVE\",\"timeout\":${TIMEOUT}}"
           FIRST=false
         fi
         

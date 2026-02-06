@@ -1,5 +1,5 @@
 - name: hunyuanvideo.default
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
@@ -21,7 +21,7 @@
     attention_backend: aiter
 
 - name: hunyuanvideo.hybrid
-  tags: [release, instinct]
+  tags: [release, instinct, gfx942, gfx950]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
@@ -43,7 +43,7 @@
     use_hybrid_fp8_attn: True
 
 - name: hunyuanvideo.sage
-  tags: [release, instinct]
+  tags: [release, instinct, gfx942, gfx950]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
@@ -65,7 +65,7 @@
     attention_backend: aiter_sage
 
 - name: hunyuanvideo.default.hopper
-  tags: [lucid, hopper]
+  tags: [lucid, hopper, h100, h200]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
@@ -87,7 +87,7 @@
     attention_backend: flash_3
 
 - name: hunyuanvideo.default.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit

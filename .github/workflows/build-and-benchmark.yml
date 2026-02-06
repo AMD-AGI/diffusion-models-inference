@@ -479,6 +479,7 @@ jobs:
         with:
           image: ${{ steps.image.outputs.used_image }}
           arch: ${{ matrix.arch }}
+          gfx_arch: ${{ matrix.gfx_arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: ${{ inputs.benchmark_image_tag != '' }}
           hf_token: ${{ secrets.HF_TOKEN }}

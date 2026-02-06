@@ -1,5 +1,5 @@
 - name: z_image_turbo.default
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: Tongyi-MAI/Z-Image-Turbo
   runner: xdit
   args:
@@ -15,7 +15,7 @@
     attention_backend: aiter
 
 - name: z_image_turbo.default.hopper
-  tags: [lucid, hopper]
+  tags: [lucid, hopper, h100, h200]
   model: Tongyi-MAI/Z-Image-Turbo
   runner: xdit
   args:
@@ -31,7 +31,7 @@
     attention_backend: flash_3
 
 - name: z_image_turbo.default.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: Tongyi-MAI/Z-Image-Turbo
   runner: xdit
   args:
