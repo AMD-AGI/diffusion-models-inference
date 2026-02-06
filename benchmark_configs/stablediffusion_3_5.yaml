@@ -1,5 +1,5 @@
 - name: stablediffusion_3_5.default
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -12,7 +12,7 @@
     attention_backend: aiter
 
 - name: stablediffusion_3_5.default.hopper
-  tags: [lucid, hopper]
+  tags: [lucid, hopper, h100, h200]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -25,7 +25,7 @@
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.default.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -38,7 +38,7 @@
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.u2r4
-  tags: [release, instinct]
+  tags: [release, instinct, gfx942, gfx950]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -51,7 +51,7 @@
     attention_backend: aiter
 
 - name: stablediffusion_3_5.u2r4.hopper
-  tags: [hopper]
+  tags: [hopper, h100, h200]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -64,7 +64,7 @@
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.u2r4.blackwell
-  tags: [blackwell]
+  tags: [blackwell, b200, b300]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -77,7 +77,7 @@
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.single_gpu
-  tags: [release, instinct]
+  tags: [release, instinct, gfx942, gfx950]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -88,7 +88,7 @@
     attention_backend: aiter
 
 - name: stablediffusion_3_5.single_gpu.hopper
-  tags: [hopper]
+  tags: [hopper, h100, h200]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:
@@ -99,7 +99,7 @@
     attention_backend: cudnn
 
 - name: stablediffusion_3_5.single_gpu.blackwell
-  tags: [blackwell]
+  tags: [blackwell, b200, b300]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
   args:

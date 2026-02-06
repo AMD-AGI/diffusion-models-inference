@@ -12,6 +12,10 @@ inputs:
     description: 'Flags used to filter benchmarks, leave empty to run all. Example, to run only release benchmarks: --tag release'
     required: false
     default: ''
+  gfx_arch:
+    description: 'GPU architecture tag for benchmark selection (gfx942, gfx950)'
+    required: false
+    default: ''
   benchmark_only:
     description: 'Whether running in benchmark-only mode'
     required: false
@@ -35,6 +39,11 @@ runs:
           MIOPEN_USER_DB_PATH_ENV="-e MIOPEN_USER_DB_PATH=/app/diffusion-models-inference/data/miopen/userdb"
         fi
         
+        EFFECTIVE_BENCHMARK_FLAGS="${{ inputs.benchmark_flags }}"
+        if [ -n "${{ inputs.gfx_arch }}" ]; then
+          EFFECTIVE_BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS} --tag ${{ inputs.gfx_arch }}"
+        fi
+        
         docker run \
           --cap-add=SYS_PTRACE \
           --security-opt seccomp=unconfined \
@@ -55,7 +64,7 @@ runs:
           -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
           -e OMP_NUM_THREADS=16 \
           -e HF_TOKEN=${{ inputs.hf_token }} \
-          -e BENCHMARK_FLAGS="${{ inputs.benchmark_flags }}" \
+          -e BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS}" \
           ${{ inputs.image }} \
           sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && \
                  python3 /app/.ci/quality_check.py --reference-path /app/references --benchmark-output-path /outputs'

@@ -1,5 +1,5 @@
 - name: flux2.default
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -17,8 +17,28 @@
     num_iterations: 25
     attention_backend: aiter
 
-- name: flux2.default.hopper
-  tags: [lucid, hopper]
+- name: flux2.default.hopper.h100
+  tags: [lucid, hopper, h100]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    use_fsdp: True
+    attention_backend: cudnn
+
+- name: flux2.default.hopper.h200
+  tags: [lucid, hopper, h200]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -37,7 +57,7 @@
     attention_backend: cudnn
 
 - name: flux2.default.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -55,89 +75,89 @@
     num_iterations: 25
     attention_backend: cudnn
 
-#- name: flux2.fp8gemm
-#  tags: [release, mad, lucid, instinct]
-#  model: black-forest-labs/FLUX.2-dev
-#  runner: xdit
-#  args:
-#    seed: 42
-#    prompt: Add a cool hat to the cat
-#    height: 1024
-#    width: 1024
-#    num_inference_steps: 50
-#    max_sequence_length: 512
-#    warmup_calls: 5
-#    use_fp8_gemms: True
-#    ulysses_degree: 8
-#    use_torch_compile: True
-#    input_images: /app/data/flux_cat.png
-#    guidance_scale: 4.0
-#    num_iterations: 25
-#    attention_backend: aiter
+- name: flux2.fp8gemm
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    use_fp8_gemms: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter
 
-#- name: flux2.fp8gemm.hopper
-#  tags: [lucid, hopper]
-#  model: black-forest-labs/FLUX.2-dev
-#  runner: xdit
-#  args:
-#    seed: 42
-#    prompt: Add a cool hat to the cat
-#    height: 1024
-#    width: 1024
-#    num_inference_steps: 50
-#    max_sequence_length: 512
-#    warmup_calls: 5
-#    use_fp8_gemms: True
-#    ulysses_degree: 8
-#    use_torch_compile: True
-#    input_images: /app/data/flux_cat.png
-#    guidance_scale: 4.0
-#    num_iterations: 25
-#    attention_backend: flash_3
+- name: flux2.fp8gemm.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    use_fp8_gemms: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: cudnn
 
-#- name: flux2.fp8gemm.blackwell
-#  tags: [lucid, blackwell]
-#  model: black-forest-labs/FLUX.2-dev
-#  runner: xdit
-#  args:
-#    seed: 42
-#    prompt: Add a cool hat to the cat
-#    height: 1024
-#    width: 1024
-#    num_inference_steps: 50
-#    max_sequence_length: 512
-#    warmup_calls: 5
-#    use_fp8_gemms: True
-#    ulysses_degree: 8
-#    use_torch_compile: True
-#    input_images: /app/data/flux_cat.png
-#    guidance_scale: 4.0
-#    num_iterations: 25
-#    attention_backend: cudnn
+- name: flux2.fp8gemm.blackwell
+  tags: [lucid, blackwell, b200, b300]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    use_fp8_gemms: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: cudnn
 
-#- name: flux2.fp8gemms_sage
-#  tags: [release, instinct]
-#  model: black-forest-labs/FLUX.2-dev
-#  runner: xdit
-#  args:
-#    seed: 42
-#    prompt: Add a cool hat to the cat
-#    height: 1024
-#    width: 1024
-#    num_inference_steps: 50
-#    max_sequence_length: 512
-#    warmup_calls: 5
-#    ulysses_degree: 8
-#    use_torch_compile: True
-#    input_images: /app/data/flux_cat.png
-#    guidance_scale: 4.0
-#    num_iterations: 25
-#    attention_backend: aiter_sage
-#    use_fp8_gemms: True
+- name: flux2.fp8gemms_sage
+  tags: [release, instinct, gfx942, gfx950]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter_sage
+    use_fp8_gemms: True
 
 # TI2V 2K
 - name: flux2.ti2i_2k
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -155,8 +175,28 @@
     num_iterations: 25
     attention_backend: aiter
 
-- name: flux2.ti2i_2k.hopper
-  tags: [lucid, hopper]
+- name: flux2.ti2i_2k.hopper.h100
+  tags: [lucid, hopper, h100]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    use_fsdp: True
+    attention_backend: cudnn
+
+- name: flux2.ti2i_2k.hopper.h200
+  tags: [lucid, hopper, h200]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -175,7 +215,7 @@
     attention_backend: cudnn
 
 - name: flux2.ti2i_2k.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -195,7 +235,7 @@
 
 # T2V 1K
 - name: flux2.t2i_1k
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -212,8 +252,27 @@
     num_iterations: 25
     attention_backend: aiter
 
-- name: flux2.t2i_1k.hopper
-  tags: [lucid, hopper]
+- name: flux2.t2i_1k.hopper.h100
+  tags: [lucid, hopper, h100]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 4.0
+    num_iterations: 25
+    use_fsdp: True
+    attention_backend: cudnn
+
+- name: flux2.t2i_1k.hopper.h200
+  tags: [lucid, hopper, h200]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -231,7 +290,7 @@
     attention_backend: cudnn
 
 - name: flux2.t2i_1k.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -250,7 +309,7 @@
 
 # T2V 2K
 - name: flux2.t2i_2k
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -267,8 +326,27 @@
     num_iterations: 25
     attention_backend: aiter
 
-- name: flux2.t2i_2k.hopper
-  tags: [lucid, hopper]
+- name: flux2.t2i_2k.hopper.h100
+  tags: [lucid, hopper, h100]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 2048
+    width: 2048
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 4.0
+    num_iterations: 25
+    use_fsdp: True
+    attention_backend: cudnn
+
+- name: flux2.t2i_2k.hopper.h200
+  tags: [lucid, hopper, h200]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -286,7 +364,7 @@
     attention_backend: cudnn
 
 - name: flux2.t2i_2k.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -305,7 +383,7 @@
 
 # TmultiI2V 1K
 - name: flux2.t-multi-i2i_1k
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -325,8 +403,30 @@
     num_iterations: 25
     attention_backend: aiter
 
-- name: flux2.t-multi-i2i_1k.hopper
-  tags: [lucid, hopper]
+- name: flux2.t-multi-i2i_1k.hopper.h100
+  tags: [lucid, hopper, h100]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    num_iterations: 25
+    use_fsdp: True
+    attention_backend: cudnn
+
+- name: flux2.t-multi-i2i_1k.hopper.h200
+  tags: [lucid, hopper, h200]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -347,7 +447,7 @@
     attention_backend: cudnn
 
 - name: flux2.t-multi-i2i_1k.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -369,7 +469,7 @@
 
 # TmultiI2V 2K
 - name: flux2.t-multi-i2i_2k
-  tags: [release, mad, lucid, instinct]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -390,7 +490,50 @@
     attention_backend: aiter
 
 - name: flux2.t-multi-i2i_2k.hopper
-  tags: [lucid, hopper]
+  tags: [lucid, hopper, h100, h200]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 2048
+    width: 2048
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: cudnn
+
+- name: flux2.t-multi-i2i_2k.hopper.h100
+  tags: [lucid, hopper, h100]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 2048
+    width: 2048
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    num_iterations: 25
+    use_fsdp: True
+    attention_backend: cudnn
+
+- name: flux2.t-multi-i2i_2k.hopper.h200
+  tags: [lucid, hopper, h200]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -411,7 +554,7 @@
     attention_backend: cudnn
 
 - name: flux2.t-multi-i2i_2k.blackwell
-  tags: [lucid, blackwell]
+  tags: [lucid, blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
