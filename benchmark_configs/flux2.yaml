@@ -34,7 +34,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    use_fsdp: True
+    fully_shard_degree: 8
     attention_backend: cudnn
 
 - name: flux2.default.hopper.h200
@@ -95,8 +95,31 @@
     num_iterations: 25
     attention_backend: aiter
 
-- name: flux2.fp8gemm.hopper
-  tags: [lucid, hopper, h100, h200]
+# Fails because quantization and sharding conflict
+# But keep this for future reference
+- name: flux2.fp8gemm.hopper.h100
+  tags: [lucid, hopper, h100]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    use_fp8_gemms: True
+    ulysses_degree: 8
+    fully_shard_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: cudnn
+
+- name: flux2.fp8gemm.hopper.h200
+  tags: [lucid, hopper, h200]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -192,7 +215,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    use_fsdp: True
+    fully_shard_degree: 8
     attention_backend: cudnn
 
 - name: flux2.ti2i_2k.hopper.h200
@@ -268,7 +291,7 @@
     use_torch_compile: True
     guidance_scale: 4.0
     num_iterations: 25
-    use_fsdp: True
+    fully_shard_degree: 8
     attention_backend: cudnn
 
 - name: flux2.t2i_1k.hopper.h200
@@ -342,7 +365,7 @@
     use_torch_compile: True
     guidance_scale: 4.0
     num_iterations: 25
-    use_fsdp: True
+    fully_shard_degree: 8
     attention_backend: cudnn
 
 - name: flux2.t2i_2k.hopper.h200
@@ -422,7 +445,7 @@
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
-    use_fsdp: True
+    fully_shard_degree: 8
     attention_backend: cudnn
 
 - name: flux2.t-multi-i2i_1k.hopper.h200
@@ -489,27 +512,6 @@
     num_iterations: 25
     attention_backend: aiter
 
-- name: flux2.t-multi-i2i_2k.hopper
-  tags: [lucid, hopper, h100, h200]
-  model: black-forest-labs/FLUX.2-dev
-  runner: xdit
-  args:
-    seed: 42
-    prompt: the cat from image 1 has the same expression as cat on image 2
-    height: 2048
-    width: 2048
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: True
-    input_images:
-      - /app/data/flux_cat.png
-      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
-    guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: cudnn
-
 - name: flux2.t-multi-i2i_2k.hopper.h100
   tags: [lucid, hopper, h100]
   model: black-forest-labs/FLUX.2-dev
@@ -529,7 +531,7 @@
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
-    use_fsdp: True
+    fully_shard_degree: 8
     attention_backend: cudnn
 
 - name: flux2.t-multi-i2i_2k.hopper.h200
