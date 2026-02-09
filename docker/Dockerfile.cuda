@@ -91,5 +91,7 @@ COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
 COPY docs/pytorch-xdit/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
-# apex causes rms_forward_affine crash in SD3.5 and numpy>2 a runtime error in Hunyuanvideo
-RUN pip uninstall -y apex && pip install "numpy<2"
+# apex causes rms_forward_affine crash in SD3.5
+# numpy>2 causes a runtime error in Hunyuanvideo
+# opencv-python is required by xDiT export_to_video
+RUN pip uninstall -y apex && pip install --no-cache-dir "numpy<2" "opencv-python"
