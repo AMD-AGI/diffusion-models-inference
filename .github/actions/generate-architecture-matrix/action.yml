@@ -50,7 +50,7 @@ runs:
           elif [ "$MI300_IS_ALLOCATOR_NODE" = "true" ] || [ "$MI300_IS_ALLOCATOR_POOL" = "true" ]; then
             TIMEOUT=2880
           else
-            TIMEOUT=480
+            TIMEOUT=1440
           fi
           
           if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
@@ -66,7 +66,7 @@ runs:
           elif [ "$MI325_IS_ALLOCATOR_NODE" = "true" ] || [ "$MI325_IS_ALLOCATOR_POOL" = "true" ]; then
             TIMEOUT=2880
           else
-            TIMEOUT=480
+            TIMEOUT=1440
           fi
           
           if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
@@ -82,7 +82,7 @@ runs:
           elif [ "$MI355_IS_ALLOCATOR_NODE" = "true" ] || [ "$MI355_IS_ALLOCATOR_POOL" = "true" ]; then
             TIMEOUT=2880
           else
-            TIMEOUT=480
+            TIMEOUT=1440
           fi
           
           if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
