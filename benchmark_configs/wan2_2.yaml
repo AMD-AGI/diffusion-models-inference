@@ -31,7 +31,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     attention_backend: flash_3
-    use_fsdp: True
+    fully_shard_degree: 8
 
 - name: wan2_2.default.hopper.h200
   tags: [lucid, hopper, h200]
@@ -150,7 +150,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_fp8_gemms: True
-    use_fsdp: True
+    fully_shard_degree: 8
     attention_backend: flash_3
 
 - name: wan2_2.5s_fp8.hopper.h200
@@ -217,7 +217,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_fsdp: True
+    fully_shard_degree: 8
     use_hybrid_fp8_attn: True
 
 - name: wan2_2.5s_hybrid.hopper.h200
@@ -267,7 +267,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_fsdp: True
+    fully_shard_degree: 8
     use_hybrid_fp8_attn: True
     use_fp8_gemms: True
 
