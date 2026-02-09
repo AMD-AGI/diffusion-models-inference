@@ -451,7 +451,7 @@ jobs:
         run: |
           if [ -n "${{ inputs.benchmark_image_tag }}" ]; then
             echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }}" >> $GITHUB_OUTPUT
-          elif [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+          elif [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
             echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
           else
             echo "used_image=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
@@ -566,7 +566,7 @@ jobs:
       - name: Determine untuned image
         id: untuned
         run: |
-          if [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ] && docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
+          if [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
             echo "tag=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
           else
             echo "tag=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
