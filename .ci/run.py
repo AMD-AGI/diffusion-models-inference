@@ -155,12 +155,17 @@ def _run_experiment(exp: Experiment, cmd: List[str], dry_run: bool, benchmark_ou
     benchmark_output_directory.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["TQDM_DISABLE"] = "1"
-    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    with open(f'{benchmark_output_directory}/stdout.txt', 'w') as f:
-        f.write(result.stdout)
-    with open(f'{benchmark_output_directory}/stderr.txt', 'w') as f:
-        f.write(result.stderr)
-    if result.returncode != 0:
+    stdout_path = benchmark_output_directory / "stdout.txt"
+    stderr_path = benchmark_output_directory / "stderr.txt"
+    with open(stdout_path, "w", buffering=1) as stdout_file, open(stderr_path, "w", buffering=1) as stderr_file:
+        r = subprocess.run(
+            cmd,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            text=True,
+            env=env,
+        )
+    if r.returncode != 0:
         logger.info(f"Experiment {exp.name} failed!")
         return False
     else:
