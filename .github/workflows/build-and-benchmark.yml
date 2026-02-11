@@ -25,7 +25,7 @@ on:
         required: false
         default: true
       benchmark_flags:
-        description: 'Flags used to filter benchmarks, leave empty to run all. Example, to run only release benchmarks: --tag release'
+        description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
         required: false
         default: ''
       benchmark_image_tag:
