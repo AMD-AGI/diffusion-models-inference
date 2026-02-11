@@ -9,7 +9,7 @@ inputs:
     description: 'Architecture name (mi300, mi308, mi325, mi350, mi355)'
     required: true
   benchmark_flags:
-    description: 'Flags used to filter benchmarks, leave empty to run all. Example, to run only release benchmarks: --tag release'
+    description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config (mutually exclusive with tag).'
     required: false
     default: ''
   gfx_arch:
@@ -40,7 +40,7 @@ runs:
         fi
         
         EFFECTIVE_BENCHMARK_FLAGS="${{ inputs.benchmark_flags }}"
-        if [ -n "${{ inputs.gfx_arch }}" ]; then
+        if [ -n "${{ inputs.gfx_arch }}" ] && [[ "$EFFECTIVE_BENCHMARK_FLAGS" != *"--name"* ]]; then
           EFFECTIVE_BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS} --tag ${{ inputs.gfx_arch }}"
         fi
         
