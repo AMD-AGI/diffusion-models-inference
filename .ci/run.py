@@ -130,19 +130,56 @@ def _filter_experiments_by_tags(experiments: List[Experiment], tags: List[str]) 
     return experiments
 
 
-def _download_model(model: str, revision: Optional[str] = None, dry_run: bool = False) -> Optional[str]:
+def _download_model(model: str, revision: Optional[str] = None, dry_run: bool = False) -> None:
     """
     Attempts to download a model from HuggingFace Hub. Skips download if already cached.
     """
     if dry_run: # TODO using dry_run with snapshot_download requires huggingface_hub => 1.0 but version < 1.0 is needed for transformers 4.57.3
         logger.info(f"[dry-run] Skipping download of model: {model}")
-        return None
-    
+        return
+
     logger.info(f"Downloading model: {model}")
     cache_dir = snapshot_download(repo_id=model, revision=revision)
     logger.info(f"Model {model} is stored in {cache_dir}.")
 
-    return cache_dir
+
+def _delete_model_cache(model: str, revision: Optional[str] = None, dry_run: bool = False) -> None:
+    """
+    Delete the given model (and optionally a specific revision) from the Hugging Face cache.
+    Uses scan_cache_dir to find the repo by name; revision can be a ref (e.g. "main") or a commit hash.
+    If revision is None, deletes all cached revisions of the model.
+    """
+    cache_info = scan_cache_dir()
+    commit_hashes_to_delete = []
+    for repo in getattr(cache_info, "repos", ()):
+        if getattr(repo, "repo_id", None) != model:
+            continue
+        for rev in getattr(repo, "revisions", ()):
+            commit_hash = getattr(rev, "commit_hash", None)
+            if not commit_hash:
+                continue
+            if revision is None:
+                commit_hashes_to_delete.append(commit_hash)
+            elif commit_hash == revision:
+                commit_hashes_to_delete.append(commit_hash)
+                break
+            elif revision in getattr(rev, "refs", ()):
+                commit_hashes_to_delete.append(commit_hash)
+                break
+        break
+    if not commit_hashes_to_delete:
+        logger.warning("No cache entries found to delete for model %s (revision=%s).", model, revision)
+        return
+    try:
+        delete_strategy = cache_info.delete_revisions(*commit_hashes_to_delete)
+        if not dry_run:
+            delete_strategy.execute()
+            logger.info("Deleted model cache for %s (revision=%s).", model, revision)
+        else:
+            logger.info(f"[dry-run] Model cache deletion strategy: {delete_strategy}")
+
+    except Exception as e:
+        logger.error(e, stack_info=True, exc_info=True)
 
 
 def _run_experiment(exp: Experiment, cmd: List[str], dry_run: bool, benchmark_output_directory: Path) -> bool:
@@ -318,7 +355,7 @@ def main():
 
         revision = exps[0].revision # Remark: assumes model experiments uses same revision.
         try:
-            cache_dir = _download_model(model_name, revision, args.dry_run)
+            _download_model(model_name, revision, args.dry_run)
         except Exception as e:
             logger.error(e, stack_info=True, exc_info=True)
             msg = f"Skipped experiments for {model_name}. Failed to download model. See logs for more details."
@@ -353,14 +390,8 @@ def main():
 
                 _save_mad_latency_metric(args.csv_output_path, exp.name, avg_latency)
 
-        if args.clear_model_cache and cache_dir:
-            logging.info(f"Deleting model cache at {cache_dir}")
-            try:
-                delete_strategy = scan_cache_dir().delete_revisions(os.path.basename(cache_dir))
-                delete_strategy.execute()
-            except Exception as e:
-                logger.error(e, stack_info=True, exc_info=True)
-                continue
+        if args.clear_model_cache:
+            _delete_model_cache(model_name, revision, args.dry_run)
 
     if args.print_csv:
         try:
