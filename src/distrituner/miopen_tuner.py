@@ -60,6 +60,12 @@ def main():
         default="./logs",
         help="Path where to log information about the individual tuning tasks",
     )
+    argparser.add_argument(
+        "--stop-on-failure",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Stop and cancel remaining tasks on first failure (default: True). Use --no-stop-on-failure to continue running all tasks despite failures.",
+    )
     args = argparser.parse_args()
 
     log_dir = Path(args.log_dir).expanduser().resolve()
@@ -77,7 +83,7 @@ def main():
     tasks = [
         Task(
             command=line.strip(),
-            stdout_log_file=log_dir / f"{ii:{n_leading_zeros_format}}.json",
+            log_file=log_dir / f"{ii:{n_leading_zeros_format}}.json",
         )
         for ii, line in enumerate(lines)
     ]
@@ -112,7 +118,7 @@ def main():
         worker_envs.append(env)
         logging.debug(f"Worker {ii} will use environment: {env}")
 
-    distritune(tasks, worker_envs=worker_envs)
+    distritune(tasks, worker_envs=worker_envs, stop_on_failure=args.stop_on_failure)
 
 
 if __name__ == "__main__":
