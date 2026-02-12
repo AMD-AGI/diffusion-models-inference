@@ -29,7 +29,9 @@ runs:
   steps:
     - name: Create benchmark output directory
       shell: bash
-      run: mkdir -p $GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}
+      run: |
+        rm -rf $GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}
+        mkdir -p $GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}
     
     - name: Run benchmarks
       shell: bash
