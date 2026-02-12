@@ -9,6 +9,10 @@ inputs:
     description: 'Space-separated list of Docker containers to remove'
     required: false
     default: ''
+  skip_workspace_cleanup:
+    description: 'Skip cleaning the workspace directory'
+    required: false
+    default: 'false'
 runs:
   using: 'composite'
   steps:
@@ -35,6 +39,7 @@ runs:
       run: docker image prune -f || true
     
     - name: Clean workspace
+      if: ${{ inputs.skip_workspace_cleanup != 'true' }}
       shell: bash
       run: |
         sudo rm -rf ${{ github.workspace }}/* || true

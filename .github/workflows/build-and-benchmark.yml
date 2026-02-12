@@ -28,8 +28,12 @@ on:
         description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
         required: false
         default: ''
-      benchmark_image_tag:
-        description: 'Tag of tuned image for benchmark-only mode'
+      benchmark_image:
+        description: 'Image tag or full Docker Hub path for benchmark-only mode'
+        required: false
+        default: ''
+      :
+        description: 'Image tag or full Docker Hub path for baseline comparison benchmarks (runs alongside normal benchmarks)'
         required: false
         default: ''
       allocator_id:
@@ -105,6 +109,7 @@ jobs:
       image_tag: ${{ steps.generate_tag.outputs.tag }}
       core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
+      : ${{ steps.determine_baseline.outputs. }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -183,18 +188,8 @@ jobs:
             exit 1
           fi
       
-      - name: Validate benchmark image exists
-        if: ${{ inputs.benchmark_image_tag != '' }}
-        run: |
-          echo "Checking if benchmark image exists: ${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }}"
-          if ! docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }} > /dev/null 2>&1; then
-            echo "Error: Benchmark image ${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }} does not exist"
-            exit 1
-          fi
-          echo "Benchmark image verified"
-      
       - name: Validate prebuilt untuned image exists
-        if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image_tag == '' }}
+        if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image == '' }}
         run: |
           echo "Checking if prebuilt untuned image exists: ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}"
           if ! docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
@@ -204,7 +199,7 @@ jobs:
           echo "Prebuilt untuned image verified"
       
       - name: Validate prebuilt core image exists
-        if: ${{ inputs.prebuilt_core_image_tag != '' && inputs.prebuilt_untuned_image_tag == '' && inputs.benchmark_image_tag == '' }}
+        if: ${{ inputs.prebuilt_core_image_tag != '' && inputs.prebuilt_untuned_image_tag == '' && inputs.benchmark_image == '' }}
         run: |
           echo "Checking if prebuilt core image exists: ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}"
           if ! docker manifest inspect ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }} > /dev/null 2>&1; then
@@ -213,6 +208,52 @@ jobs:
           fi
           echo "Prebuilt core image verified"
       
+      - name: Determine benchmark image
+        id: determine_benchmark
+        run: |
+          BENCHMARK="${{ inputs.benchmark_image }}"
+          if [ -z "$BENCHMARK" ]; then
+            echo "benchmark_image=" >> $GITHUB_OUTPUT
+          elif [[ "$BENCHMARK" == *"/"* ]] || [[ "$BENCHMARK" == *":"* ]]; then
+            echo "benchmark_image=${BENCHMARK}" >> $GITHUB_OUTPUT
+          else
+            echo "benchmark_image=${{ env.STAGING_IMAGE }}:${BENCHMARK}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Validate benchmark image exists
+        if: ${{ inputs.benchmark_image != '' }}
+        run: |
+          BENCHMARK_IMAGE="${{ steps.determine_benchmark.outputs.benchmark_image }}"
+          echo "Checking if benchmark image exists: ${BENCHMARK_IMAGE}"
+          if ! docker manifest inspect ${BENCHMARK_IMAGE} > /dev/null 2>&1; then
+            echo "Error: Benchmark image ${BENCHMARK_IMAGE} does not exist"
+            exit 1
+          fi
+          echo "Benchmark image verified"
+      
+      - name: Determine baseline image
+        id: determine_baseline
+        run: |
+          BASELINE="${{ inputs. }}"
+          if [ -z "$BASELINE" ]; then
+            echo "=" >> $GITHUB_OUTPUT
+          elif [[ "$BASELINE" == *"/"* ]] || [[ "$BASELINE" == *":"* ]]; then
+            echo "=${BASELINE}" >> $GITHUB_OUTPUT
+          else
+            echo "=${{ env.STAGING_IMAGE }}:${BASELINE}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Validate baseline image exists
+        if: ${{ inputs. != '' }}
+        run: |
+          ="${{ steps.determine_baseline.outputs. }}"
+          echo "Checking if baseline comparison image exists: ${}"
+          if ! docker manifest inspect ${} > /dev/null 2>&1; then
+            echo "Error: Baseline comparison image ${} does not exist"
+            exit 1
+          fi
+          echo "Baseline comparison image verified"
+      
       - name: Store build metadata
         run: |
           mkdir -p build-metadata
@@ -220,7 +261,9 @@ jobs:
           {
             "image_tag": "${{ steps.generate_tag.outputs.tag }}",
             "core_image_with_tag": "${{ steps.generate_tag.outputs.core_image_with_tag }}",
-            "staging_image_with_tag": "${{ steps.generate_tag.outputs.staging_image_with_tag }}"
+            "staging_image_with_tag": "${{ steps.generate_tag.outputs.staging_image_with_tag }}",
+            "benchmark_image": "${{ steps.determine_benchmark.outputs.benchmark_image }}",
+            "": "${{ steps.determine_baseline.outputs. }}"
           }
           EOF
       
@@ -257,14 +300,15 @@ jobs:
             {
               "Workflow Inputs": ${{ toJSON(inputs) }},
               "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
-              "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
+              "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }},
+              "Baseline Image": ${{ toJSON(steps.determine_baseline.outputs) }}
             }
 
   build-core:
     name: Build core and untuned images
     needs: [validate]
     runs-on: build-only
-    if: ${{ inputs.benchmark_image_tag == '' && inputs.prebuilt_untuned_image_tag == '' }}
+    if: ${{ inputs.benchmark_image == '' && inputs.prebuilt_untuned_image_tag == '' }}
     outputs:
       image_tag: ${{ needs.validate.outputs.image_tag }}
       core_image_with_tag: ${{ needs.validate.outputs.core_image_with_tag }}
@@ -421,7 +465,7 @@ jobs:
       !cancelled() && 
       (needs.allocate-allocator-resources.result == 'success' || needs.allocate-allocator-resources.result == 'skipped') &&
       (needs.build-core.result == 'success' || needs.build-core.result == 'skipped') &&
-      (!failure() || inputs.benchmark_image_tag != '')
+      (!failure() || inputs.benchmark_image != '')
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
@@ -440,7 +484,6 @@ jobs:
           password: ${{ secrets.DOCKERHUB_OAT }}
 
       - name: Load build metadata
-        if: ${{ inputs.benchmark_image_tag == '' }}
         id: metadata
         uses: ./.github/actions/load-build-metadata
         with:
@@ -449,26 +492,28 @@ jobs:
       - name: Determine image to use
         id: image
         run: |
-          if [ -n "${{ inputs.benchmark_image_tag }}" ]; then
-            echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.benchmark_image_tag }}" >> $GITHUB_OUTPUT
+          if [ -n "${{ steps.metadata.outputs.benchmark_image }}" ]; then
+            echo "used_image=${{ steps.metadata.outputs.benchmark_image }}" >> $GITHUB_OUTPUT
           elif [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
             echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
           else
             echo "used_image=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
           fi
+          
+          echo "=${{ steps.metadata.outputs. }}" >> $GITHUB_OUTPUT
       
       - name: Pull image
         run: docker pull ${{ steps.image.outputs.used_image }}
       
       - name: Run MIOpen tuning
-        if: ${{ inputs.benchmark_image_tag == '' }}
+        if: ${{ steps.image.outputs.benchmark_image != '' }}
         uses: ./.github/actions/run-miopen-tuning
         with:
           image: ${{ steps.image.outputs.used_image }}
           arch: ${{ matrix.arch }}
       
       - name: Upload MIOpen tuning results
-        if: ${{ inputs.benchmark_image_tag == '' }}
+        if: ${{ steps.image.outputs.benchmark_image != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
@@ -481,7 +526,7 @@ jobs:
           arch: ${{ matrix.arch }}
           gfx_arch: ${{ matrix.gfx_arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
-          benchmark_only: ${{ inputs.benchmark_image_tag != '' }}
+          benchmark_only: ${{ steps.image.outputs.benchmark_image != '' }}
           hf_token: ${{ secrets.HF_TOKEN }}
       
       - name: Upload benchmark results
@@ -498,6 +543,38 @@ jobs:
         with:
           images: '${{ steps.image.outputs.used_image }}'
           containers: 'xdit-bench miopen-tune'
+          skip_workspace_cleanup: 'true'
+      
+      - name: Pull baseline image
+        if: ${{ steps.image.outputs. != '' }}
+        run: docker pull ${{ steps.image.outputs. }}
+      
+      - name: Run baseline benchmarks
+        if: ${{ steps.image.outputs. != '' }}
+        uses: ./.github/actions/run-benchmarks
+        with:
+          image: ${{ steps.image.outputs. }}
+          arch: ${{ matrix.arch }}
+          gfx_arch: ${{ matrix.gfx_arch }}
+          benchmark_flags: ${{ inputs.benchmark_flags }}
+          benchmark_only: true
+          hf_token: ${{ secrets.HF_TOKEN }}
+      
+      - name: Upload baseline benchmark results
+        if: ${{ steps.image.outputs. != '' && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}--${{ matrix.arch }}
+          path: benchmarks/${{ matrix.arch }}/**
+      
+      - name: Baseline cleanup
+        if: ${{ steps.image.outputs. != '' && always() }}
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: '${{ steps.image.outputs. }}'
+          containers: 'xdit-bench'
+          skip_workspace_cleanup: 'false'
       
       - name: Cleanup Allocator resources
         if: (always() || cancelled()) && matrix.allocator_reserve == 'true'
@@ -532,7 +609,7 @@ jobs:
     name: Build final tuned image
     needs: [validate, build-core, tune-and-benchmark]
     runs-on: build-only
-    if: ${{ inputs.benchmark_image_tag == '' && !cancelled() && !failure() }}
+    if: ${{ inputs.benchmark_image == '' && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
