@@ -56,10 +56,16 @@ def _parse_args():
         help="Optional tag to filter benchmarks",
         default=[],
     )
-    parser.add_argument(
+    cache_group = parser.add_mutually_exclusive_group()
+    cache_group.add_argument(
         "--clear-model-cache",
         action="store_true",
-        help="Remove model cache after finishing all model specific experiments",
+        help="Always remove model cache after finishing all model specific experiments. Default: preserve original state (delete only if we downloaded it).",
+    )
+    cache_group.add_argument(
+        "--no-clear-model-cache",
+        action="store_true",
+        help="Never remove model cache (keep it after runs). Default: preserve original state (delete only if we downloaded it).",
     )
     parser.add_argument(
         "--dry-run",
@@ -128,6 +134,36 @@ def _filter_experiments_by_tags(experiments: List[Experiment], tags: List[str]) 
     ]   
 
     return experiments
+
+
+def _model_in_cache(model: str, revision: Optional[str] = None) -> bool:
+    """
+    Return True if the given model repo is already in the Hugging Face cache.
+
+    If revision is None, returns True if the model exists with any revision.
+    If revision is set, matches by commit hash or by ref (e.g. "main", "refs/pr/123").
+    """
+    try:
+        cache_info = scan_cache_dir()
+        repos = getattr(cache_info, "repos", None)
+        if repos is None:
+            return False
+        for repo in repos:
+            if getattr(repo, "repo_id", None) != model:
+                continue
+            if revision is None:
+                return True
+            # CachedRevisionInfo has commit_hash and refs (e.g. "main", tags)
+            revs = getattr(repo, "revisions", ())
+            for rev in revs:
+                if getattr(rev, "commit_hash", None) == revision:
+                    return True
+                if revision in getattr(rev, "refs", ()):
+                    return True
+        return False
+    except Exception as e:
+        logger.warning("Could not scan cache for %s: %s", model, e)
+        return False
 
 
 def _download_model(model: str, revision: Optional[str] = None, dry_run: bool = False) -> None:
@@ -349,11 +385,13 @@ def main():
         experiments_per_model[exp.model].append(exp)
 
     # Download models and run Experiments
+    preserve_original_state = not args.clear_model_cache and not args.no_clear_model_cache
+
     for model_name, exps in experiments_per_model.items():
         logger.info(f"Running experiments for model: {model_name}")
-        
 
         revision = exps[0].revision # Remark: assumes model experiments uses same revision.
+        model_existed_before = _model_in_cache(model_name, revision)
         try:
             _download_model(model_name, revision, args.dry_run)
         except Exception as e:
@@ -390,8 +428,15 @@ def main():
 
                 _save_mad_latency_metric(args.csv_output_path, exp.name, avg_latency)
 
-        if args.clear_model_cache:
-            _delete_model_cache(model_name, revision, args.dry_run)
+        should_clear_cache = args.clear_model_cache or (
+            preserve_original_state and not model_existed_before
+        )
+        if should_clear_cache:
+            try:
+                _delete_model_cache(model_name, revision, args.dry_run)
+            except Exception as e:
+                logger.error(e, stack_info=True, exc_info=True)
+                continue
 
     if args.print_csv:
         try:
@@ -403,7 +448,7 @@ def main():
             logger.error(e, stack_info=True, exc_info=True)
 
     if errors:
-        logger.error("One ore more errors occured during experiment runs:")
+        logger.error("One or more errors occurred during experiment runs:")
         for msg in errors:
             logger.error(f" - {msg}")
         sys.exit(1)
