@@ -36,6 +36,16 @@ on:
         description: 'Image tag or full Docker Hub path for baseline comparison benchmarks (runs alongside normal benchmarks)'
         required: false
         default: ''
+      skip_baseline_duplicate_check:
+        description: 'Skip checking if baseline benchmarks already exist (force re-run)'
+        type: boolean
+        required: false
+        default: false
+      trigger_benchmark_metrics_refresh:
+        description: 'Trigger benchmarking metrics refresh after completion'
+        type: boolean
+        required: false
+        default: true
       allocator_id:
         description: 'Allocator reservation ID'
         required: false
@@ -109,6 +119,7 @@ jobs:
       image_tag: ${{ steps.generate_tag.outputs.tag }}
       core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
+      : ${{ steps.determine_baseline.outputs. }}
       : ${{ steps.determine_baseline.outputs. }}
     steps:
       - name: Checkout repository
@@ -214,10 +225,19 @@ jobs:
           BENCHMARK="${{ inputs.benchmark_image }}"
           if [ -z "$BENCHMARK" ]; then
             echo "benchmark_image=" >> $GITHUB_OUTPUT
+            echo "benchmark_image_tag=" >> $GITHUB_OUTPUT
           elif [[ "$BENCHMARK" == *"/"* ]] || [[ "$BENCHMARK" == *":"* ]]; then
             echo "benchmark_image=${BENCHMARK}" >> $GITHUB_OUTPUT
+            # Extract tag portion after colon, or use whole string if no colon
+            if [[ "$BENCHMARK" == *":"* ]]; then
+              TAG="${BENCHMARK##*:}"
+            else
+              TAG=""
+            fi
+            echo "benchmark_image_tag=${TAG}" >> $GITHUB_OUTPUT
           else
             echo "benchmark_image=${{ env.STAGING_IMAGE }}:${BENCHMARK}" >> $GITHUB_OUTPUT
+            echo "benchmark_image_tag=${BENCHMARK}" >> $GITHUB_OUTPUT
           fi
       
       - name: Validate benchmark image exists
@@ -237,10 +257,19 @@ jobs:
           BASELINE="${{ inputs. }}"
           if [ -z "$BASELINE" ]; then
             echo "=" >> $GITHUB_OUTPUT
+            echo "=" >> $GITHUB_OUTPUT
           elif [[ "$BASELINE" == *"/"* ]] || [[ "$BASELINE" == *":"* ]]; then
             echo "=${BASELINE}" >> $GITHUB_OUTPUT
+            # Extract tag portion after colon, or use whole string if no colon
+            if [[ "$BASELINE" == *":"* ]]; then
+              TAG="${BASELINE##*:}"
+            else
+              TAG="$BASELINE"
+            fi
+            echo "=${TAG}" >> $GITHUB_OUTPUT
           else
             echo "=${{ env.STAGING_IMAGE }}:${BASELINE}" >> $GITHUB_OUTPUT
+            echo "=${BASELINE}" >> $GITHUB_OUTPUT
           fi
       
       - name: Validate baseline image exists
@@ -260,9 +289,15 @@ jobs:
           cat > build-metadata/tags.json << EOF
           {
             "image_tag": "${{ steps.generate_tag.outputs.tag }}",
+            "core_image": "${{ env.CORE_IMAGE }}",
+            "core_image_tag": "${{ steps.generate_tag.outputs.tag }}",
             "core_image_with_tag": "${{ steps.generate_tag.outputs.core_image_with_tag }}",
+            "staging_image": "${{ env.STAGING_IMAGE }}",
+            "staging_image_tag": "${{ steps.generate_tag.outputs.tag }}",
             "staging_image_with_tag": "${{ steps.generate_tag.outputs.staging_image_with_tag }}",
             "benchmark_image": "${{ steps.determine_benchmark.outputs.benchmark_image }}",
+            "benchmark_image_tag": "${{ steps.determine_benchmark.outputs.benchmark_image_tag }}",
+            "": "${{ steps.determine_baseline.outputs. }}",
             "": "${{ steps.determine_baseline.outputs. }}"
           }
           EOF
@@ -545,12 +580,20 @@ jobs:
           containers: 'xdit-bench miopen-tune'
           skip_workspace_cleanup: 'true'
       
+      - name: Check if baseline benchmarks already exist
+        id: check_baseline
+        if: ${{ steps.image.outputs. != '' && !inputs.skip_baseline_duplicate_check }}
+        uses: ./.github/actions/check-if-baseline-exists
+        with:
+          image: ${{ steps.metadata.outputs. }}
+          gh_token: ${{ secrets.GH_PAT }}
+      
       - name: Pull baseline image
-        if: ${{ steps.image.outputs. != '' }}
+        if: ${{ steps.image.outputs. != '' && (inputs.skip_baseline_duplicate_check || steps.check_baseline.outputs.exists != '1') }}
         run: docker pull ${{ steps.image.outputs. }}
       
       - name: Run baseline benchmarks
-        if: ${{ steps.image.outputs. != '' }}
+        if: ${{ steps.image.outputs. != '' && (inputs.skip_baseline_duplicate_check || steps.check_baseline.outputs.exists != '1') }}
         uses: ./.github/actions/run-benchmarks
         with:
           image: ${{ steps.image.outputs. }}
@@ -558,17 +601,18 @@ jobs:
           gfx_arch: ${{ matrix.gfx_arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: true
+          output_dir: ''
           hf_token: ${{ secrets.HF_TOKEN }}
       
       - name: Upload baseline benchmark results
-        if: ${{ steps.image.outputs. != '' && always() }}
+        if: ${{ steps.image.outputs. != '' && (inputs.skip_baseline_duplicate_check || steps.check_baseline.outputs.exists != '1') && always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.run_number }}--${{ matrix.arch }}
-          path: benchmarks/${{ matrix.arch }}/**
+          name: ${{ github.run_number }}--${{ matrix.arch }}-${{ steps.metadata.outputs. }}
+          path: /${{ matrix.arch }}/**
       
       - name: Baseline cleanup
-        if: ${{ steps.image.outputs. != '' && always() }}
+        if: ${{ steps.image.outputs. != '' && (inputs.skip_baseline_duplicate_check || steps.check_baseline.outputs.exists != '1') && always() }}
         continue-on-error: true
         uses: ./.github/actions/cleanup-workspace
         with:
@@ -706,4 +750,18 @@ jobs:
           repository: ${{ github.repository }}
           gh_token: ${{ secrets.GH_PAT }}
 
+  trigger-benchmark-metrics-refresh:
+    name: Trigger benchmark metrics refresh
+    needs: [tune-and-benchmark]
+    runs-on: ubuntu-latest
+    if: ${{ always() && inputs.trigger_benchmark_metrics_refresh }}
+    steps:
+      - name: Trigger benchmark metrics refresh workflow
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh workflow run "Publish benchmark results to GitHub Pages" \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref }} \
+            --field source_branch="${{ inputs.git_branch }}"
 

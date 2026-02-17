@@ -20,6 +20,10 @@ inputs:
     description: 'Whether running in benchmark-only mode'
     required: false
     default: 'false'
+  output_dir:
+    description: 'Output directory name for benchmark results (e.g., benchmarks, )'
+    required: false
+    default: 'benchmarks'
   hf_token:
     description: 'HuggingFace token for model downloads'
     required: true
@@ -30,8 +34,8 @@ runs:
     - name: Create benchmark output directory
       shell: bash
       run: |
-        rm -rf $GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}
-        mkdir -p $GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}
+        rm -rf $GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}
+        mkdir -p $GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}
     
     - name: Run benchmarks
       shell: bash
@@ -59,7 +63,7 @@ runs:
           --privileged \
           --shm-size 128G \
           --name xdit-bench \
-          --mount type=bind,src="$GITHUB_WORKSPACE/benchmarks/${{ inputs.arch }}",dst=/outputs \
+          --mount type=bind,src="$GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}",dst=/outputs \
           --mount type=bind,src="$(pwd)",dst=/app/diffusion-models-inference \
           --mount type=bind,src="$GITHUB_WORKSPACE/references",dst=/app/references \
           $MIOPEN_USER_DB_PATH_ENV \
