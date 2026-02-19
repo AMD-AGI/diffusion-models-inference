@@ -21,17 +21,17 @@ runs:
       shell: bash
       run: |
         # Parse inputs from JSON
-        MI300_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_runner // ""')
+        MI300_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_runner // ""' | xargs)
         MI300_IS_ALLOCATOR_NODE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_is_allocator_node // "false"')
         MI300_IS_ALLOCATOR_POOL=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_is_allocator_pool // "false"')
         MI300_ALLOCATOR_RESERVE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_allocator_reserve // "false"')
         
-        MI325_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_runner // ""')
+        MI325_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_runner // ""' | xargs)
         MI325_IS_ALLOCATOR_NODE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_is_allocator_node // "false"')
         MI325_IS_ALLOCATOR_POOL=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_is_allocator_pool // "false"')
         MI325_ALLOCATOR_RESERVE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_allocator_reserve // "false"')
         
-        MI355_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_runner // ""')
+        MI355_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_runner // ""' | xargs)
         MI355_IS_ALLOCATOR_NODE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_is_allocator_node // "false"')
         MI355_IS_ALLOCATOR_POOL=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_is_allocator_pool // "false"')
         MI355_ALLOCATOR_RESERVE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_allocator_reserve // "false"')

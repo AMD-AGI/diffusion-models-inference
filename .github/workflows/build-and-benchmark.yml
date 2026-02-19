@@ -131,8 +131,9 @@ jobs:
         id: generate_tag
         run: |         
           IMAGE_TAG=$(git rev-parse --short HEAD)
-          if [ -n "${{ inputs.image_tag_suffix }}" ]; then
-            IMAGE_TAG="${IMAGE_TAG}-${{ inputs.image_tag_suffix }}"
+          IMAGE_TAG_SUFFIX=$(echo "${{ inputs.image_tag_suffix }}" | xargs)
+          if [ -n "$IMAGE_TAG_SUFFIX" ]; then
+            IMAGE_TAG="${IMAGE_TAG}-${IMAGE_TAG_SUFFIX}"
           fi
           echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
@@ -141,10 +142,14 @@ jobs:
       - name: Check architectures
         id: check-archs
         run: |
+          MI300_RUNNER=$(echo "${{ inputs.mi300_runner }}" | xargs)
+          MI325_RUNNER=$(echo "${{ inputs.mi325_runner }}" | xargs)
+          MI355_RUNNER=$(echo "${{ inputs.mi355_runner }}" | xargs)
+          
           ANY_ENABLED=false
-          if [ -n "${{ inputs.mi300_runner }}" ] || \
-             [ -n "${{ inputs.mi325_runner }}" ] || \
-             [ -n "${{ inputs.mi355_runner }}" ]; then
+          if [ -n "$MI300_RUNNER" ] || \
+             [ -n "$MI325_RUNNER" ] || \
+             [ -n "$MI355_RUNNER" ]; then
             ANY_ENABLED=true
           fi
           echo "any_enabled=${ANY_ENABLED}" >> $GITHUB_OUTPUT
@@ -202,9 +207,10 @@ jobs:
       - name: Validate prebuilt untuned image exists
         if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image == '' }}
         run: |
-          echo "Checking if prebuilt untuned image exists: ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}"
-          if ! docker manifest inspect ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} > /dev/null 2>&1; then
-            echo "Error: Prebuilt untuned image ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }} does not exist"
+          PREBUILT_UNTUNED_TAG=$(echo "${{ inputs.prebuilt_untuned_image_tag }}" | xargs)
+          echo "Checking if prebuilt untuned image exists: ${{ env.STAGING_IMAGE }}:${PREBUILT_UNTUNED_TAG}"
+          if ! docker manifest inspect ${{ env.STAGING_IMAGE }}:${PREBUILT_UNTUNED_TAG} > /dev/null 2>&1; then
+            echo "Error: Prebuilt untuned image ${{ env.STAGING_IMAGE }}:${PREBUILT_UNTUNED_TAG} does not exist"
             exit 1
           fi
           echo "Prebuilt untuned image verified"
@@ -212,9 +218,10 @@ jobs:
       - name: Validate prebuilt core image exists
         if: ${{ inputs.prebuilt_core_image_tag != '' && inputs.prebuilt_untuned_image_tag == '' && inputs.benchmark_image == '' }}
         run: |
-          echo "Checking if prebuilt core image exists: ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}"
-          if ! docker manifest inspect ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }} > /dev/null 2>&1; then
-            echo "Error: Prebuilt core image ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }} does not exist"
+          PREBUILT_CORE_TAG=$(echo "${{ inputs.prebuilt_core_image_tag }}" | xargs)
+          echo "Checking if prebuilt core image exists: ${{ env.CORE_IMAGE }}:${PREBUILT_CORE_TAG}"
+          if ! docker manifest inspect ${{ env.CORE_IMAGE }}:${PREBUILT_CORE_TAG} > /dev/null 2>&1; then
+            echo "Error: Prebuilt core image ${{ env.CORE_IMAGE }}:${PREBUILT_CORE_TAG} does not exist"
             exit 1
           fi
           echo "Prebuilt core image verified"
@@ -222,7 +229,7 @@ jobs:
       - name: Determine benchmark image
         id: determine_benchmark
         run: |
-          BENCHMARK="${{ inputs.benchmark_image }}"
+          BENCHMARK=$(echo "${{ inputs.benchmark_image }}" | xargs)
           if [ -z "$BENCHMARK" ]; then
             echo "benchmark_image=" >> $GITHUB_OUTPUT
             echo "benchmark_image_tag=" >> $GITHUB_OUTPUT
@@ -254,7 +261,7 @@ jobs:
       - name: Determine baseline image
         id: determine_baseline
         run: |
-          BASELINE="${{ inputs. }}"
+          BASELINE=$(echo "${{ inputs. }}" | xargs)
           if [ -z "$BASELINE" ]; then
             echo "=" >> $GITHUB_OUTPUT
             echo "=" >> $GITHUB_OUTPUT
@@ -285,20 +292,33 @@ jobs:
       
       - name: Store build metadata
         run: |
+          # Strip whitespace from all image-related values before storing in metadata
+          IMAGE_TAG=$(echo "${{ steps.generate_tag.outputs.tag }}" | xargs)
+          CORE_IMAGE_WITH_TAG=$(echo "${{ steps.generate_tag.outputs.core_image_with_tag }}" | xargs)
+          STAGING_IMAGE_WITH_TAG=$(echo "${{ steps.generate_tag.outputs.staging_image_with_tag }}" | xargs)
+          BENCHMARK_IMAGE=$(echo "${{ steps.determine_benchmark.outputs.benchmark_image }}" | xargs)
+          BENCHMARK_IMAGE_TAG=$(echo "${{ steps.determine_benchmark.outputs.benchmark_image_tag }}" | xargs)
+          =$(echo "${{ steps.determine_baseline.outputs. }}" | xargs)
+          =$(echo "${{ steps.determine_baseline.outputs. }}" | xargs)
+          PREBUILT_CORE_TAG=$(echo "${{ inputs.prebuilt_core_image_tag }}" | xargs)
+          PREBUILT_UNTUNED_TAG=$(echo "${{ inputs.prebuilt_untuned_image_tag }}" | xargs)
+          
           mkdir -p build-metadata
           cat > build-metadata/tags.json << EOF
           {
-            "image_tag": "${{ steps.generate_tag.outputs.tag }}",
+            "image_tag": "${IMAGE_TAG}",
             "core_image": "${{ env.CORE_IMAGE }}",
-            "core_image_tag": "${{ steps.generate_tag.outputs.tag }}",
-            "core_image_with_tag": "${{ steps.generate_tag.outputs.core_image_with_tag }}",
+            "core_image_tag": "${IMAGE_TAG}",
+            "core_image_with_tag": "${CORE_IMAGE_WITH_TAG}",
             "staging_image": "${{ env.STAGING_IMAGE }}",
-            "staging_image_tag": "${{ steps.generate_tag.outputs.tag }}",
-            "staging_image_with_tag": "${{ steps.generate_tag.outputs.staging_image_with_tag }}",
-            "benchmark_image": "${{ steps.determine_benchmark.outputs.benchmark_image }}",
-            "benchmark_image_tag": "${{ steps.determine_benchmark.outputs.benchmark_image_tag }}",
-            "": "${{ steps.determine_baseline.outputs. }}",
-            "": "${{ steps.determine_baseline.outputs. }}"
+            "staging_image_tag": "${IMAGE_TAG}",
+            "staging_image_with_tag": "${STAGING_IMAGE_WITH_TAG}",
+            "benchmark_image": "${BENCHMARK_IMAGE}",
+            "benchmark_image_tag": "${BENCHMARK_IMAGE_TAG}",
+            "": "${}",
+            "": "${}",
+            "prebuilt_core_image_tag": "${PREBUILT_CORE_TAG}",
+            "prebuilt_untuned_image_tag": "${PREBUILT_UNTUNED_TAG}"
           }
           EOF
       
@@ -407,8 +427,11 @@ jobs:
 
   generate-matrix:
     name: Generate architecture matrix
-    needs: [validate]
+    needs: [validate, build-core]
     runs-on: ubuntu-latest
+    if: |
+      !cancelled() &&
+      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped')
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       allocator_matrix: ${{ steps.generate.outputs.allocator_matrix }}
@@ -436,7 +459,10 @@ jobs:
   allocate-allocator-resources:
     name: Allocate Allocator resources for ${{ matrix.arch }}
     needs: [generate-matrix]
-    if: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null }}
+    if: |
+      !cancelled() &&
+      needs.generate-matrix.result == 'success' &&
+      fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null
     runs-on: jump-host
     concurrency:
       group: allocator-jump-host
@@ -529,8 +555,8 @@ jobs:
         run: |
           if [ -n "${{ steps.metadata.outputs.benchmark_image }}" ]; then
             echo "used_image=${{ steps.metadata.outputs.benchmark_image }}" >> $GITHUB_OUTPUT
-          elif [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
-            echo "used_image=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}" ]; then
+            echo "used_image=${{ env.STAGING_IMAGE }}:${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
           else
             echo "used_image=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
           fi
@@ -541,14 +567,14 @@ jobs:
         run: docker pull ${{ steps.image.outputs.used_image }}
       
       - name: Run MIOpen tuning
-        if: ${{ steps.image.outputs.benchmark_image != '' }}
+        if: ${{ steps.metadata.outputs.benchmark_image == '' }}
         uses: ./.github/actions/run-miopen-tuning
         with:
           image: ${{ steps.image.outputs.used_image }}
           arch: ${{ matrix.arch }}
       
       - name: Upload MIOpen tuning results
-        if: ${{ steps.image.outputs.benchmark_image != '' }}
+        if: ${{ steps.metadata.outputs.benchmark_image == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
@@ -687,8 +713,8 @@ jobs:
       - name: Determine untuned image
         id: untuned
         run: |
-          if [ -n "${{ inputs.prebuilt_untuned_image_tag }}" ]; then
-            echo "tag=${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
+          if [ -n "${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}" ]; then
+            echo "tag=${{ env.STAGING_IMAGE }}:${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}" >> $GITHUB_OUTPUT
           else
             echo "tag=${{ steps.metadata.outputs.staging_image_with_tag }}-temp" >> $GITHUB_OUTPUT
           fi
@@ -714,7 +740,7 @@ jobs:
         if: always()
         uses: ./.github/actions/cleanup-workspace
         with:
-          images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}'
+          images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}'
           containers: 'core'
 
   cleanup-allocator-resources:
