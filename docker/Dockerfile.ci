@@ -444,8 +444,10 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
     git reset --hard ${XDIT_COMMIT} && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
-# rocprofiler-compute runtime deps
-RUN pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt
+# rocprofiler-compute runtime dependencies
+# Due to https://github.com/ROCm/rocm-systems/pull/2821 drop numpy to avoid installing numpy<2
+RUN sed -i '/numpy/d' ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt && \
+    pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt
 # hotfix: until diffusers installs ftfy
 RUN pip install ftfy
 # hotfix: transformers<5.0.0 required for good output quality
