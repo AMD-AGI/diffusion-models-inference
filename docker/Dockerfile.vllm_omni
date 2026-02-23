@@ -1,0 +1,23 @@
+FROM amdsiloai/pytorch-xdit:v26.2.1
+
+ARG VLLM_COMMIT="2d5be1d" # v0.16.0
+
+ARG VLLM_OMNI_COMMIT="a42b7487b0681afab4a5a4b305d7f59c0b158de9"
+
+WORKDIR /app/external
+
+# Install vLLM
+RUN git clone https://github.com/vllm-project/vllm.git && \
+    cd vllm && \
+    git reset --hard ${VLLM_COMMIT} && \
+    pip3 install --no-cache-dir setuptools_scm && \
+    pip3 install --no-cache-dir -r requirements/rocm.txt && \
+    PYTORCH_ROCM_ARCH="gfx942;gfx950" python3 setup.py develop
+
+RUN apt update && apt install libopenmpi3 -y
+
+
+RUN git clone https://github.com/vllm-project/vllm-omni.git && \
+  cd vllm-omni && \
+  git reset --hard ${VLLM_OMNI_COMMIT} && \
+  VLLM_OMNI_TARGET_DEVICE=rocm pip install -e .
