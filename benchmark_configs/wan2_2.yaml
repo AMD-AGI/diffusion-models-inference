@@ -67,58 +67,7 @@
     use_torch_compile: True
     attention_backend: flash_4
 
-- name: wan2_2.10s
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 161
-    ulysses_degree: 8
-    seed: 42
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: aiter
-
-- name: wan2_2.10s.hopper.h200
-  tags: [lucid, hopper, h200]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 161
-    ulysses_degree: 8
-    seed: 42
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: flash_3
-
-- name: wan2_2.10s.blackwell
-  tags: [lucid, blackwell, b200, b300]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 161
-    ulysses_degree: 8
-    seed: 42
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: flash_4
-
-- name: wan2_2.5s_fp8
+- name: wan2_2.5s_fp8gemms
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -135,7 +84,24 @@
     use_fp8_gemms: True
     attention_backend: aiter
 
-- name: wan2_2.5s_fp8.hopper.h100
+- name: wan2_2.5s_fp4gemms.gfx950 # MXFP4 only supported on gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    height: 720
+    width: 1280
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    ulysses_degree: 8
+    num_iterations: 1
+    num_inference_steps: 40
+    use_torch_compile: True
+    use_fp4_gemms: True
+    attention_backend: aiter
+
+- name: wan2_2.5s_fp8gemms.hopper.h100
   tags: [lucid, hopper, h100]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -153,7 +119,7 @@
     fully_shard_degree: 8
     attention_backend: flash_3
 
-- name: wan2_2.5s_fp8.hopper.h200
+- name: wan2_2.5s_fp8gemms.hopper.h200
   tags: [lucid, hopper, h200]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -170,7 +136,7 @@
     use_fp8_gemms: True
     attention_backend: flash_3
 
-- name: wan2_2.5s_fp8.blackwell
+- name: wan2_2.5s_fp8gemms.blackwell
   tags: [lucid, blackwell, b200, b300]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -201,7 +167,9 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_hybrid_fp8_attn: True
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: aiter_fp8
+    hybrid_attn_high_precision_backend: aiter
 
 - name: wan2_2.5s_hybrid.hopper.h100
   tags: [lucid, hopper, h100]
@@ -218,7 +186,9 @@
     num_inference_steps: 40
     use_torch_compile: True
     fully_shard_degree: 8
-    use_hybrid_fp8_attn: True
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: flash_3_fp8
+    hybrid_attn_high_precision_backend: flash_3
 
 - name: wan2_2.5s_hybrid.hopper.h200
   tags: [lucid, hopper, h200]
@@ -234,10 +204,12 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_hybrid_fp8_attn: True
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: flash_3_fp8
+    hybrid_attn_high_precision_backend: flash_3
 
-- name: wan2_2.5s_fp8gemms_hybrid
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+- name: wan2_2.5s_fp8gemms_hybrid.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -250,8 +222,10 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_hybrid_fp8_attn: True
     use_fp8_gemms: True
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: aiter_fp8
+    hybrid_attn_high_precision_backend: aiter
 
 - name: wan2_2.5s_fp8gemms_hybrid.hopper.h100  
   tags: [lucid, hopper, h100]
@@ -268,8 +242,10 @@
     num_inference_steps: 40
     use_torch_compile: True
     fully_shard_degree: 8
-    use_hybrid_fp8_attn: True
     use_fp8_gemms: True
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: flash_3_fp8
+    hybrid_attn_high_precision_backend: flash_3
 
 - name: wan2_2.5s_fp8gemms_hybrid.hopper.h200  
   tags: [lucid, hopper, h200]
@@ -285,11 +261,13 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_hybrid_fp8_attn: True
     use_fp8_gemms: True
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: flash_3_fp8
+    hybrid_attn_high_precision_backend: flash_3
 
-- name: wan2_2.5s_fp8gemms_sage.gfx942
-  tags: [release, mad, lucid, instinct, gfx942]
+- name: wan2_2.5s_fp8gemms_sage
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -305,8 +283,8 @@
     attention_backend: aiter_sage
     use_fp8_gemms: True
 
-- name: wan2_2.5s_fp8gemms_sage.gfx950
-  tags: [release, instinct, gfx950]
+- name: wan2_2.5s_fp4gemms_sage.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -320,4 +298,4 @@
     num_inference_steps: 40
     use_torch_compile: True
     attention_backend: aiter_sage
-    use_fp8_gemms: True
+    use_fp4_gemms: True

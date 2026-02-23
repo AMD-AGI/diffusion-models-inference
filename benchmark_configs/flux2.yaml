@@ -95,6 +95,26 @@
     num_iterations: 25
     attention_backend: aiter
 
+- name: flux2.fp4gemm.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    max_sequence_length: 512
+    warmup_calls: 5
+    use_fp4_gemms: True
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter
+
 # Fails because quantization and sharding conflict
 # But keep this for future reference
 - name: flux2.fp8gemm.hopper.h100

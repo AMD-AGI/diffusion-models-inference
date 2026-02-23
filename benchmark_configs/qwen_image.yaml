@@ -1,0 +1,29 @@
+- name: qwen_image.default
+  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  model: Qwen/Qwen-Image
+  runner: xdit
+  args:
+    prompt: A cat holding a sign that says hello world
+    height: 2048
+    width: 2048
+    seed: 42
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    use_torch_compile: True
+    attention_backend: aiter
+
+- name: qwen_image.default.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: Qwen/Qwen-Image
+  runner: xdit
+  args:
+    prompt: A cat holding a sign that says hello world
+    height: 2048
+    width: 2048
+    seed: 42
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    use_torch_compile: True
+    attention_backend: cudnn
