@@ -1,0 +1,18 @@
+# Run commands used to get the results shared in here: 
+# This file should be removed as soon as we switch to proper yaml configs
+# To run the xDiT equivalent ones, just replace ".ci/integrations/sgld/runner.py" with "xdit"
+
+#Wan2.1:
+python .ci/integrations/sgld/runner.py --model Wan-AI/Wan2.1-I2V-14B-720P-Diffusers --prompt 'Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline'"'"'s intricate details and the refreshing atmosphere of the seaside.' --height 720 --width 1280 --input_images /app/data/wan_input.jpg --num_frames 93 --ulysses_degree 8 --seed 42 --num_iterations 1 --num_inference_steps 40 --use_torch_compile --attention_backend aiter --output-directory .
+#Wan2.2:
+python .ci/integrations/sgld/runner.py --model Wan-AI/Wan2.2-I2V-A14B-Diffusers --prompt 'Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline'"'"'s intricate details and the refreshing atmosphere of the seaside.' --height 544 --width 720 --input_images /app/data/wan_input.jpg --num_frames 93 --ulysses_degree 8 --seed 42 --num_iterations 1 --num_inference_steps 40 --use_torch_compile --attention_backend aiter --output-directory .
+#Flux:
+python .ci/integrations/sgld/runner.py --model black-forest-labs/FLUX.1-dev --seed 0 --prompt 'A small cat' --height 2048 --width 2048 --num_inference_steps 25 --max_sequence_length 256 --ulysses_degree 8 --use_torch_compile --guidance_scale 0.0 --num_iterations 25 --attention_backend aiter --output-directory . --num_frames 1
+#Z-Image:
+python .ci/integrations/sgld/runner.py --model Tongyi-MAI/Z-Image-Turbo --seed 42 --prompt 'A crowded beach' --height 1088 --width 1920 --num_inference_steps 9 --ulysses_degree 2 --use_torch_compile --guidance_scale 0.0 --num_iterations 50 --attention_backend aiter --output-directory . --num_frames 1
+
+# Keeping this here, but this produced incredibly slow results
+#Hunyuanvideo:
+#python .ci/integrations/sgld/runner.py --model hunyuanvideo-community/HunyuanVideo --prompt 'In the large cage, two puppies were wagging their tails at each other.' --batch_size 1 --height 720 --width 1280 --seed 1168860793 --num_frames 129 --num_inference_steps 50 --warmup_calls 1 --num_iterations 1 --ulysses_degree 8 --enable_tiling --enable_slicing --guidance_scale 6.0 --use_torch_compile --attention_backend aiter --output-directory .
+# Rather, here we used standrad sglang generate call. For other models it made no difference. Hunyuanvideo uses some extra params clearly that aren't part of the runner.
+sglang generate --model-path hunyuanvideo-community/HunyuanVideo --num-gpus 8 --ulysses-degree 8 --prompt "In the large cage, two puppies were wagging their tails at each other." --seed 1168860893 --num-frames 129 --num-inference-steps 50 --vae-precision bf16  --dit-cpu-offload false --dit-layerwise-offload false --text-encoder-cpu-offload false --guidance-scale 6.0 --image-encoder-cpu-offload false --vae-cpu-offload false --pin-cpu-memory --warmup true --output-path "./sgl_diffusion" --save-output

@@ -105,6 +105,18 @@ def _parse_args():
         help="Export the filtered experiment configurations to a YAML file",
     )
     parser.add_argument(
+        "--override-runner",
+        type=str,
+        required=False,
+        help="Override the runner for the experiments",
+    )
+    parser.add_argument(
+        "--override-entrypoint",
+        type=str,
+        required=False,
+        help="Override the entrypoint for the experiments",
+    )
+    parser.add_argument(
         "configs",
         nargs="+",
         help="YAML config files containing experiment definitions",
@@ -280,14 +292,19 @@ def _save_mad_latency_metric(csv_output_path: str, experiment_name: str, latency
 
     with open(csv_file_path, 'a', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        
+
         if not file_exists:
             writer.writerow(["model", "performance", "metric"])
-        
+
         writer.writerow([experiment_name, latency, "latency"])
 
 
-def command(e: Experiment, override_args: dict) -> List[str]:
+def command(e: Experiment, override_args: dict, override_runner: Optional[str] = None, override_entrypoint: Optional[str] = None) -> List[str]:
+
+    if override_runner is not None:
+        e.runner = override_runner
+    if override_entrypoint is not None:
+        e.entrypoint = override_entrypoint
 
     if e.runner == "xdit":
         if e.entrypoint is not None:
@@ -404,10 +421,10 @@ def main():
 
         for i, exp in enumerate(exps, 1):
             benchmark_output_directory = Path(args.results_directory) / exp.name
-            
+
             logger.info(f"Running Experiment {i}/{len(exps)}: {exp.name}. See {benchmark_output_directory}/stdout.txt for stdout logs.")
 
-            cmd = command(exp, override_args) + ["--output-directory", benchmark_output_directory]
+            cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + ["--output-directory", benchmark_output_directory]
 
             if not _run_experiment(exp, cmd, args.dry_run, benchmark_output_directory):
                 msg = f"Experiment {exp.name} failed to complete. Reason: Failed to run command: {cmd}. See {benchmark_output_directory}/stderr.txt for stderr logs."
