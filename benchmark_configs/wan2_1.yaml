@@ -49,58 +49,7 @@
     use_torch_compile: True
     attention_backend: flash_4
 
-- name: wan2_1.10s
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
-  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 161
-    ulysses_degree: 8
-    seed: 42
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: aiter
-
-- name: wan2_1.10s.hopper
-  tags: [lucid, hopper, h100, h200]
-  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 161
-    ulysses_degree: 8
-    seed: 42
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: flash_3
-
-- name: wan2_1.10s.blackwell
-  tags: [lucid, blackwell, b200, b300]
-  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 161
-    ulysses_degree: 8
-    seed: 42
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: flash_4
-
-- name: wan2_1.5s_fp8
+- name: wan2_1.5s_fp8gemms_sage
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
   runner: xdit
@@ -115,10 +64,10 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_fp8_gemms: True
-    attention_backend: aiter
+    attention_backend: aiter_sage
 
-- name: wan2_1.5s_fp8.hopper
-  tags: [lucid, hopper, h100, h200]
+- name: wan2_1.5s_fp4gemms_sage.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
   runner: xdit
   args:
@@ -131,54 +80,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_fp8_gemms: True
-    attention_backend: flash_3
+    use_fp4_gemms: True
+    attention_backend: aiter_sage
 
-- name: wan2_1.5s_fp8.blackwell
-  tags: [lucid, blackwell, b200, b300]
-  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 81
-    ulysses_degree: 8
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    use_fp8_gemms: True
-    attention_backend: flash_4
-
-- name: wan2_1.5s_hybrid.gfx942
-  tags: [release, mad, lucid, instinct, gfx942]
-  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 81
-    ulysses_degree: 8
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    use_hybrid_fp8_attn: True
-
-- name: wan2_1.5s_hybrid.hopper
-  tags: [lucid, hopper, h100, h200]
-  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 81
-    ulysses_degree: 8
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    use_hybrid_fp8_attn: True
+# TODO: FP8 and FP4 Gemms with Sage for Nvidia

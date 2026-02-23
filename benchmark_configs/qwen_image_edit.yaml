@@ -1,0 +1,33 @@
+- name: qwen_image_edit.default
+  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  model: Qwen/Qwen-Image-Edit
+  runner: xdit
+  args:
+    prompt: Add a cool hat to the cat.
+    negative_prompt: ""
+    height: 2048
+    width: 2048
+    input_images: /app/data/flux_cat.png
+    seed: 42
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    use_torch_compile: True
+    attention_backend: aiter
+
+- name: qwen_image_edit.default.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: Qwen/Qwen-Image-Edit
+  runner: xdit
+  args:
+    prompt: Add a cool hat to the cat.
+    negative_prompt: ""
+    height: 2048
+    width: 2048
+    input_images: /app/data/flux_cat.png
+    seed: 42
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    use_torch_compile: True
+    attention_backend: cudnn
