@@ -196,7 +196,7 @@ WORKDIR /app/TheRock
 # if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
 RUN pip install --no-cache-dir dvc[s3] && \
     pip install -r requirements.txt && \
-    python build_tools/fetch_sources.py
+    python build_tools/fetch_sources.py --jobs 8 --depth 1
 RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
     -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="gfx94X_gfx950_bundle" \
@@ -237,10 +237,10 @@ RUN git config --global user.name "TheRock Builder" && \
 # fetch sources
 WORKDIR /app/TheRock/external-builds/pytorch
 RUN pip install -r /app/TheRock/requirements.txt && \
-    python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} && \
-    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} && \
-    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} && \
-    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/pytorch/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT}
+    python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/pytorch/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
 # fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
 RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
     cd pytorch_codec && \
