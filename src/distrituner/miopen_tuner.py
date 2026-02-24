@@ -118,7 +118,14 @@ def main():
         worker_envs.append(env)
         logging.debug(f"Worker {ii} will use environment: {env}")
 
-    distritune(tasks, worker_envs=worker_envs, stop_on_failure=args.stop_on_failure)
+    results = distritune(tasks, worker_envs=worker_envs, stop_on_failure=args.stop_on_failure)
+    failed_count = sum(1 for r in results if r.returncode != 0)
+    logging.info(f"Completed {len(results)} MIOpen tuning tasks ({failed_count} failed)")
+    if len(results) > 0:
+        logging.info(f"Sum of task durations: {sum(result.duration_ms for result in results):.2f} ms")
+        logging.info(f"Average duration: {sum(result.duration_ms for result in results) / len(results):.2f} ms")
+        logging.info(f"Minimum duration: {min(result.duration_ms for result in results):.2f} ms")
+        logging.info(f"Maximum duration: {max(result.duration_ms for result in results):.2f} ms")
 
 
 if __name__ == "__main__":
