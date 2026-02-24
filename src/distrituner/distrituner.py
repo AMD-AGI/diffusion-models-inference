@@ -2,7 +2,8 @@ import json
 import logging
 import os
 import subprocess
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, asdict
 from queue import Queue
 from multiprocessing import Manager
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -20,13 +21,24 @@ class Task:
     log_file: Path | None = None
 
 
-def do_work(task: Task) -> int:
+@dataclass(frozen=True)
+class Result:
+    """Represents the result of a task execution."""
+
+    command: str
+    returncode: int
+    stdout: str
+    stderr: str
+    duration_ms: float
+
+def do_work(task: Task) -> Result:
     """Execute a task in a subprocess, capturing and printing its output.
     
     Returns:
-        The exit code of the subprocess.
+        A Result object containing the task command, exit code, stdout, stderr, and duration.
     """
     logging.debug(f"Worker [PID={os.getpid()}] - executing task")
+    start_timestamp = time.perf_counter_ns()
     proc = subprocess.run(
         task.command,
         shell=True,
@@ -35,21 +47,24 @@ def do_work(task: Task) -> int:
         stderr=subprocess.PIPE,
         text=True,
     )
+    end_timestamp = time.perf_counter_ns()
+    duration_ms = (end_timestamp - start_timestamp) / 1000000
+    result = Result(
+        command=task.command,
+        returncode=proc.returncode,
+        stdout=proc.stdout,
+        stderr=proc.stderr,
+        duration_ms=duration_ms,
+    )
 
     if task.log_file is not None:
         logging.debug(
             f"Worker [PID={os.getpid()}] - saving output to {task.log_file}"
         )
-        data = {
-            "command": task.command,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
-            "returncode": proc.returncode,
-        }
         with open(task.log_file, "w") as f:
-            json.dump(data, f)
+            json.dump(asdict(result), f)
     
-    return proc.returncode
+    return result
 
 
 def worker_initializer(env_queue: Queue):
@@ -65,7 +80,7 @@ def distritune(
     tasks: list[Task],
     worker_envs: list[dict[str, str]],
     stop_on_failure: bool = True,
-) -> None:
+) -> list[Result]:
     """Distribute tasks across multiple GPU worker environments. Tasks are executed in parallel,
     and dynamically assigned to workers as they become available.
 
@@ -84,10 +99,14 @@ def distritune(
         If True (default), cancel all remaining tasks and raise an exception when
         any task fails with a non-zero exit code. If False, continue running all
         tasks regardless of failures and only log errors.
+
+    Returns:
+    --------
+    list[Result]
+        List of Result objects, one for each task.
     """
     max_workers = len(worker_envs)
-    failed_tasks = []
-    
+
     with Manager() as manager:
         env_queue = manager.Queue()
         for env in worker_envs:
@@ -100,39 +119,34 @@ def distritune(
         ) as executor:
             logger.debug("Process pool starting work tasks")
             future_to_task = {executor.submit(do_work, task): task for task in tasks}
+            results = []
             for future in tqdm(
                 as_completed(future_to_task), total=len(tasks), desc="DistriTune"
             ):
                 task = future_to_task[future]
                 try:
-                    returncode = future.result()
-                    if returncode != 0:
-                        logger.error(f"{task=} exited with non-zero code: {returncode}")
-                        failed_tasks.append((task, returncode))
-                        
+                    result = future.result()
+                    results.append(result)
+                    if result.returncode != 0:
+                        logger.error(f"{task=} exited with non-zero code: {result.returncode}")
                         if stop_on_failure:
-                            # Cancel all remaining tasks
                             for f in future_to_task:
                                 if not f.done():
                                     f.cancel()
-                            raise RuntimeError(f"Task {task} failed with exit code {returncode}")
+                            raise RuntimeError(f"Task {task} failed with exit code {result.returncode}")
                 except Exception as exc:
                     logger.error(f"{task=} generated an exception: {exc}")
-                    failed_tasks.append((task, exc))
-                    
-                    if stop_on_failure:
-                        # Cancel all remaining tasks
-                        for f in future_to_task:
-                            if not f.done():
-                                f.cancel()
-                        raise
-    
-    # If we didn't stop on failure but have failed tasks, report them
-    if not stop_on_failure and failed_tasks:
-        logger.error(f"Completed with {len(failed_tasks)} failed tasks:")
-        for task, error in failed_tasks:
-            if isinstance(error, int):
-                logger.error(f"  - {task} failed with exit code {error}")
-            else:
-                logger.error(f"  - {task} failed with exception: {error}")
-        raise RuntimeError(f"{len(failed_tasks)} tasks failed. See logs for details.")
+                    for f in future_to_task:
+                        if not f.done():
+                            f.cancel()
+                    raise
+
+    failed_count = sum(1 for r in results if r.returncode != 0)
+    if not stop_on_failure and failed_count > 0:
+        logger.error(f"Completed with {failed_count} failed tasks (non-zero return codes)")
+        for r in results:
+            if r.returncode != 0:
+                logger.error(f"  - {r.command}")
+        raise RuntimeError(f"{failed_count} tasks failed. See logs for details.")
+
+    return results
