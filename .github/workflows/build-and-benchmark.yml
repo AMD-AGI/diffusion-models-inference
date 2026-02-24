@@ -364,15 +364,17 @@ jobs:
     needs: [validate]
     runs-on: build-only
     if: ${{ inputs.benchmark_image == '' && inputs.prebuilt_untuned_image_tag == '' }}
-    outputs:
-      image_tag: ${{ needs.validate.outputs.image_tag }}
-      core_image_with_tag: ${{ needs.validate.outputs.core_image_with_tag }}
-      staging_image_with_tag: ${{ needs.validate.outputs.staging_image_with_tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.git_branch }}
+      
+      - name: Load build metadata
+        id: metadata
+        uses: ./.github/actions/load-build-metadata
+        with:
+          run_number: ${{ github.run_number }}
       
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -389,7 +391,7 @@ jobs:
           cleanup: false
       
       - name: Build core image
-        if: ${{ inputs.prebuilt_core_image_tag == '' }}
+        if: ${{ steps.metadata.outputs.prebuilt_core_image_tag == '' }}
         uses: docker/build-push-action@v5
         env:
           BUILDKIT_PROGRESS: plain
@@ -398,13 +400,22 @@ jobs:
           context: .
           target: core
           push: true
-          tags: ${{ needs.validate.outputs.core_image_with_tag }}
+          tags: ${{ steps.metadata.outputs.core_image_with_tag }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
       
       - name: Pull prebuilt core image
-        if: ${{ inputs.prebuilt_core_image_tag != '' }}
-        run: docker pull ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}
+        if: ${{ steps.metadata.outputs.prebuilt_core_image_tag != '' }}
+        run: docker pull ${{ env.CORE_IMAGE }}:${{ steps.metadata.outputs.prebuilt_core_image_tag }}
+      
+      - name: Determine cache source
+        id: cache
+        run: |
+          if [ -n "${{ steps.metadata.outputs.prebuilt_core_image_tag }}" ]; then
+            echo "source=${{ env.CORE_IMAGE }}:${{ steps.metadata.outputs.prebuilt_core_image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "source=${{ steps.metadata.outputs.core_image_with_tag }}" >> $GITHUB_OUTPUT
+          fi
       
       - name: Build untuned image
         uses: docker/build-push-action@v5
@@ -414,10 +425,10 @@ jobs:
           file: docker/Dockerfile.ci
           context: .
           push: true
-          tags: ${{ needs.validate.outputs.staging_image_with_tag }}-temp
+          tags: ${{ steps.metadata.outputs.staging_image_with_tag }}-temp
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-          cache-from: ${{ inputs.prebuilt_core_image_tag != '' && format('{0}:{1}', env.CORE_IMAGE, inputs.prebuilt_core_image_tag) || '' }}
+          cache-from: ${{ steps.cache.outputs.source }}
       
       - name: Cleanup
         if: always()
@@ -598,7 +609,7 @@ jobs:
           name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
           path: benchmarks/${{ matrix.arch }}/**
       
-      - name: Cleanup
+      - name: Image cleanup
         if: always()
         continue-on-error: true
         uses: ./.github/actions/cleanup-workspace
@@ -638,8 +649,8 @@ jobs:
           name: ${{ github.run_number }}--${{ matrix.arch }}-${{ steps.metadata.outputs. }}
           path: /${{ matrix.arch }}/**
       
-      - name: Baseline cleanup
-        if: ${{ steps.image.outputs. != '' && (inputs.skip_baseline_duplicate_check || steps.check_baseline.outputs.exists != '1') && always() }}
+      - name: Workspace cleanup
+        if: always()
         continue-on-error: true
         uses: ./.github/actions/cleanup-workspace
         with:
@@ -752,7 +763,7 @@ jobs:
     runs-on: jump-host
     if: |
       (always() || cancelled()) &&
-      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped') &&
+      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped' || needs.tune-and-benchmark.result == 'failure') &&
       fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null
     strategy:
       fail-fast: false
