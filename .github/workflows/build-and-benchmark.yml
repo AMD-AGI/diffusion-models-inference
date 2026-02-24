@@ -380,9 +380,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
           password: ${{ secrets.DOCKERHUB_OAT }}
       
-      - name: Set up Docker Buildx
+      - name: Set up Docker Buildx with custom log size
         uses: docker/setup-buildx-action@v3
         with:
+          driver-opts: |
+            env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+          use: true
           cleanup: false
       
       - name: Build core image
@@ -398,7 +401,6 @@ jobs:
           tags: ${{ needs.validate.outputs.core_image_with_tag }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-            BUILDKIT_STEP_LOG_MAX_SIZE=104857600
       
       - name: Pull prebuilt core image
         if: ${{ inputs.prebuilt_core_image_tag != '' }}
@@ -415,7 +417,6 @@ jobs:
           tags: ${{ needs.validate.outputs.staging_image_with_tag }}-temp
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-            BUILDKIT_STEP_LOG_MAX_SIZE=104857600
           cache-from: ${{ inputs.prebuilt_core_image_tag != '' && format('{0}:{1}', env.CORE_IMAGE, inputs.prebuilt_core_image_tag) || '' }}
       
       - name: Cleanup
@@ -705,9 +706,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
           password: ${{ secrets.DOCKERHUB_OAT }}
       
-      - name: Set up Docker Buildx
+      - name: Set up Docker Buildx with custom log size
         uses: docker/setup-buildx-action@v3
         with:
+          driver-opts: |
+            env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+          use: true
           cleanup: false
       
       - name: Determine untuned image
@@ -733,7 +737,6 @@ jobs:
           tags: ${{ steps.metadata.outputs.staging_image_with_tag }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-            BUILDKIT_STEP_LOG_MAX_SIZE=104857600
           cache-from: ${{ steps.untuned.outputs.tag }}
       
       - name: Cleanup
