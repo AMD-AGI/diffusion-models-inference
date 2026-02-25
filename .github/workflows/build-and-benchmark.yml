@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       git_branch:
-        description: 'Git branch to build from'
-        required: true
-        default: 'main'
+        description: 'Git branch to build from (optional)'
+        required: false
+        default: ''
       image_tag_suffix:
         description: 'Custom tag suffix for built images'
         required: false
@@ -125,7 +125,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_branch }}
+          ref: ${{ inputs.git_branch || github.ref_name }}
       
       - name: Generate image tag
         id: generate_tag
@@ -302,6 +302,7 @@ jobs:
           =$(echo "${{ steps.determine_baseline.outputs. }}" | xargs)
           PREBUILT_CORE_TAG=$(echo "${{ inputs.prebuilt_core_image_tag }}" | xargs)
           PREBUILT_UNTUNED_TAG=$(echo "${{ inputs.prebuilt_untuned_image_tag }}" | xargs)
+          GIT_BRANCH=$(echo "${{ inputs.git_branch }}" | xargs)
           
           mkdir -p build-metadata
           cat > build-metadata/tags.json << EOF
@@ -318,7 +319,8 @@ jobs:
             "": "${}",
             "": "${}",
             "prebuilt_core_image_tag": "${PREBUILT_CORE_TAG}",
-            "prebuilt_untuned_image_tag": "${PREBUILT_UNTUNED_TAG}"
+            "prebuilt_untuned_image_tag": "${PREBUILT_UNTUNED_TAG}",
+            "git_branch": "${GIT_BRANCH}"
           }
           EOF
       
@@ -368,7 +370,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_branch }}
+          ref: ${{ inputs.git_branch || github.ref_name }}
       
       - name: Load build metadata
         id: metadata
@@ -443,6 +445,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       !cancelled() &&
+      needs.validate.result == 'success' &&
       (needs.build-core.result == 'success' || needs.build-core.result == 'skipped')
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
@@ -451,7 +454,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_branch }}
+          ref: ${{ inputs.git_branch || github.ref_name }}
       
       - name: Generate matrix
         id: generate
@@ -487,7 +490,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_branch }}
+          ref: ${{ inputs.git_branch || github.ref_name }}
 
       - name: Generate JIT config for ${{ matrix.arch }}
         id: jit
@@ -546,7 +549,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_branch }}
+          ref: ${{ inputs.git_branch || github.ref_name }}
           token: ${{ secrets.GH_PAT }}
           submodules: ${{ inputs.quality_check && 'recursive' || 'false' }}
           
@@ -696,7 +699,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_branch }}
+          ref: ${{ inputs.git_branch || github.ref_name }}
       
       - name: Load build metadata
         id: metadata
@@ -772,7 +775,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_branch }}
+          ref: ${{ inputs.git_branch || github.ref_name }}
       
       - name: Cleanup Allocator resources
         if: matrix.allocator_reserve == 'true'
@@ -792,9 +795,9 @@ jobs:
 
   trigger-benchmark-metrics-refresh:
     name: Trigger benchmark metrics refresh
-    needs: [tune-and-benchmark]
+    needs: [validate, tune-and-benchmark]
     runs-on: ubuntu-latest
-    if: ${{ always() && inputs.trigger_benchmark_metrics_refresh }}
+    if: ${{ always() && needs.validate.result == 'success' && inputs.trigger_benchmark_metrics_refresh }}
     steps:
       - name: Trigger benchmark metrics refresh workflow
         env:
@@ -803,5 +806,5 @@ jobs:
           gh workflow run "Publish benchmark results to GitHub Pages" \
             --repo ${{ github.repository }} \
             --ref ${{ github.ref }} \
-            --field source_branch="${{ inputs.git_branch }}"
+            --field source_branch="${{ inputs.git_branch || github.ref_name }}"
 
