@@ -47,4 +47,4 @@
     num_iterations: 1
     ulysses_degree: 8
     use_torch_compile: True
-    attention_backend: flash_4
+    attention_backend: cudnn
