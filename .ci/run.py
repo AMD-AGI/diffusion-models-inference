@@ -8,6 +8,7 @@ import importlib.util
 import sys
 import csv
 import shlex
+import time
 from pathlib import Path
 from dataclasses import asdict, dataclass
 from typing import List, Dict, Any, Optional
@@ -115,6 +116,11 @@ def _parse_args():
         type=str,
         required=False,
         help="Override the entrypoint for the experiments",
+    )
+    parser.add_argument(
+        "--print-timing-summary",
+        action=argparse.BooleanOptionalAction,
+        help="Print wall-clock timing summary",
     )
     parser.add_argument(
         "configs",
@@ -299,6 +305,36 @@ def _save_mad_latency_metric(csv_output_path: str, experiment_name: str, latency
         writer.writerow([experiment_name, latency, "latency"])
 
 
+def _print_timing_summary(timing: Dict[str, Any]) -> None:
+    """Print a neat summary table of wall-clock times for download_model and experiments."""
+    if not timing.get("download_model") and not timing.get("experiments"):
+        return
+    time_col_width = 10
+    print("\nWall-clock time summary")
+    if timing.get("download_model"):
+        model_names = list(timing["download_model"].keys())
+        download_sum = sum(timing["download_model"].values())
+        name_width = max(len("Model"), len("Sum"), *(len(n) for n in model_names))
+        sep_width = name_width + 1 + time_col_width
+        print("-" * sep_width)
+        print(f"{'Model':<{name_width}} {'Time (s)':>{time_col_width}}")
+        for model_name, seconds in timing["download_model"].items():
+            print(f"{model_name:<{name_width}} {seconds:>{time_col_width}.2f}")
+        print(f"{'Sum':<{name_width}} {download_sum:>{time_col_width}.2f}")
+        print("-" * sep_width)
+    if timing.get("experiments"):
+        exp_names = [e["name"] for e in timing["experiments"]]
+        experiments_sum = sum(e["seconds"] for e in timing["experiments"])
+        name_width = max(len("Experiment"), len("Sum"), *(len(n) for n in exp_names))
+        sep_width = name_width + 1 + time_col_width
+        print("-" * sep_width)
+        print(f"{'Experiment':<{name_width}} {'Time (s)':>{time_col_width}}")
+        for entry in timing["experiments"]:
+            print(f"{entry['name']:<{name_width}} {entry['seconds']:>{time_col_width}.2f}")
+        print(f"{'Sum':<{name_width}} {experiments_sum:>{time_col_width}.2f}")
+        print("-" * sep_width)
+
+
 def command(e: Experiment, override_args: dict, override_runner: Optional[str] = None, override_entrypoint: Optional[str] = None) -> List[str]:
 
     if override_runner is not None:
@@ -403,6 +439,7 @@ def main():
 
     # Download models and run Experiments
     preserve_original_state = not args.clear_model_cache and not args.no_clear_model_cache
+    timing: Dict[str, Any] = {"download_model": {}, "experiments": []}
 
     for model_name, exps in experiments_per_model.items():
         logger.info(f"Running experiments for model: {model_name}")
@@ -410,7 +447,9 @@ def main():
         revision = exps[0].revision # Remark: assumes model experiments uses same revision.
         model_existed_before = _model_in_cache(model_name, revision)
         try:
+            t0 = time.monotonic()
             _download_model(model_name, revision, args.dry_run)
+            timing["download_model"][model_name] = round(time.monotonic() - t0, 2)
         except Exception as e:
             logger.error(e, stack_info=True, exc_info=True)
             msg = f"Skipped experiments for {model_name}. Failed to download model. See logs for more details."
@@ -426,11 +465,15 @@ def main():
 
             cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + ["--output-directory", benchmark_output_directory]
 
+            t0 = time.monotonic()
             if not _run_experiment(exp, cmd, args.dry_run, benchmark_output_directory):
+                timing["experiments"].append({"name": exp.name, "seconds": round(time.monotonic() - t0, 2)})
                 msg = f"Experiment {exp.name} failed to complete. Reason: Failed to run command: {cmd}. See {benchmark_output_directory}/stderr.txt for stderr logs."
                 errors.append(msg)
                 logger.error(msg)
                 continue
+
+            timing["experiments"].append({"name": exp.name, "seconds": round(time.monotonic() - t0, 2)})
 
             if not args.dry_run:
                 latency_output_filepath = Path(benchmark_output_directory) / "timings.json" # benchmark scripts are expected to write latencies to "timings.json"
@@ -454,6 +497,9 @@ def main():
             except Exception as e:
                 logger.error(e, stack_info=True, exc_info=True)
                 continue
+
+    if args.print_timing_summary and (timing.get("download_model") or timing.get("experiments")):
+        _print_timing_summary(timing)
 
     if args.print_csv:
         try:
