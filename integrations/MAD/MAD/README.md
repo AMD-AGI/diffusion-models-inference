@@ -38,6 +38,7 @@ latencies can be found from `results.csv` once the benchmark runs have finished.
 | pyt_xdit_flux                  | [Flux.1](https://huggingface.co/black-forest-labs/FLUX.1-dev)                         |
 | pyt_xdit_flux_kontext          | [Flux.1 Kontext](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)         |
 | pyt_xdit_flux_2                | [Flux.2](https://huggingface.co/black-forest-labs/FLUX.2-dev)                         |
+| pyt_xdit_flux_2_klein          | [Flux.2 Klein](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B)              |
 | pyt_xdit_hunyuanvideo          | [HunyuanVideo](https://huggingface.co/tencent/HunyuanVideo)                           |
 | pyt_xdit_hunyuanvideo_1_5      | [HunyuanVideo 1.5](https://huggingface.co/tencent/HunyuanVideo-1.5)                   |
 | pyt_xdit_ltx2                  | [LTX-2](https://huggingface.co/Lightricks/LTX-2)                                      |
