@@ -194,8 +194,9 @@ FROM base AS build_rocm
 COPY --from=setup_therock /app/TheRock /app/TheRock
 WORKDIR /app/TheRock
 # if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
-RUN pip install --no-cache-dir dvc[s3] && \
-    pip install -r requirements.txt && \
+RUN pip install -r requirements.txt && \
+    pip freeze | grep -E 'botocore' > constraints.txt && \
+    pip install --no-cache-dir -c constraints.txt "pathspec<0.13.0" "dvc[s3]==3.62.0" && \
     python build_tools/fetch_sources.py --jobs 8 --depth 1
 RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
