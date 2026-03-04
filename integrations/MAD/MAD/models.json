@@ -1,72 +1,4 @@
 {
-    "name": "pyt_xdit_hunyuanvideo",
-    "dockerfile": "docker/pyt_xdit",
-    "scripts": "scripts/pyt_xdit/run.sh",
-    "n_gpus": "8",
-    "owner": "nsakkine@amd.com",
-    "training_precision": "",
-    "tags": [
-        "inference",
-        "diffusion",
-        "t2v",
-        "pyt",
-        "xdit"
-    ],
-    "args": "--workload hunyuanvideo",
-    "multiple_results": "results.csv"
-},
-{
-    "name": "pyt_xdit_hunyuanvideo_1_5",
-    "dockerfile": "docker/pyt_xdit",
-    "scripts": "scripts/pyt_xdit/run.sh",
-    "n_gpus": "8",
-    "owner": "nsakkine@amd.com",
-    "training_precision": "",
-    "tags": [
-        "inference",
-        "diffusion",
-        "t2v",
-        "pyt",
-        "xdit"
-    ],
-    "args": "--workload hunyuanvideo_1_5",
-    "multiple_results": "results.csv"
-},
-{
-    "name": "pyt_xdit_wan_2_1",
-    "dockerfile": "docker/pyt_xdit",
-    "scripts": "scripts/pyt_xdit/run.sh",
-    "n_gpus": "8",
-    "owner": "nsakkine@amd.com",
-    "training_precision": "",
-    "tags": [
-        "inference",
-        "diffusion",
-        "i2v",
-        "pyt",
-        "xdit"
-    ],
-    "args": "--workload wan2_1",
-    "multiple_results": "results.csv"
-},
-{
-    "name": "pyt_xdit_wan_2_2",
-    "dockerfile": "docker/pyt_xdit",
-    "scripts": "scripts/pyt_xdit/run.sh",
-    "n_gpus": "8",
-    "owner": "nsakkine@amd.com",
-    "training_precision": "",
-    "tags": [
-        "inference",
-        "diffusion",
-        "i2v",
-        "pyt",
-        "xdit"
-    ],
-    "args": "--workload wan2_2",
-    "multiple_results": "results.csv"
-},
-{
     "name": "pyt_xdit_flux",
     "dockerfile": "docker/pyt_xdit",
     "scripts": "scripts/pyt_xdit/run.sh",
@@ -82,25 +14,8 @@
     ],
     "args": "--workload flux",
     "multiple_results": "results.csv"
-},
-{
-    "name": "pyt_xdit_sd_3_5",
-    "dockerfile": "docker/pyt_xdit",
-    "scripts": "scripts/pyt_xdit/run.sh",
-    "n_gpus": "8",
-    "owner": "nsakkine@amd.com",
-    "training_precision": "",
-    "tags": [
-        "inference",
-        "diffusion",
-        "t2i",
-        "pyt",
-        "xdit"
-    ],
-    "args": "--workload stablediffusion_3_5",
-    "multiple_results": "results.csv"
-},
-{
+  },
+  {
     "name": "pyt_xdit_flux_kontext",
     "dockerfile": "docker/pyt_xdit",
     "scripts": "scripts/pyt_xdit/run.sh",
@@ -116,8 +31,8 @@
     ],
     "args": "--workload flux_kontext",
     "multiple_results": "results.csv"
-},
-{
+  },
+  {
     "name": "pyt_xdit_flux_2",
     "dockerfile": "docker/pyt_xdit",
     "scripts": "scripts/pyt_xdit/run.sh",
@@ -128,30 +43,15 @@
         "inference",
         "diffusion",
         "t2i",
+        "ti2i",
+        "tmi2i",
         "pyt",
         "xdit"
     ],
     "args": "--workload flux2",
     "multiple_results": "results.csv"
-},
-{
-    "name": "pyt_xdit_z_image_turbo",
-    "dockerfile": "docker/pyt_xdit",
-    "scripts": "scripts/pyt_xdit/run.sh",
-    "n_gpus": "2",
-    "owner": "nsakkine@amd.com",
-    "training_precision": "",
-    "tags": [
-        "inference",
-        "diffusion",
-        "t2i",
-        "pyt",
-        "xdit"
-    ],
-    "args": "--workload z_image_turbo",
-    "multiple_results": "results.csv"
-},
-{
+  },
+  {
     "name": "pyt_xdit_flux_2_klein",
     "dockerfile": "docker/pyt_xdit",
     "scripts": "scripts/pyt_xdit/run.sh",
@@ -167,9 +67,9 @@
     ],
     "args": "--workload flux2_klein",
     "multiple_results": "results.csv"
-},
-{
-    "name": "pyt_xdit_ltx2",
+  },
+  {
+    "name": "pyt_xdit_hunyuanvideo",
     "dockerfile": "docker/pyt_xdit",
     "scripts": "scripts/pyt_xdit/run.sh",
     "n_gpus": "8",
@@ -178,14 +78,48 @@
     "tags": [
         "inference",
         "diffusion",
-        "t2va",
+        "t2v",
+        "pyt",
+        "xdit"
+    ],
+    "args": "--workload hunyuanvideo",
+    "multiple_results": "results.csv"
+  },
+  {
+    "name": "pyt_xdit_hunyuanvideo_1_5",
+    "dockerfile": "docker/pyt_xdit",
+    "scripts": "scripts/pyt_xdit/run.sh",
+    "n_gpus": "8",
+    "owner": "nsakkine@amd.com",
+    "training_precision": "",
+    "tags": [
+        "inference",
+        "diffusion",
+        "t2v",
+        "pyt",
+        "xdit"
+    ],
+    "args": "--workload hunyuanvideo_1_5",
+    "multiple_results": "results.csv"
+  },
+  {
+    "name": "pyt_xdit_ltx_2",
+    "dockerfile": "docker/pyt_xdit",
+    "scripts": "scripts/pyt_xdit/run.sh",
+    "n_gpus": "8",
+    "owner": "nsakkine@amd.com",
+    "training_precision": "",
+    "tags": [
+        "inference",
+        "diffusion",
+        "t2v",
         "pyt",
         "xdit"
     ],
     "args": "--workload ltx2",
     "multiple_results": "results.csv"
-},
-{
+  },
+  {
     "name": "pyt_xdit_qwen_image",
     "dockerfile": "docker/pyt_xdit",
     "scripts": "scripts/pyt_xdit/run.sh",
@@ -201,8 +135,8 @@
     ],
     "args": "--workload qwen_image",
     "multiple_results": "results.csv"
-},
-{
+  },
+  {
     "name": "pyt_xdit_qwen_image_edit",
     "dockerfile": "docker/pyt_xdit",
     "scripts": "scripts/pyt_xdit/run.sh",
@@ -218,4 +152,72 @@
     ],
     "args": "--workload qwen_image_edit",
     "multiple_results": "results.csv"
-},
+  },
+  {
+    "name": "pyt_xdit_sd_3_5",
+    "dockerfile": "docker/pyt_xdit",
+    "scripts": "scripts/pyt_xdit/run.sh",
+    "n_gpus": "8",
+    "owner": "nsakkine@amd.com",
+    "training_precision": "",
+    "tags": [
+        "inference",
+        "diffusion",
+        "t2i",
+        "pyt",
+        "xdit"
+    ],
+    "args": "--workload stablediffusion_3_5",
+    "multiple_results": "results.csv"
+  },
+  {
+    "name": "pyt_xdit_wan_2_1",
+    "dockerfile": "docker/pyt_xdit",
+    "scripts": "scripts/pyt_xdit/run.sh",
+    "n_gpus": "8",
+    "owner": "nsakkine@amd.com",
+    "training_precision": "",
+    "tags": [
+        "inference",
+        "diffusion",
+        "i2v",
+        "pyt",
+        "xdit"
+    ],
+    "args": "--workload wan2_1",
+    "multiple_results": "results.csv"
+  },
+  {
+    "name": "pyt_xdit_wan_2_2",
+    "dockerfile": "docker/pyt_xdit",
+    "scripts": "scripts/pyt_xdit/run.sh",
+    "n_gpus": "8",
+    "owner": "nsakkine@amd.com",
+    "training_precision": "",
+    "tags": [
+        "inference",
+        "diffusion",
+        "i2v",
+        "pyt",
+        "xdit"
+    ],
+    "args": "--workload wan2_2",
+    "multiple_results": "results.csv"
+  },
+  {
+    "name": "pyt_xdit_z_image_turbo",
+    "dockerfile": "docker/pyt_xdit",
+    "scripts": "scripts/pyt_xdit/run.sh",
+    "n_gpus": "2",
+    "owner": "nsakkine@amd.com",
+    "training_precision": "",
+    "tags": [
+        "inference",
+        "diffusion",
+        "t2i",
+        "pyt",
+        "xdit"
+    ],
+    "args": "--workload z_image_turbo",
+    "multiple_results": "results.csv"
+  }
