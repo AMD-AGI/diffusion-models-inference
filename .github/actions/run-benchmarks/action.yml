@@ -27,6 +27,10 @@ inputs:
   hf_token:
     description: 'HuggingFace token for model downloads'
     required: true
+  hf_cache_map:
+    description: 'Hostname to HF cache mapping'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -37,6 +41,29 @@ runs:
         rm -rf $GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}
         mkdir -p $GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}
     
+    - name: Get HF cache path for node
+      id: hf_cache
+      shell: bash
+      run: |
+        HF_CACHE_ARGS=""
+        RUN_PY_FLAGS=""
+        CACHE_PATHS='${{ inputs.hf_cache_map }}'
+        if [ -n "$CACHE_PATHS" ]; then
+          HOSTNAME=$(hostname)
+          cache_path=$(echo "$CACHE_PATHS" | jq -r --arg host "$HOSTNAME" '.[$host] // empty')
+          if [ -n "$cache_path" ]; then
+            if [ -d "$cache_path" ]; then
+              echo "HF cache: $cache_path"
+              HF_CACHE_ARGS="--mount type=bind,src=$cache_path,dst=/hf_cache -e HF_HOME=/hf_cache"
+              RUN_PY_FLAGS="--no-clear-model-cache"
+            else
+              echo "HF cache does not exist: $cache_path"
+            fi
+          fi
+        fi
+        echo "hf_cache_args=$HF_CACHE_ARGS" >> $GITHUB_OUTPUT
+        echo "run_py_flags=$RUN_PY_FLAGS" >> $GITHUB_OUTPUT
+    
     - name: Run benchmarks
       shell: bash
       run: |
@@ -45,7 +72,7 @@ runs:
           MIOPEN_USER_DB_PATH_ENV="-e MIOPEN_USER_DB_PATH=/app/diffusion-models-inference/data/miopen/userdb"
         fi
         
-        EFFECTIVE_BENCHMARK_FLAGS="${{ inputs.benchmark_flags }}"
+        EFFECTIVE_BENCHMARK_FLAGS="${{ steps.hf_cache.outputs.run_py_flags }} ${{ inputs.benchmark_flags }}"
         if [ -n "${{ inputs.gfx_arch }}" ] && [[ "$EFFECTIVE_BENCHMARK_FLAGS" != *"--name"* ]]; then
           EFFECTIVE_BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS} --tag ${{ inputs.gfx_arch }}"
         fi
@@ -66,6 +93,7 @@ runs:
           --mount type=bind,src="$GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}",dst=/outputs \
           --mount type=bind,src="$(pwd)",dst=/app/diffusion-models-inference \
           --mount type=bind,src="$GITHUB_WORKSPACE/references",dst=/app/references \
+          ${{ steps.hf_cache.outputs.hf_cache_args }} \
           $MIOPEN_USER_DB_PATH_ENV \
           -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
           -e OMP_NUM_THREADS=16 \

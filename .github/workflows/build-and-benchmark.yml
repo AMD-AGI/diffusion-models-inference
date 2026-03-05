@@ -604,6 +604,7 @@ jobs:
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: ${{ steps.image.outputs.benchmark_image != '' }}
           hf_token: ${{ secrets.HF_TOKEN }}
+          hf_cache_map: ${{ vars.HF_CACHE_MAP }}
       
       - name: Upload benchmark results
         if: always()
@@ -644,6 +645,7 @@ jobs:
           benchmark_only: true
           output_dir: ''
           hf_token: ${{ secrets.HF_TOKEN }}
+          hf_cache_map: ${{ vars.HF_CACHE_MAP }}
       
       - name: Upload baseline benchmark results
         if: ${{ steps.image.outputs. != '' && (inputs.skip_baseline_duplicate_check || steps.check_baseline.outputs.exists != '1') && always() }}
