@@ -1,0 +1,77 @@
+MIOpenDriver convbfp16 -n 16 -c 1024 -H 17 -W 30 -k 4096 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 1024 --in_d 16 -H 17 -W 30 -k 1024 --fil_d 3 -y 3 -x 3 --pad_d 1 -p 1 -q 1 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 1024 --in_d 16 -H 34 -W 60 -k 1024 --fil_d 3 -y 3 -x 3 --pad_d 1 -p 1 -q 1 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 1024 --in_d 16 -H 34 -W 60 -k 128 --fil_d 3 -y 3 -x 3 --pad_d 1 -p 1 -q 1 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 1024 --in_d 18 -H 36 -W 62 -k 1024 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 1024 --in_d 18 -H 36 -W 62 -k 4096 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 11 -p 0 -q 15 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 11 -p 0 -q 25 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 11 -p 0 -q 5 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 3 -p 0 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 3 -p 0 -q 3 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 3 -p 0 -q 5 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 7 -p 0 -q 15 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 128 -y 1 -x 7 -p 0 -q 9 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 30060 -k 256 -y 1 -x 8 -p 0 -q 3 -u 1 -v 2 -l 1 -j 1 -m conv -g 1 -F 2 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1 -W 501 -k 1024 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 503 -W 66 -k 128 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 503 -W 66 -k 2 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 --in_d 123 -H 274 -W 482 -k 128 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 --in_d 123 -H 274 -W 482 -k 48 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 --in_d 16 -H 17 -W 30 -k 1024 --fil_d 3 -y 3 -x 3 --pad_d 1 -p 1 -q 1 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 --in_d 18 -H 36 -W 62 -k 1024 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 11 -p 0 -q 15 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 11 -p 0 -q 25 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 11 -p 0 -q 5 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 3 -p 0 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 3 -p 0 -q 3 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 3 -p 0 -q 5 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 7 -p 0 -q 15 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 256 -y 1 -x 7 -p 0 -q 9 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1 -W 15030 -k 512 -y 1 -x 15 -p 0 -q 5 -u 1 -v 5 -l 1 -j 1 -m conv -g 1 -F 2 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 253 -W 34 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 501 -W 64 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 503 -W 66 -k 128 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 504 -W 66 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 --in_d 63 -H 138 -W 242 -k 1024 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 --in_d 63 -H 138 -W 242 -k 256 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 2 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 11 -p 0 -q 15 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 11 -p 0 -q 25 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 11 -p 0 -q 5 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 3 -p 0 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 3 -p 0 -q 3 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 3 -p 0 -q 5 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 7 -p 0 -q 15 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 32 -y 1 -x 7 -p 0 -q 9 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 -H 1 -W 120240 -k 64 -y 1 -x 4 -p 0 -q 1 -u 1 -v 2 -l 1 -j 1 -m conv -g 1 -F 2 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 128 -W 18 -k 512 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 1024 -y 1 -x 16 -p 0 -q 5 -u 1 -v 6 -l 1 -j 1 -m conv -g 1 -F 2 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 11 -p 0 -q 15 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 11 -p 0 -q 25 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 11 -p 0 -q 5 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 3 -p 0 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 3 -p 0 -q 3 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 3 -p 0 -q 5 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 7 -p 0 -q 15 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 1 -W 3006 -k 512 -y 1 -x 7 -p 0 -q 9 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 251 -W 32 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 253 -W 34 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 254 -W 34 -k 512 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 --in_d 33 -H 70 -W 122 -k 2048 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 --in_d 33 -H 70 -W 122 -k 512 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 128 -y 1 -x 4 -p 0 -q 1 -u 1 -v 2 -l 1 -j 1 -m conv -g 1 -F 2 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 11 -p 0 -q 15 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 11 -p 0 -q 25 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 11 -p 0 -q 5 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 3 -p 0 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 3 -p 0 -q 3 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 3 -p 0 -q 5 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 7 -p 0 -q 15 -u 1 -v 1 -l 1 -j 5 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 64 -H 1 -W 60120 -k 64 -y 1 -x 7 -p 0 -q 9 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 8 -H 128 -W 18 -k 512 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
