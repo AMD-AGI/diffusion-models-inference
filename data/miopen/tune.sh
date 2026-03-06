@@ -15,7 +15,7 @@ MIOPEN_FIND_ENFORCE=${MIOPEN_FIND_ENFORCE:-4}
 
 # glob, concatenate and retain unique MIOpen driver commands
 echo "Extracting workload MIOpenDriver calls"
-cat $ROOTDIR/src/*/miopen/drivercmd/*.txt | sort | uniq > $WORKDIR/drivercmd.txt
+cat $ROOTDIR/data/miopen/workloads/*.txt $ROOTDIR/src/*/miopen/drivercmd/*.txt | sort -u > $WORKDIR/drivercmd.txt
 
 # find MIOpenDriver executable
 echo "Searching for MIOpenDriver executable"

@@ -1,0 +1,12 @@
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1088 -W 1920 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 128 -H 1088 -W 1920 -k 3 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 16 -H 136 -W 240 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1088 -W 1920 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1088 -W 1920 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 1088 -W 1920 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 256 -H 544 -W 960 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 136 -W 240 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 272 -W 480 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 544 -W 960 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 544 -W 960 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 512 -H 544 -W 960 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1

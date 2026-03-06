@@ -1,0 +1,31 @@
+MIOpenDriver convbfp16 -n 1 -c 16 --in_d 1 -H 256 -W 256 -k 16 --fil_d 1 -y 1 -x 1 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 16 --in_d 3 -H 258 -W 258 -k 384 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 -H 2048 -W 2048 -k 96 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 -H 433 -W 625 -k 192 -y 3 -x 3 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 --in_d 1 -H 216 -W 312 -k 384 --fil_d 1 -y 1 -x 1 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 --in_d 1 -H 512 -W 512 -k 384 --fil_d 1 -y 1 -x 1 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 --in_d 3 -H 1026 -W 1026 -k 192 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 --in_d 3 -H 218 -W 314 -k 384 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 --in_d 3 -H 434 -W 626 -k 192 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 192 --in_d 3 -H 514 -W 514 -k 384 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 32 --in_d 1 -H 108 -W 156 -k 32 --fil_d 1 -y 1 -x 1 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 -H 1024 -W 1024 -k 192 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 -H 108 -W 156 -k 1152 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 -H 108 -W 156 -k 384 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 -H 217 -W 313 -k 384 -y 3 -x 3 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 -H 256 -W 256 -k 1152 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 -H 256 -W 256 -k 384 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 -H 512 -W 512 -k 192 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 --in_d 3 -H 110 -W 158 -k 32 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 --in_d 3 -H 110 -W 158 -k 384 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 --in_d 3 -H 218 -W 314 -k 384 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 --in_d 3 -H 258 -W 258 -k 384 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 384 --in_d 3 -H 514 -W 514 -k 384 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 3 --in_d 3 -H 866 -W 1250 -k 96 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 --in_layout NDHWC --fil_layout NDHWC --out_layout NDHWC -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 96 -H 865 -W 1249 -k 96 -y 3 -x 3 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 96 --in_d 1 -H 432 -W 624 -k 192 --fil_d 1 -y 1 -x 1 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 96 --in_d 3 -H 2050 -W 2050 -k 3 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 96 --in_d 3 -H 2050 -W 2050 -k 96 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 96 --in_d 3 -H 434 -W 626 -k 192 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 96 --in_d 3 -H 866 -W 1250 -k 96 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 --in_layout NDHWC --fil_layout NDHWC --out_layout NDHWC -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 5580 -c 3 --in_d 2 -H 14 -W 14 -k 1280 --fil_d 2 -y 14 -x 14 --pad_d 0 -p 0 -q 0 --conv_stride_d 2 -u 14 -v 14 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
