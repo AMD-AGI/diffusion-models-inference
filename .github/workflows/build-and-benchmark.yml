@@ -509,6 +509,7 @@ jobs:
           arch: ${{ matrix.arch }}
           jitconfig: ${{ steps.jit.outputs.jitconfig }}
           repository: ${{ github.repository }}
+          gha_runner_version: ${{ vars.GHA_RUNNER_VERSION }}
       
       - name: Allocate resources via Allocator
         id: allocate
