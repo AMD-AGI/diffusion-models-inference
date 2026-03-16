@@ -476,6 +476,7 @@ COPY docs/pytorch-xdit/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
 COPY .ci/quality_check.py /app/.ci/quality_check.py
+COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
 ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
