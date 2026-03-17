@@ -1,0 +1,50 @@
+name: 'Check MIOpen Changes'
+description: 'Checks if Dockerfile or MIOpen drivercmd files changed'
+inputs:
+  base_ref:
+    description: 'Base reference for comparison (default: HEAD~1)'
+    required: false
+    default: 'HEAD~1'
+  head_ref:
+    description: 'Head reference for comparison (default: HEAD)'
+    required: false
+    default: 'HEAD'
+
+outputs:
+  should_trigger:
+    description: 'Whether tuning workflow should be triggered (true if either changed)'
+    value: ${{ steps.check.outputs.should_trigger }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check for MIOpen changes
+      id: check
+      shell: bash
+      run: |
+        DOCKERFILE_CHANGED="false"
+        MIOPEN_CHANGED="false"
+        CHANGED_FILES=$(git diff --name-only ${{ inputs.base_ref }} ${{ inputs.head_ref }})
+
+        if echo "$CHANGED_FILES" | grep -q "^docker/Dockerfile.ci$"; then
+          DOCKERFILE_CHANGED="true"
+          echo "Dockerfile changed"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^src/.*/miopen/drivercmd/"; then
+          MIOPEN_CHANGED="true"
+          echo "MIOpen drivercmd files changed (legacy)"
+        fi
+        
+        if echo "$CHANGED_FILES" | grep -q "^data/miopen/workloads/"; then
+          MIOPEN_CHANGED="true"
+          echo "MIOpen drivercmd files changed (workloads)"  
+        fi
+
+        if [ "$DOCKERFILE_CHANGED" = "true" ] || [ "$MIOPEN_CHANGED" = "true" ]; then
+          echo "should_trigger=true" >> $GITHUB_OUTPUT
+          echo "MIOpen tuning changes detected, retuning will be triggered"
+        else
+          echo "should_trigger=false" >> $GITHUB_OUTPUT
+          echo "No MIOpen tuning changes detected"
+        fi
