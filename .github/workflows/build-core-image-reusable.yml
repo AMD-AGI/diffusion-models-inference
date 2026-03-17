@@ -1,0 +1,141 @@
+name: Build Core Images (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      git_ref:
+        description: 'Git ref to checkout'
+        required: true
+        type: string
+      image_tag:
+        description: 'Image tag to use for built images'
+        required: true
+        type: string
+      core_image_name:
+        description: 'Core image name'
+        required: false
+        type: string
+        default: 'amdsiloai/pytorch-xdit-core'
+      staging_image_name:
+        description: 'Staging image name'
+        required: false
+        type: string
+        default: 'amdsiloai/pytorch-xdit-staging'
+      prebuilt_core_image_tag:
+        description: 'Prebuilt core image tag to use as cache (skips core build if provided)'
+        required: false
+        type: string
+        default: ''
+      build_untuned_image:
+        description: 'Whether to build the untuned image'
+        required: false
+        type: boolean
+        default: true
+      runner:
+        description: 'Runner label to use'
+        required: false
+        type: string
+        default: 'build-only'
+    outputs:
+      core_image_with_tag:
+        description: 'Full core image with tag'
+        value: ${{ jobs.build.outputs.core_image_with_tag }}
+      staging_image_with_tag:
+        description: 'Full staging image with tag (untuned, with -temp suffix)'
+        value: ${{ jobs.build.outputs.staging_image_with_tag }}
+
+jobs:
+  build:
+    name: Build images
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 1440
+    outputs:
+      core_image_with_tag: ${{ steps.set_outputs.outputs.core_image_with_tag }}
+      staging_image_with_tag: ${{ steps.set_outputs.outputs.staging_image_with_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+      
+      - name: Set up Docker Buildx with custom log size
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+          use: true
+          cleanup: false
+      
+      - name: Determine images to build
+        id: images
+        run: |
+          PREBUILT_CORE_TAG=$(echo "${{ inputs.prebuilt_core_image_tag }}" | xargs)
+          
+          if [ -n "$PREBUILT_CORE_TAG" ]; then
+            echo "skip_core_build=true" >> $GITHUB_OUTPUT
+            echo "cache_source=${{ inputs.core_image_name }}:${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+          else
+            echo "skip_core_build=false" >> $GITHUB_OUTPUT
+            echo "cache_source=${{ inputs.core_image_name }}:${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build core image
+        if: ${{ steps.images.outputs.skip_core_build == 'false' }}
+        uses: docker/build-push-action@v5
+        env:
+          BUILDKIT_PROGRESS: plain
+        with:
+          file: docker/Dockerfile.ci
+          context: .
+          target: core
+          push: true
+          tags: ${{ steps.images.outputs.cache_source }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=min
+      
+      - name: Pull prebuilt core image
+        if: ${{ steps.images.outputs.skip_core_build == 'true' }}
+        run: |
+          docker pull ${{ steps.images.outputs.cache_source }}
+          docker buildx build --cache-from type=registry,ref=${{ steps.images.outputs.cache_source }} \
+            --cache-to type=local,dest=/tmp/.buildx-cache,mode=max \
+            --target core \
+            -f docker/Dockerfile.ci . || true
+      
+      - name: Build untuned image
+        if: ${{ inputs.build_untuned_image }}
+        uses: docker/build-push-action@v5
+        env:
+          BUILDKIT_PROGRESS: plain
+        with:
+          file: docker/Dockerfile.ci
+          context: .
+          push: true
+          tags: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          cache-from: |
+            type=local,src=/tmp/.buildx-cache
+            type=registry,ref=${{ steps.images.outputs.cache_source }}
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=min
+      
+      - name: Set outputs
+        id: set_outputs
+        run: |
+          echo "core_image_with_tag=${{ inputs.core_image_name }}:${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          echo "staging_image_with_tag=${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp" >> $GITHUB_OUTPUT
+      
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: ''
+          containers: ''

@@ -1,4 +1,4 @@
-name: Build xDiT Image
+name: Build core image
 on:
   push:
     branches:
@@ -13,51 +13,233 @@ on:
         description: "Runner label"
         required: false
         default: "build-only"
+      prebuilt_core_image_tag:
+        description: "Prebuilt core image tag (build untuned only)"
+        required: false
+        default: ""
+      force_trigger_tuning:
+        description: "Force trigger automatic tuning"
+        type: boolean
+        required: false
+        default: false
+
 jobs:
-  build-xdit-core:
-    name: Build xDiT core image
-    runs-on: ${{ github.event.inputs.runner || 'build-only' }}
-    timeout-minutes: 1440
+  get-short-sha:
+    name: Compute short SHA
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.short_sha.outputs.sha }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Get commit SHA
+      
+      - name: Get short commit SHA
         id: short_sha
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-      - name: Log in to the container registry
-        uses: docker/login-action@v3
+      
+      - name: Write workflow summary
+        uses: ./.github/actions/write-workflow-summary
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_OAT }}
-      - name: Set up Docker Buildx with custom log size
-        uses: docker/setup-buildx-action@v3
+          title: 'Workflow Configuration'
+          tables: |
+            {
+              "Core build parameters": {
+                "tag": "${{ inputs.tag }}",
+                "runner": "${{ inputs.runner || 'build-only' }}",
+                "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
+                "force_trigger_tuning": "${{ inputs.force_trigger_tuning || 'false' }}",
+                "short_sha": "${{ steps.short_sha.outputs.sha }}"
+              }
+            }
+
+  build-xdit-images:
+    name: Build xDiT images
+    needs: [get-short-sha]
+    uses: ./.github/workflows/build-core-image-reusable.yml
+    with:
+      git_ref: ${{ github.ref_name }}
+      image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
+      core_image_name: amdsiloai/pytorch-xdit-core
+      staging_image_name: amdsiloai/pytorch-xdit-staging
+      prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
+      build_untuned_image: true
+      runner: ${{ inputs.runner || 'build-only' }}
+    secrets: inherit
+  
+  check-changes:
+    name: Check for MIOpen changes
+    needs: [build-xdit-images]
+    runs-on: ubuntu-latest
+    outputs:
+      should_trigger: ${{ steps.check.outputs.should_trigger }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
         with:
-          driver-opts: |
-            env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
-          use: true
-      - name: Check Docker
-        run: docker info
-      - name: Build core image
-        uses: docker/build-push-action@v5
+          fetch-depth: 2
+      
+      - name: Check for MIOpen changes
+        id: check
+        uses: ./.github/actions/check-miopen-changes
         with:
-          file: docker/Dockerfile.ci
-          context: .
-          target: core
-          push: true
-          load: false
-          tags: amdsiloai/pytorch-xdit-core:${{ github.event.inputs.tag || steps.short_sha.outputs.sha }}
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=min
-      - name: Build untuned image
-        uses: docker/build-push-action@v5
+          base_ref: HEAD~1
+          head_ref: HEAD
+  
+  prepare:
+    name: Prepare build configuration
+    needs: [check-changes, get-short-sha]
+    runs-on: ubuntu-latest
+    if: |
+      inputs.force_trigger_tuning == true ||
+      (
+        github.ref_name == 'main' &&
+        needs.check-changes.outputs.should_trigger == 'true'
+      )
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+      allocator_id: ${{ steps.tuning_config.outputs.allocator_id }}
+      mi300_runner: ${{ steps.tuning_config.outputs.mi300_runner }}
+      mi300_runner_type: ${{ steps.tuning_config.outputs.mi300_runner_type }}
+      mi325_runner: ${{ steps.tuning_config.outputs.mi325_runner }}
+      mi325_runner_type: ${{ steps.tuning_config.outputs.mi325_runner_type }}
+      mi355_runner: ${{ steps.tuning_config.outputs.mi355_runner }}
+      mi355_runner_type: ${{ steps.tuning_config.outputs.mi355_runner_type }}
+      tuning_enabled: ${{ steps.tuning_config.outputs.enabled }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ needs.get-short-sha.outputs.short_sha }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Determine runner
+        id: config
+        run: |
+          if [ -n "${{ github.event.inputs.runner }}" ]; then
+            echo "runner=${{ github.event.inputs.runner }}" >> $GITHUB_OUTPUT
+          else
+            echo "runner=build-only" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Prepare tuning configuration
+        id: tuning_config
+        run: |
+          # Trim whitespace from repository variables
+          ALLOCATOR_ID=$(echo "${{ vars.DEFAULT_ALLOCATOR_ID }}" | xargs)
+          MI300_RUNNER=$(echo "${{ vars.DEFAULT_MI300_RUNNER }}" | xargs)
+          MI300_RUNNER_TYPE=$(echo "${{ vars.DEFAULT_MI300_RUNNER_TYPE }}" | xargs)
+          MI325_RUNNER=$(echo "${{ vars.DEFAULT_MI325_RUNNER }}" | xargs)
+          MI325_RUNNER_TYPE=$(echo "${{ vars.DEFAULT_MI325_RUNNER_TYPE }}" | xargs)
+          MI355_RUNNER=$(echo "${{ vars.DEFAULT_MI355_RUNNER }}" | xargs)
+          MI355_RUNNER_TYPE=$(echo "${{ vars.DEFAULT_MI355_RUNNER_TYPE }}" | xargs)
+          
+          # Output values
+          echo "allocator_id=${ALLOCATOR_ID}" >> $GITHUB_OUTPUT
+          echo "mi300_runner=${MI300_RUNNER}" >> $GITHUB_OUTPUT
+          echo "mi300_runner_type=${MI300_RUNNER_TYPE}" >> $GITHUB_OUTPUT
+          echo "mi325_runner=${MI325_RUNNER}" >> $GITHUB_OUTPUT
+          echo "mi325_runner_type=${MI325_RUNNER_TYPE}" >> $GITHUB_OUTPUT
+          echo "mi355_runner=${MI355_RUNNER}" >> $GITHUB_OUTPUT
+          echo "mi355_runner_type=${MI355_RUNNER_TYPE}" >> $GITHUB_OUTPUT
+          
+          # Check if tuning should be enabled
+          ENABLED=false
+          
+          if [ -z "${ALLOCATOR_ID}" ]; then
+            echo "Tuning disabled: DEFAULT_ALLOCATOR_ID is not configured"
+          elif [ -z "${MI300_RUNNER}" ] && [ -z "${MI325_RUNNER}" ] && [ -z "${MI355_RUNNER}" ]; then
+            echo "Tuning disabled: no architecture runners configured"
+          else
+            ENABLED=true
+            echo "Tuning enabled: ALLOCATOR_ID and at least one architecture runner configured"
+          fi
+          
+          echo "enabled=${ENABLED}" >> $GITHUB_OUTPUT
+  
+  trigger-tuning:
+    name: Trigger MIOpen tuning workflow
+    needs: [check-changes, prepare, build-xdit-images]
+    runs-on: ubuntu-latest
+    if: |
+      (
+        inputs.force_trigger_tuning == true ||
+        (
+          github.ref_name == 'main' &&
+          needs.check-changes.outputs.should_trigger == 'true'
+        )
+      ) &&
+      needs.prepare.outputs.tuning_enabled == 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      
+      - name: Write workflow summary
+        uses: ./.github/actions/write-workflow-summary
         with:
-          file: docker/Dockerfile.ci
-          context: .
-          push: true
-          load: false
-          tags: amdsiloai/pytorch-xdit-staging:${{ github.event.inputs.tag || steps.short_sha.outputs.sha }}-temp
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-          cache-from: type=local,src=/tmp/.buildx-cache
+          title: 'MIOpen tuning parameters'
+          tables: |
+            {
+              "Workflow parameters": {
+                "git_branch": "${{ github.ref_name }}",
+                "prebuilt_untuned_image_tag": "${{ needs.prepare.outputs.image_tag }}-temp",
+                "run_mode": "${{ vars.BENCHMARK_AFTER_AUTOMATIC_TUNING == 'true' && 'MIOpen tuning + benchmarking' || 'MIOpen tuning only' }}",
+                "trigger_benchmark_metrics_refresh": "false"
+              },
+              "MIOpen modes": {
+                "miopen_find_mode": "${{ vars.DEFAULT_MIOPEN_FIND_MODE }}",
+                "miopen_find_enforce": "${{ vars.DEFAULT_MIOPEN_FIND_ENFORCE }}"
+              },
+              "Allocator ID": {
+                "allocator_id": "${{ needs.prepare.outputs.allocator_id }}"
+              },
+              "MI300 runner": {
+                "runner": "${{ needs.prepare.outputs.mi300_runner }}",
+                "runner_type": "${{ needs.prepare.outputs.mi300_runner_type }}"
+              },
+              "MI325 runner": {
+                "runner": "${{ needs.prepare.outputs.mi325_runner }}",
+                "runner_type": "${{ needs.prepare.outputs.mi325_runner_type }}"
+              },
+              "MI355 runner": {
+                "runner": "${{ needs.prepare.outputs.mi355_runner }}",
+                "runner_type": "${{ needs.prepare.outputs.mi355_runner_type }}"
+              }
+            }
+      
+      - name: Trigger build-and-benchmark workflow
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          BENCHMARK_AFTER_TUNING=$(echo "${{ vars.BENCHMARK_AFTER_AUTOMATIC_TUNING }}" | xargs)
+          if [ "${BENCHMARK_AFTER_TUNING}" = "true" ]; then
+            RUN_MODE="MIOpen tuning + benchmarking"
+          else
+            RUN_MODE="MIOpen tuning only"
+          fi
+          
+          # Get MIOpen parameters from repository variables
+          MIOPEN_FIND_MODE=$(echo "${{ vars.DEFAULT_MIOPEN_FIND_MODE }}" | xargs)
+          MIOPEN_FIND_ENFORCE=$(echo "${{ vars.DEFAULT_MIOPEN_FIND_ENFORCE }}" | xargs)
+          
+          gh workflow run "build-and-benchmark.yml" \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            --field git_branch="${{ github.ref_name }}" \
+            --field prebuilt_untuned_image_tag="${{ needs.prepare.outputs.image_tag }}-temp" \
+            --field run_mode="${RUN_MODE}" \
+            --field miopen_find_mode="${MIOPEN_FIND_MODE}" \
+            --field miopen_find_enforce="${MIOPEN_FIND_ENFORCE}" \
+            --field trigger_benchmark_metrics_refresh=false \
+            --field allocator_id="${{ needs.prepare.outputs.allocator_id }}" \
+            --field mi300_runner="${{ needs.prepare.outputs.mi300_runner }}" \
+            --field mi300_runner_type="${{ needs.prepare.outputs.mi300_runner_type }}" \
+            --field mi325_runner="${{ needs.prepare.outputs.mi325_runner }}" \
+            --field mi325_runner_type="${{ needs.prepare.outputs.mi325_runner_type }}" \
+            --field mi355_runner="${{ needs.prepare.outputs.mi355_runner }}" \
+            --field mi355_runner_type="${{ needs.prepare.outputs.mi355_runner_type }}"

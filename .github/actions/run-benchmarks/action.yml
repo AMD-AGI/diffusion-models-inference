@@ -31,6 +31,9 @@ inputs:
     description: 'Hostname to HF cache mapping'
     required: false
     default: ''
+  artifact_name:
+    description: 'Full artifact name for upload'
+    required: true
 
 runs:
   using: composite
@@ -102,3 +105,10 @@ runs:
           ${{ inputs.image }} \
           sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && \
                  python3 /app/.ci/quality_check.py --reference-path /app/references --benchmark-output-path /outputs'
+    
+    - name: Upload benchmark results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ inputs.output_dir }}/${{ inputs.arch }}/**

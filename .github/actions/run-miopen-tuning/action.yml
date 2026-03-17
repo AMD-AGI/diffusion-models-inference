@@ -8,6 +8,17 @@ inputs:
   arch:
     description: 'Architecture name (mi300, mi308, mi325, mi350, mi355)'
     required: true
+  artifact_name:
+    description: 'Full artifact name for upload'
+    required: true
+  miopen_find_mode:
+    description: 'MIOpen find mode (integer)'
+    required: false
+    default: '1'
+  miopen_find_enforce:
+    description: 'MIOpen find enforce (integer)'
+    required: false
+    default: '3'
 
 runs:
   using: composite
@@ -32,8 +43,14 @@ runs:
           -e HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
           -e OMP_NUM_THREADS=16 \
           -e MIOPEN_USER_DB_PATH=/app/diffusion-models-inference/data/miopen/userdb \
-          -e MIOPEN_FIND_MODE=1 \
-          -e MIOPEN_FIND_ENFORCE=3 \
+          -e MIOPEN_FIND_MODE=${{ inputs.miopen_find_mode }} \
+          -e MIOPEN_FIND_ENFORCE=${{ inputs.miopen_find_enforce }} \
           -e HOST_UID=$(id -g) \
           ${{ inputs.image }} \
           bash -c "/app/diffusion-models-inference/data/miopen/tune.sh"
+    
+    - name: Upload MIOpen tuning results
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: data/miopen/userdb/gfx*

@@ -1,0 +1,79 @@
+name: 'Create MIOpen Database PR'
+description: 'Creates a branch with MIOpen database changes and opens a pull request'
+
+inputs:
+  branch_name:
+    description: 'Branch name for the MIOpen database update'
+    required: true
+  run_number:
+    description: 'GitHub Actions run number'
+    required: true
+  arch:
+    description: 'Architecture (e.g., mi300, mi325, mi355)'
+    required: true
+  gh_token:
+    description: 'GitHub token for creating PR'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+    
+    - name: Create and checkout branch
+      shell: bash
+      run: |
+        BRANCH_NAME="${{ inputs.branch_name }}"
+        echo "Creating branch: ${BRANCH_NAME}"
+        git checkout -b "${BRANCH_NAME}"
+    
+    - name: Check for MIOpen changes
+      id: check_changes
+      shell: bash
+      run: |
+        if [ -d "data/miopen/userdb" ] && [ "$(ls -A data/miopen/userdb 2>/dev/null)" ]; then
+          git add data/miopen/userdb/*.udb.txt data/miopen/userdb/*.ufdb.txt 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Commit changes
+      if: steps.check_changes.outputs.has_changes == 'true'
+      shell: bash
+      run: |
+        COMMIT_MSG="Update MIOpen database for ${{ inputs.arch }} (run #${{ inputs.run_number }})"
+        echo "Committing with message: ${COMMIT_MSG}"
+        git commit -m "${COMMIT_MSG}"
+    
+    - name: Push branch
+      if: steps.check_changes.outputs.has_changes == 'true'
+      shell: bash
+      run: |
+        BRANCH_NAME="${{ inputs.branch_name }}"
+        echo "Pushing branch: ${BRANCH_NAME}"
+        git push origin "${BRANCH_NAME}"
+    
+    - name: Create PR
+      if: steps.check_changes.outputs.has_changes == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_token }}
+      run: |
+        BRANCH_NAME="${{ inputs.branch_name }}"
+        PR_TITLE="MIOpen tuning for ${{ inputs.arch }}, run #${{ inputs.run_number }}"
+        PR_BODY="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        gh pr create \
+          --repo ${{ github.repository }} \
+          --base ${{ github.ref_name }} \
+          --head "${BRANCH_NAME}" \
+          --title "${PR_TITLE}" \
+          --body "${PR_BODY}"
