@@ -11,7 +11,8 @@ ARG FLASHATTENTION_COMMIT="fffabc3"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="a80b19218b4bd4faf2d6d8c428dcf1ae6f11e43d"
 ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
-ARG XDIT_COMMIT="e806faba8e87f02056c3deda13bd0d4652c84b4d"
+ARG DISTVAE_COMMIT="bf7531e"
+ARG XDIT_COMMIT="951760d5247d8c1a56eef57bb55f4ee7d476ada1"
 ARG AO_COMMIT="8b72284"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
@@ -29,6 +30,7 @@ ARG FLASHATTENTION_COMMIT
 ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
 ARG ACCELERATE_COMMIT
+ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG AO_COMMIT
 
@@ -64,6 +66,11 @@ RUN git clone https://github.com/pytorch/ao.git && \
     cd ao && \
     git reset --hard ${AO_COMMIT} && \
     pip install -e . --no-build-isolation
+# install distvae
+RUN git clone https://github.com/xdit-project/DistVAE.git && \
+    cd DistVAE && \
+    git reset --hard ${DISTVAE_COMMIT} && \
+    pip install -e .
 # install xfuser
 WORKDIR /app
 RUN git clone https://github.com/xdit-project/xDiT.git && \
