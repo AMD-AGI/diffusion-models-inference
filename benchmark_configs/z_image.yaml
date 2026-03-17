@@ -1,47 +1,53 @@
-- name: z_image_turbo.default
+- name: z_image.default
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
-  model: Tongyi-MAI/Z-Image-Turbo
+  model: Tongyi-MAI/Z-Image
   runner: xdit
   args:
     seed: 42
     prompt: A crowded beach
     height: 1088
     width: 1920
-    num_inference_steps: 9
+    num_inference_steps: 50
     ulysses_degree: 2
+    ring_degree: 2
     use_torch_compile: True
-    guidance_scale: 0.0
-    num_iterations: 50
+    guidance_scale: 4.0
+    num_iterations: 25
     attention_backend: aiter
+    use_cfg_parallel: True
 
-- name: z_image_turbo.default.hopper
+- name: z_image.default.hopper
   tags: [lucid, hopper, h100, h200]
-  model: Tongyi-MAI/Z-Image-Turbo
+  model: Tongyi-MAI/Z-Image
   runner: xdit
   args:
     seed: 42
     prompt: A crowded beach
     height: 1088
     width: 1920
-    num_inference_steps: 9
+    num_inference_steps: 50
     ulysses_degree: 2
+    ring_degree: 2
     use_torch_compile: True
-    guidance_scale: 0.0
-    num_iterations: 50
+    guidance_scale: 4.0
+    num_iterations: 25
     attention_backend: flash_3
+    use_cfg_parallel: True
 
-- name: z_image_turbo.default.blackwell
+- name: z_image.default.blackwell
   tags: [lucid, blackwell, b200, b300]
-  model: Tongyi-MAI/Z-Image-Turbo
+  model: Tongyi-MAI/Z-Image
   runner: xdit
   args:
     seed: 42
     prompt: A crowded beach
     height: 1088
     width: 1920
-    num_inference_steps: 9
+    num_inference_steps: 50
     ulysses_degree: 2
+    ring_degree: 2
     use_torch_compile: True
-    guidance_scale: 0.0
-    num_iterations: 50
+    guidance_scale: 4.0
+    num_iterations: 25
     attention_backend: cudnn
+    use_cfg_parallel: True
