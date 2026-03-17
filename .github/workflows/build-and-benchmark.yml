@@ -113,7 +113,7 @@ env:
 jobs:
   validate:
     name: Validate inputs
-    runs-on: build-only
+    runs-on: ubuntu-latest
     outputs:
       any_arch_enabled: ${{ steps.check-archs.outputs.any_enabled }}
       image_tag: ${{ steps.generate_tag.outputs.tag }}
@@ -127,6 +127,12 @@ jobs:
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
       
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
       - name: Generate image tag
         id: generate_tag
         run: |         
