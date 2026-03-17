@@ -9,6 +9,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -26,6 +27,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -44,6 +46,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -61,6 +64,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -78,6 +82,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -95,6 +100,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -112,6 +118,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -129,6 +136,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -146,6 +154,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -164,6 +173,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -183,6 +193,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -201,6 +212,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -220,6 +232,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -239,6 +252,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -256,6 +270,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -273,6 +288,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
@@ -292,6 +308,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
+    use_parallel_vae: True
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
