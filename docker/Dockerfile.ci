@@ -24,7 +24,7 @@ ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="a80b19218b4bd4faf2d6d8c428dcf1ae6f11e43d"
 ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
 ARG DISTVAE_COMMIT="bf7531e"
-ARG XDIT_COMMIT="951760d5247d8c1a56eef57bb55f4ee7d476ada1"
+ARG XDIT_COMMIT="5fc47c3"
 ARG AO_COMMIT="8b72284"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -59,7 +59,7 @@ RUN if [ "${PYTHON_VERSION}" = "default" ]; then \
             tk-dev \
             uuid-dev \
             zlib1g-dev \
-            # do not install on Ubuntu 24.04 
+            # do not install on Ubuntu 24.04
 #            libmpdec-dev \
             libzstd-dev \
             inetutils-inetd \

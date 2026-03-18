@@ -12,8 +12,9 @@ ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="a80b19218b4bd4faf2d6d8c428dcf1ae6f11e43d"
 ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
 ARG DISTVAE_COMMIT="bf7531e"
-ARG XDIT_COMMIT="951760d5247d8c1a56eef57bb55f4ee7d476ada1"
+ARG XDIT_COMMIT="5fc47c3"
 ARG AO_COMMIT="8b72284"
+ARG SAGEATTENTION_COMMIT="d1a57a5"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
 FROM ${BASE_IMAGE} AS core
@@ -71,6 +72,11 @@ RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
     git reset --hard ${DISTVAE_COMMIT} && \
     pip install -e .
+# install sageattention
+RUN git clone https://github.com/thu-ml/SageAttention.git && \
+    cd SageAttention && \
+    git reset --hard ${SAGEATTENTION_COMMIT} && \
+    TORCH_CUDA_ARCH_LIST="9.0" python3 setup.py install
 # install xfuser
 WORKDIR /app
 RUN git clone https://github.com/xdit-project/xDiT.git && \
