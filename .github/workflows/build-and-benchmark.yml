@@ -279,26 +279,7 @@ jobs:
           prebuilt_untuned_image_tag: ${{ inputs.prebuilt_untuned_image_tag }}
           git_branch: ${{ inputs.git_branch }}
           run_number: ${{ github.run_number }}
-      
-      - name: Extract version information
-        run: |
-          mkdir -p versions
-          git rev-parse HEAD > versions/repository.txt
-          if docker manifest inspect ${{ steps.generate_tag.outputs.core_image_with_tag }} > /dev/null 2>&1; then
-            docker pull ${{ steps.generate_tag.outputs.core_image_with_tag }}
-            docker create --name core ${{ steps.generate_tag.outputs.core_image_with_tag }}
-            docker cp core:/opt/rocm/share/therock/ versions/ || true
-            docker rm core
-          else
-            echo "Core image does not exist yet, skipping docker extraction"
-          fi
-      
-      - name: Upload version artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.run_number }}-versions
-          path: versions/**
-      
+          
       - name: Write summary
         uses: ./.github/actions/write-workflow-summary
         with:
@@ -454,8 +435,21 @@ jobs:
           run_number: ${{ github.run_number }}
           gh_token: ${{ secrets.GH_PAT }}
       
-      - name: Pull image
-        run: docker pull ${{ steps.metadata.outputs.tune_and_benchmark_image }}
+      - name: Pull image and extract version information
+        run: |
+          mkdir -p versions
+          git rev-parse HEAD > versions/repository.txt
+          docker pull ${{ steps.metadata.outputs.tune_and_benchmark_image }}
+          docker create --name core ${{ steps.metadata.outputs.tune_and_benchmark_image }}
+          docker cp core:/opt/rocm/share/therock/ versions/ || true
+          docker rm core
+      
+      - name: Upload version artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-versions
+          path: versions/**
+          overwrite: true
 
       - name: Check if baseline benchmarks already exist
         id: check_baseline
@@ -538,10 +532,23 @@ jobs:
           containers: 'xdit-bench miopen-tune'
           skip_workspace_cleanup: 'true'
       
-      - name: Pull baseline image
+      - name: Pull baseline image and extract version information
         if: ${{ steps.conditions.outputs.should_run_baseline == 'true' }}
-        run: docker pull ${{ steps.metadata.outputs. }}
+        run: |
+          mkdir -p versions-baseline
+          docker pull ${{ steps.metadata.outputs. }}
+          docker create --name baseline ${{ steps.metadata.outputs. }}
+          docker cp baseline:/opt/rocm/share/therock/ versions-baseline/ || true
+          docker rm baseline
       
+      - name: Upload baseline version artifacts
+        if: ${{ steps.conditions.outputs.should_run_baseline == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}-versions-baseline
+          path: versions-baseline/**
+          overwrite: true
+
       - name: Run baseline benchmarks
         if: ${{ steps.conditions.outputs.should_run_baseline == 'true' }}
         uses: ./.github/actions/run-benchmarks
