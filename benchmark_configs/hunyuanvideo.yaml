@@ -109,3 +109,25 @@
     guidance_scale: 6.0
     use_torch_compile: True
     attention_backend: flash_4
+
+# Custom config for SGL-D due to the different number of frames
+- name: hunyuanvideo.sgld
+  tags: [sgld]
+  model: hunyuanvideo-community/HunyuanVideo
+  runner: xdit
+  args:
+    prompt: In the large cage, two puppies were wagging their tails at each other.
+    batch_size: 1
+    height: 720
+    width: 1280
+    seed: 1168860793
+    num_frames: 157
+    num_inference_steps: 50
+    warmup_calls: 1
+    num_iterations: 1
+    ulysses_degree: 8
+    enable_tiling: True
+    enable_slicing: True
+    guidance_scale: 6.0
+    use_torch_compile: True
+    attention_backend: aiter

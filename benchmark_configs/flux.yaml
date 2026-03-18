@@ -1,5 +1,5 @@
 - name: flux.usp
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, sgld]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -107,7 +107,7 @@
     attention_backend: cudnn
 
 - name: flux.usp_2k
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, sgld]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
