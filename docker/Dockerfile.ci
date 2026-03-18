@@ -306,6 +306,7 @@ RUN apt-get update -qq && apt-get -y install --no-install-recommends \
     libfreetype6-dev \
     libgnutls28-dev \
     libmp3lame-dev \
+    libopenh264-dev \
     libtool \
     libunistring-dev \
     libvorbis-dev \
@@ -343,6 +344,7 @@ RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-
     --enable-libdav1d \
     --enable-libfreetype \
     --enable-libmp3lame \
+    --enable-libopenh264 \
     --enable-libvorbis \
     --enable-shared && \
     PATH="$FFMPEG_BIN_DIR:$PATH" make -j$(($(nproc)-1)) && \
@@ -365,6 +367,7 @@ RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libfreetype6 \
   libgnutls30 \
   libmp3lame0 \
+  libopenh264-7 \
   libvorbis0a \
   libvorbisenc2 \
   && rm -rf /var/lib/apt/lists/*
@@ -467,6 +470,10 @@ RUN pip install ftfy
 RUN pip uninstall -y transformers && pip install --no-cache-dir "transformers==4.57.6"
 # hotfix: transformers needs protobuf
 RUN pip install --no-cache-dir "protobuf==6.33.5"
+# imageio + imageio-ffmpeg for diffusers export_to_video H.264 encoding
+# --no-binary avoids shipping imageio-ffmpeg's bundled GPL ffmpeg binary
+RUN pip install --no-cache-dir --no-binary :all: imageio-ffmpeg
+RUN pip install --no-cache-dir imageio
 # cleanup
 RUN rm -fr /patches
 
