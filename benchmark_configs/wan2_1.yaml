@@ -69,6 +69,7 @@
     use_torch_compile: True
     use_fp8_gemms: True
     attention_backend: aiter_sage
+    cross_attention_backend: aiter
 
 - name: wan2_1.5s_fp4gemms_sage.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -87,6 +88,7 @@
     use_torch_compile: True
     use_fp4_gemms: True
     attention_backend: aiter_sage
+    cross_attention_backend: aiter
 
 - name: wan2_1.5s_fp8gemms_sage.hopper
   tags: [lucid, hopper, h100, h200]
