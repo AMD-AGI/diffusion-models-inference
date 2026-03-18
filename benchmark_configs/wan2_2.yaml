@@ -221,7 +221,7 @@
     hybrid_attn_low_precision_backend: aiter_fp8
     hybrid_attn_high_precision_backend: aiter
 
-- name: wan2_2.5s_fp8gemms_hybrid.hopper  
+- name: wan2_2.5s_fp8gemms_hybrid.hopper
   tags: [lucid, hopper, h100, h200]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -315,4 +315,23 @@
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: aiter_sage_v2
     hybrid_attn_high_precision_backend: aiter
+    use_fp8_gemms: True
+
+
+- name: wan2_2.5s_fp8gemms_sage.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    height: 720
+    width: 1280
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    ulysses_degree: 8
+    use_parallel_vae: True
+    num_iterations: 1
+    num_inference_steps: 40
+    use_torch_compile: True
+    attention_backend: sage
     use_fp8_gemms: True
