@@ -1,5 +1,5 @@
 - name: qwen_image.default
-  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  tags: [release, lucid, mad, instinct, gfx942, gfx950, sgld]
   model: Qwen/Qwen-Image
   runner: xdit
   args:
@@ -8,6 +8,7 @@
     width: 2048
     seed: 42
     num_inference_steps: 50
+    guidance_scale: 0.0
     num_iterations: 1
     ulysses_degree: 8
     use_torch_compile: True
@@ -23,6 +24,7 @@
     width: 2048
     seed: 42
     num_inference_steps: 50
+    guidance_scale: 0.0
     num_iterations: 1
     ulysses_degree: 8
     use_torch_compile: True
@@ -38,6 +40,7 @@
     width: 2048
     seed: 42
     num_inference_steps: 50
+    guidance_scale: 0.0
     num_iterations: 1
     ulysses_degree: 8
     use_torch_compile: True

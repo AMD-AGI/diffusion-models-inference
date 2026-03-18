@@ -1,5 +1,5 @@
 - name: flux2.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, sgld]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:

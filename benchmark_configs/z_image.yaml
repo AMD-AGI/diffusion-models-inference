@@ -1,5 +1,5 @@
 - name: z_image.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, sgld]
   model: Tongyi-MAI/Z-Image
   runner: xdit
   args:

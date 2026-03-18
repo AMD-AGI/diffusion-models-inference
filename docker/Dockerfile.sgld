@@ -1,7 +1,8 @@
-FROM amdsiloai/pytorch-xdit:v26.2
+FROM amdsiloai/pytorch-xdit:v26.3
 
 ARG VLLM_COMMIT="2d5be1d" # v0.16.0
-ARG SGL_COMMIT="0189f41" # v0.5.8
+ARG SGL_COMMIT="46b5584" # v0.5.9 + more commits
+ARG AMDGPU_TARGET="gfx942"
 
 
 WORKDIR /app/external
@@ -19,7 +20,7 @@ RUN git clone https://github.com/sgl-project/sglang.git && \
     cd sglang && \
     git reset --hard ${SGL_COMMIT} && \
     cd sgl-kernel && \
-    python3 setup_rocm.py install && \
+    AMDGPU_TARGET="$AMDGPU_TARGET" python3 setup_rocm.py install && \
     cd .. && \
     mv python/pyproject_other.toml python/pyproject.toml && \
     sed -i '/numpy/d' python/pyproject.toml && \
@@ -37,3 +38,10 @@ RUN pip3 install remote_pdb imageio
 
 # Envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"
+ENV MIOPEN_DEBUG_CONV_DIRECT=0
+
+WORKDIR /app
+# Include CI
+COPY .ci/run.py /app/.ci/run.py
+COPY .ci/integrations/sgld/ /app/.ci/integrations/sgld/
+COPY benchmark_configs/ /app/.ci/benchmark_configs/

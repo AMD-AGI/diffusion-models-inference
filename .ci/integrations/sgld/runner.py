@@ -4,6 +4,8 @@ import json
 import torch
 import argparse
 import numpy as np
+import subprocess
+import re
 from PIL import Image
 
 from sglang.multimodal_gen import DiffGenerator
@@ -142,6 +144,19 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="The max sequence length to run",
     )
+    parser.add_argument(
+        "--resize_input_images",
+        required=False,
+        action="store_true",
+        help="Whether to resize the input images to match the height and width",
+    )
+    parser.add_argument(
+        "--run_type",
+        type=str,
+        default="cli",
+        choices=["cli", "api"],
+        help="Whether to run through CLI or API",
+    )
     return parser.parse_args()
 
 
@@ -152,7 +167,8 @@ def run_sgld(generator, sampling_params):
     return output
 
 def save_output(output, elapsed_times, args):
-    json.dump(elapsed_times, open(os.path.join(args.output_directory, "timings.json"), "w"))
+    with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
+        json.dump(elapsed_times, f)
 
     if not output or len(output) == 0:
         raise ValueError("No output generated from generator.generate()")
@@ -164,10 +180,77 @@ def save_output(output, elapsed_times, args):
         imageio.mimsave(os.path.join(args.output_directory, "output.mp4"), output, fps=24, codec="libx264")
 
 
+def run_cli(args):
+    cmd = ["sglang", "generate"]
 
+    values = {
+        "model-path": args.model,
+        "height": args.height,
+        "width": args.width,
+        "ulysses-degree": args.ulysses_degree,
+        "num-gpus": args.ulysses_degree,
+        "num-inference-steps": args.num_inference_steps,
+        "guidance-scale": args.guidance_scale,
+        "prompt": f'"{args.prompt}"',
+        "dit-cpu-offload": "False",
+        "dit-layerwise-offload": "False",
+        "text-encoder-cpu-offload": "False",
+        "image-encoder-cpu-offload": "False",
+        "vae-cpu-offload": "False",
+        "warmup": "True",
+        "warmup-steps": 2,
+        "output-path": args.output_directory,
+    }
 
-def main():
-    args = parse_args()
+    for key, value in values.items():
+        cmd.extend([f"--{key}", str(value)])
+
+    if args.num_frames is not None:
+        cmd.extend(["--num-frames", str(args.num_frames)])
+
+    if args.seed is not None:
+        cmd.extend(["--seed", str(args.seed)])
+
+    if args.negative_prompt is not None:
+        cmd.extend(["--negative-prompt", f'"{args.negative_prompt}"'])
+
+    if args.input_images is not None:
+        cmd.extend(["--image-path"] + args.input_images)
+
+    if args.use_torch_compile:
+        cmd.append("--enable-torch-compile")
+
+    if args.enable_slicing:
+        cmd.append("--vae-slicing")
+
+    if args.enable_tiling:
+        cmd.append("--vae-tiling")
+
+    print(f"Running command: {' '.join(cmd)}")
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    command_output = result.stdout + result.stderr
+    print(f"Command output: {command_output}")
+
+    timing = None
+    ansi_escape = r'\x1b\[[0-9;]*m'
+    match = re.search(rf'Warmed-up request processed in {ansi_escape}?([\d.]+){ansi_escape}? seconds', command_output)
+    if match:
+        timing = float(match.group(1))
+        print(f"Extracted post-warmup time: {timing} seconds")
+    else:
+        raise ValueError("Could not find post-warmup time in command output")
+
+    with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
+        json.dump([timing], f)
+
+def run_api(args):
 
     num_gpus = args.ulysses_degree  # TODO: Add more parallelization strategies
 
@@ -238,6 +321,18 @@ def main():
     print(f"Average time taken: {np.mean(elapsed_times):.2f}s")
 
     save_output(output, elapsed_times,args)
+
+
+def main():
+    args = parse_args()
+
+    if args.run_type == "cli":
+        run_cli(args)
+    elif args.run_type == "api":
+        run_api(args)
+    else:
+        raise ValueError(f"Invalid run type: {args.run_type}")
+
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,5 @@
 - name: qwen_image_edit.default
-  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  tags: [release, lucid, mad, instinct, gfx942, gfx950, sgld]
   model: Qwen/Qwen-Image-Edit
   runner: xdit
   args:
@@ -10,6 +10,7 @@
     input_images: /app/data/flux_cat.png
     seed: 42
     num_inference_steps: 50
+    guidance_scale: 4.0
     num_iterations: 1
     ulysses_degree: 8
     use_torch_compile: True
@@ -27,6 +28,7 @@
     input_images: /app/data/flux_cat.png
     seed: 42
     num_inference_steps: 50
+    guidance_scale: 4.0
     num_iterations: 1
     ulysses_degree: 8
     use_torch_compile: True
@@ -44,6 +46,7 @@
     input_images: /app/data/flux_cat.png
     seed: 42
     num_inference_steps: 50
+    guidance_scale: 4.0
     num_iterations: 1
     ulysses_degree: 8
     use_torch_compile: True
