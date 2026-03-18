@@ -257,6 +257,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     attention_backend: aiter_sage
+    cross_attention_backend: aiter
     use_fp8_gemms: True
 
 - name: wan2_2.5s_fp4gemms_sage.gfx950
@@ -275,6 +276,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     attention_backend: aiter_sage
+    cross_attention_backend: aiter
     use_fp4_gemms: True
 
 - name: wan2_2.5s_fp4gemms_sage_v2_hybrid.gfx950
@@ -295,6 +297,7 @@
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: aiter_sage_v2
     hybrid_attn_high_precision_backend: aiter
+    cross_attention_backend: aiter
     use_fp4_gemms: True
 
 - name: wan2_2.5s_fp8gemms_sage_v2_hybrid.gfx950
@@ -315,6 +318,7 @@
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: aiter_sage_v2
     hybrid_attn_high_precision_backend: aiter
+    cross_attention_backend: aiter
     use_fp8_gemms: True
 
 
