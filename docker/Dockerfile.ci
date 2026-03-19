@@ -9,12 +9,12 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="e40a6da680f0a83fd931a5285ee1dc7cde5fd8c8"
+ARG THEROCK_COMMIT="9b611c60e4e4125d86e381b20ee332afb10452bd"
 # Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
 # This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
 ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
-ARG PYTORCH_COMMIT="91be249cee02ddd0b31f98438ca1b82d10e13dc4"
+ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
 ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
 ARG PYTORCH_AUDIO_COMMIT="e3c6ee2b6588b7cd27a84182de74bf12fe043831"
 ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
@@ -250,13 +250,7 @@ RUN cd triton && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
 # install pytorch
-# the mv hack avoids flatbuffers being found in ROCm system dependencies, instead of picking up the
-# version that is bundled with pytorch as a third_party submodule.
-# flatbuffers hack can be removed once pytorch includes https://github.com/ROCm/pytorch/pull/2930
-RUN if [ -d "/opt/rocm/include/flatbuffers" ]; then \
-        mv /opt/rocm/include/flatbuffers /opt/rocm/include/flatbuffers.bak ; \
-    fi && \
-    cd pytorch && \
+RUN cd pytorch && \
     pip install -r requirements.txt && \
     USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
     USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
@@ -266,10 +260,7 @@ RUN if [ -d "/opt/rocm/include/flatbuffers" ]; then \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install && \
-    if [ -d "/opt/rocm/include/flatbuffers.bak" ]; then \
-        mv /opt/rocm/include/flatbuffers.bak /opt/rocm/include/flatbuffers ; \
-    fi
+    cp dist/*.whl /install
 # install vision
 RUN cd pytorch_vision && \
     FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
