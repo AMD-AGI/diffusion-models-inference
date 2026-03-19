@@ -15,7 +15,7 @@ MIOPEN_FIND_ENFORCE=${MIOPEN_FIND_ENFORCE:-4}
 
 # glob, concatenate and retain unique MIOpen driver commands
 echo "Extracting workload MIOpenDriver calls"
-cat $ROOTDIR/data/miopen/workloads/*.txt $ROOTDIR/src/*/miopen/drivercmd/*.txt | sort -u > $WORKDIR/drivercmd.txt
+sed -s '$a\\' $ROOTDIR/data/miopen/workloads/*.txt $ROOTDIR/src/*/miopen/drivercmd/*.txt | uniq -u | sort -u > $ROOTDIR/drivercmd.txt
 
 # find MIOpenDriver executable
 echo "Searching for MIOpenDriver executable"
@@ -33,7 +33,7 @@ ln -s "$miopendriver_path" /bin/MIOpenDriver
 # run MIOpen tuning
 echo "Executing MIOpen tuning"
 cd $ROOTDIR/src/distrituner
-python miopen_tuner.py $WORKDIR/drivercmd.txt \
+python miopen_tuner.py $ROOTDIR/drivercmd.txt \
     --tuning-output-path $WORKDIR/tuning --log-dir $WORKDIR/logs \
     --miopen-find-mode $MIOPEN_FIND_MODE --miopen-find-enforce $MIOPEN_FIND_ENFORCE
 

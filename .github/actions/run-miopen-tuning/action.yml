@@ -54,3 +54,9 @@ runs:
       with:
         name: ${{ inputs.artifact_name }}
         path: data/miopen/userdb/gfx*
+    
+    - name: Upload driver commands
+      uses: actions/upload-artifact@v4
+      with:
+        name: drivercmd-${{ inputs.arch }}
+        path: drivercmd.txt
