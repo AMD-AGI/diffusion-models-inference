@@ -13,6 +13,10 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
+# ROCm bug that causes a crash: 
+# TODO: revert after fix implemented
+BAD_MIOPEN_DRIVER_CMDS = ["MIOpenDriver convbfp16 -n 1 -c 128 --in_d 131 -H 258 -W 258 -k 3 --fil_d 3 -y 3 -x 3 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1"]
+
 @dataclass(frozen=True)
 class Task:
     """Represents a unit of work to execute in a subprocess with configuration and logging information."""
@@ -39,14 +43,29 @@ def do_work(task: Task) -> Result:
     """
     logging.debug(f"Worker [PID={os.getpid()}] - executing task")
     start_timestamp = time.perf_counter_ns()
-    proc = subprocess.run(
-        task.command,
-        shell=True,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    if task.command in BAD_MIOPEN_DRIVER_CMDS:
+        logger.warning(f"Worker [PID={os.getpid()}] - handling bad MIOpenDriver command: {task.command}")
+        logger.warning(f"Worker [PID={os.getpid()}] - setting MIOPEN_DEBUG_CONV_GEMM=0 and running tuning")
+        os.environ["MIOPEN_DEBUG_CONV_GEMM"] = "0"
+        proc = subprocess.run(
+            task.command,
+            shell=True,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        logger.warning(f"Worker [PID={os.getpid()}] - tuning complete, unsetting MIOPEN_DEBUG_CONV_GEMM")
+        del os.environ["MIOPEN_DEBUG_CONV_GEMM"]
+    else:
+        proc = subprocess.run(
+            task.command,
+            shell=True,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
     end_timestamp = time.perf_counter_ns()
     duration_ms = (end_timestamp - start_timestamp) / 1000000
     result = Result(
