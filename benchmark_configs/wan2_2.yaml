@@ -71,8 +71,8 @@
     use_torch_compile: True
     attention_backend: flash_4
 
-- name: wan2_2.5s_fp8gemms
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+- name: wan2_2.quantgemm.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -89,7 +89,7 @@
     use_fp8_gemms: True
     attention_backend: aiter
 
-- name: wan2_2.5s_fp4gemms.gfx950 # MXFP4 only supported on gfx950
+- name: wan2_2.quantgemm.gfx950 # MXFP4 only supported on gfx950
   tags: [release, mad, lucid, instinct, gfx950]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -107,7 +107,7 @@
     use_fp4_gemms: True
     attention_backend: aiter
 
-- name: wan2_2.5s_fp8gemms.hopper
+- name: wan2_2.quantgemm.hopper
   tags: [lucid, hopper, h100, h200]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -125,7 +125,7 @@
     use_fp8_gemms: True
     attention_backend: flash_3
 
-- name: wan2_2.5s_fp8gemms.blackwell
+- name: wan2_2.quantgemm.blackwell
   tags: [lucid, blackwell, b200, b300]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -143,7 +143,7 @@
     use_fp8_gemms: True
     attention_backend: flash_4
 
-- name: wan2_2.5s_hybrid.gfx942
+- name: wan2_2.fp8attn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -162,7 +162,7 @@
     hybrid_attn_low_precision_backend: aiter_fp8
     hybrid_attn_high_precision_backend: aiter
 
-- name: wan2_2.5s_hybrid.hopper.h100
+- name: wan2_2.fp8attn.hopper.h100
   tags: [lucid, hopper, h100]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -182,7 +182,7 @@
     hybrid_attn_low_precision_backend: flash_3_fp8
     hybrid_attn_high_precision_backend: flash_3
 
-- name: wan2_2.5s_hybrid.hopper.h200
+- name: wan2_2.fp8attn.hopper.h200
   tags: [lucid, hopper, h200]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -201,7 +201,7 @@
     hybrid_attn_low_precision_backend: flash_3_fp8
     hybrid_attn_high_precision_backend: flash_3
 
-- name: wan2_2.5s_fp8gemms_hybrid.gfx942
+- name: wan2_2.quantgemm_fp8attn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -221,7 +221,7 @@
     hybrid_attn_low_precision_backend: aiter_fp8
     hybrid_attn_high_precision_backend: aiter
 
-- name: wan2_2.5s_fp8gemms_hybrid.hopper
+- name: wan2_2.quantgemm_fp8attn.hopper  
   tags: [lucid, hopper, h100, h200]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -241,8 +241,8 @@
     hybrid_attn_low_precision_backend: flash_3_fp8
     hybrid_attn_high_precision_backend: flash_3
 
-- name: wan2_2.5s_fp8gemms_sage
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+- name: wan2_2.quantgemm_sageattn.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -260,26 +260,7 @@
     cross_attention_backend: aiter
     use_fp8_gemms: True
 
-- name: wan2_2.5s_fp4gemms_sage.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 81
-    ulysses_degree: 8
-    use_parallel_vae: True
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: aiter_sage
-    cross_attention_backend: aiter
-    use_fp4_gemms: True
-
-- name: wan2_2.5s_fp4gemms_sage_v2_hybrid.gfx950
+- name: wan2_2.quantgemm_sageattn.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
@@ -300,28 +281,7 @@
     cross_attention_backend: aiter
     use_fp4_gemms: True
 
-- name: wan2_2.5s_fp8gemms_sage_v2_hybrid.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 81
-    ulysses_degree: 8
-    use_parallel_vae: True
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: aiter_sage_v2
-    hybrid_attn_high_precision_backend: aiter
-    cross_attention_backend: aiter
-    use_fp8_gemms: True
-
-- name: wan2_2.5s_fp8gemms_sage.hopper
+- name: wan2_2.quantgemm_sageattn.hopper
   tags: [lucid, hopper, h100, h200]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit

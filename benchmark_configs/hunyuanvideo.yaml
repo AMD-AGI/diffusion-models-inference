@@ -20,7 +20,7 @@
     use_torch_compile: True
     attention_backend: aiter
 
-- name: hunyuanvideo.hybrid
+- name: hunyuanvideo.fp8attn
   tags: [release, instinct, gfx942, gfx950]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
@@ -44,8 +44,8 @@
     hybrid_attn_low_precision_backend:  aiter_fp8
     hybrid_attn_high_precision_backend: aiter
 
-- name: hunyuanvideo.sage
-  tags: [release, instinct, gfx942, gfx950]
+- name: hunyuanvideo.sageattn.gfx942
+  tags: [release, instinct, gfx942]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
@@ -65,6 +65,30 @@
     guidance_scale: 6.0
     use_torch_compile: True
     attention_backend: aiter_sage
+
+- name: hunyuanvideo.sageattn.gfx950
+  tags: [release, instinct, gfx950]
+  model: tencent/HunyuanVideo
+  revision: refs/pr/18
+  runner: xdit
+  args:
+    prompt: In the large cage, two puppies were wagging their tails at each other.
+    batch_size: 1
+    height: 720
+    width: 1280
+    seed: 1168860793
+    num_frames: 129
+    num_inference_steps: 50
+    warmup_calls: 1
+    num_iterations: 1
+    ulysses_degree: 8
+    enable_tiling: True
+    enable_slicing: True
+    guidance_scale: 6.0
+    use_torch_compile: True
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: aiter_sage_v2
+    hybrid_attn_high_precision_backend: aiter
 
 - name: hunyuanvideo.default.hopper
   tags: [lucid, hopper, h100, h200]
