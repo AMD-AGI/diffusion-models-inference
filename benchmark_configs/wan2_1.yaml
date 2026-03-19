@@ -55,8 +55,8 @@
     use_torch_compile: True
     attention_backend: flash_4
 
-- name: wan2_1.5s_fp8gemms_sage
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+- name: wan2_1.quantgemm_sageattn.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
   runner: xdit
   args:
@@ -75,7 +75,7 @@
     attention_backend: aiter_sage
     cross_attention_backend: aiter
 
-- name: wan2_1.5s_fp4gemms_sage.gfx950
+- name: wan2_1.quantgemm_sageattn.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
   runner: xdit
@@ -92,10 +92,12 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_fp4_gemms: True
-    attention_backend: aiter_sage
+    use_hybrid_attn_schedule: True
+    hybrid_attn_low_precision_backend: aiter_sage_v2
+    hybrid_attn_high_precision_backend: aiter
     cross_attention_backend: aiter
 
-- name: wan2_1.5s_fp8gemms_sage.hopper
+- name: wan2_1.quantgemm_sageattn.hopper
   tags: [lucid, hopper, h100, h200]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
   runner: xdit
