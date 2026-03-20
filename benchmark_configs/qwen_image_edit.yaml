@@ -11,7 +11,7 @@
     seed: 42
     num_inference_steps: 50
     guidance_scale: 4.0
-    num_iterations: 1
+    num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
     attention_backend: aiter
@@ -29,7 +29,7 @@
     seed: 42
     num_inference_steps: 50
     guidance_scale: 4.0
-    num_iterations: 1
+    num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
     attention_backend: cudnn
@@ -47,7 +47,7 @@
     seed: 42
     num_inference_steps: 50
     guidance_scale: 4.0
-    num_iterations: 1
+    num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
     attention_backend: cudnn
