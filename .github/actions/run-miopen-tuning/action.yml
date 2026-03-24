@@ -19,6 +19,10 @@ inputs:
     description: 'MIOpen find enforce (integer)'
     required: false
     default: '3'
+  force_retuning:
+    description: 'Force full retuning (delete existing tuning databases before tuning)'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -42,6 +46,8 @@ runs:
           --mount type=bind,src="$(pwd)",dst=/app/diffusion-models-inference \
           -e HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
           -e OMP_NUM_THREADS=16 \
+          -e ARCH=${{ inputs.arch }} \
+          -e FORCE_RETUNING=${{ inputs.force_retuning }} \
           -e MIOPEN_USER_DB_PATH=/app/diffusion-models-inference/data/miopen/userdb \
           -e MIOPEN_FIND_MODE=${{ inputs.miopen_find_mode }} \
           -e MIOPEN_FIND_ENFORCE=${{ inputs.miopen_find_enforce }} \
@@ -59,4 +65,6 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: drivercmd-${{ inputs.arch }}
-        path: drivercmd.txt
+        path: |
+          drivercmd.txt
+          drivercmd_filtered.txt

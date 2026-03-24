@@ -32,6 +32,11 @@ on:
         description: 'MIOpen find enforce (integer)'
         required: false
         default: '3'
+      force_retuning:
+        description: 'Force full retuning (delete existing tuning databases before tuning)'
+        type: boolean
+        required: false
+        default: false
       quality_check:
         description: 'Enable quality checks after benchmarks'
         type: boolean
@@ -509,6 +514,7 @@ jobs:
           artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
           miopen_find_mode: ${{ inputs.miopen_find_mode }}
           miopen_find_enforce: ${{ inputs.miopen_find_enforce }}
+          force_retuning: ${{ inputs.force_retuning }}
       
       - name: Run benchmarks
         if: ${{ steps.conditions.outputs.should_run_benchmarks == 'true' }}
