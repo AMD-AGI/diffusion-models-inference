@@ -95,6 +95,7 @@ jobs:
           context: .
           target: core
           push: true
+          pull: true
           tags: ${{ steps.images.outputs.cache_source }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
