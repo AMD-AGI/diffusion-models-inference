@@ -202,12 +202,156 @@ RUN pip install -r requirements.txt && \
 RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
     -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="gfx94X_gfx950_bundle" \
-    -DCMAKE_INSTALL_PREFIX=/opt/rocm && \
-    cmake --build /app/TheRock/build && \
-    cmake --install /app/TheRock/build
+    -DTHEROCK_ENABLE_ALL=OFF \
+    -DTHEROCK_ENABLE_CORE=ON \
+    -DTHEROCK_ENABLE_COMM_LIBS=ON \
+    -DTHEROCK_ENABLE_DEBUG_TOOLS=ON \
+    -DTHEROCK_ENABLE_MATH_LIBS=ON \
+    -DTHEROCK_ENABLE_ML_LIBS=ON \
+    -DTHEROCK_ENABLE_PROFILER=ON \
+    -DTHEROCK_ENABLE_DC_TOOLS=ON \
+    -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
+    cmake --build /app/TheRock/build --target therock-archives
 
-FROM base AS rocm_only
-COPY --from=build_rocm /opt/rocm /opt/rocm
+FROM base AS rocm_devel
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/build/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
+    "${A}/amd-dbgapi_dbg_generic.tar.xz" \
+    "${A}/amd-dbgapi_dev_generic.tar.xz" \
+    "${A}/amd-dbgapi_lib_generic.tar.xz" \
+    "${A}/amd-llvm_dbg_generic.tar.xz" \
+    "${A}/amd-llvm_dev_generic.tar.xz" \
+    "${A}/amd-llvm_lib_generic.tar.xz" \
+    "${A}/amd-llvm_run_generic.tar.xz" \
+    "${A}/base_dbg_generic.tar.xz" \
+    "${A}/base_dev_generic.tar.xz" \
+    "${A}/base_lib_generic.tar.xz" \
+    "${A}/base_run_generic.tar.xz" \
+    "${A}/blas_dbg_${T}.tar.xz" \
+    "${A}/blas_dev_${T}.tar.xz" \
+    "${A}/blas_lib_${T}.tar.xz" \
+    "${A}/blas_run_${T}.tar.xz" \
+    # blas_test_${T} artifact is included because of hipblaslt-bench
+    "${A}/blas_test_${T}.tar.xz" \
+    "${A}/composable-kernel_dbg_${T}.tar.xz" \
+    "${A}/composable-kernel_dev_${T}.tar.xz" \
+    "${A}/composable-kernel_lib_${T}.tar.xz" \
+    "${A}/core-amdsmi_dbg_generic.tar.xz" \
+    "${A}/core-amdsmi_dev_generic.tar.xz" \
+    "${A}/core-amdsmi_lib_generic.tar.xz" \
+    "${A}/core-amdsmi_run_generic.tar.xz" \
+    "${A}/core-hip_dbg_generic.tar.xz" \
+    "${A}/core-hip_dev_generic.tar.xz" \
+    "${A}/core-hip_lib_generic.tar.xz" \
+    "${A}/core-hip_run_generic.tar.xz" \
+    "${A}/core-ocl_dev_generic.tar.xz" \
+    "${A}/core-ocl_lib_generic.tar.xz" \
+    "${A}/core-ocl_run_generic.tar.xz" \
+    "${A}/core-runtime_dbg_generic.tar.xz" \
+    "${A}/core-runtime_dev_generic.tar.xz" \
+    "${A}/core-runtime_lib_generic.tar.xz" \
+    "${A}/core-runtime_run_generic.tar.xz" \
+    "${A}/fft_dbg_${T}.tar.xz" \
+    "${A}/fft_dev_${T}.tar.xz" \
+    "${A}/fft_lib_${T}.tar.xz" \
+    "${A}/fft_run_${T}.tar.xz" \
+    "${A}/fftw3_dbg_generic.tar.xz" \
+    "${A}/fftw3_dev_generic.tar.xz" \
+    "${A}/fftw3_lib_generic.tar.xz" \
+    "${A}/fftw3_run_generic.tar.xz" \
+    "${A}/hipblasltprovider_dbg_generic.tar.xz" \
+    "${A}/hipblasltprovider_lib_generic.tar.xz" \
+    "${A}/hipdnn_dbg_generic.tar.xz" \
+    "${A}/hipdnn_dev_generic.tar.xz" \
+    "${A}/hipdnn_lib_generic.tar.xz" \
+    "${A}/hipdnn_run_generic.tar.xz" \
+    "${A}/hipify_dbg_generic.tar.xz" \
+    "${A}/hipify_run_generic.tar.xz" \
+    "${A}/host-blas_dbg_generic.tar.xz" \
+    "${A}/host-blas_dev_generic.tar.xz" \
+    "${A}/host-blas_lib_generic.tar.xz" \
+    "${A}/host-blas_run_generic.tar.xz" \
+    "${A}/host-suite-sparse_dbg_generic.tar.xz" \
+    "${A}/host-suite-sparse_dev_generic.tar.xz" \
+    "${A}/host-suite-sparse_lib_generic.tar.xz" \
+    "${A}/host-suite-sparse_run_generic.tar.xz" \
+    "${A}/libhipcxx_dbg_${T}.tar.xz" \
+    "${A}/libhipcxx_dev_${T}.tar.xz" \
+    "${A}/libhipcxx_lib_${T}.tar.xz" \
+    "${A}/miopen_dbg_${T}.tar.xz" \
+    "${A}/miopen_dev_${T}.tar.xz" \
+    "${A}/miopen_lib_${T}.tar.xz" \
+    "${A}/miopen_run_${T}.tar.xz" \
+    "${A}/miopenprovider_dbg_generic.tar.xz" \
+    "${A}/miopenprovider_lib_generic.tar.xz" \
+    "${A}/prim_dbg_${T}.tar.xz" \
+    "${A}/prim_dev_${T}.tar.xz" \
+    "${A}/rand_dbg_${T}.tar.xz" \
+    "${A}/rand_dev_${T}.tar.xz" \
+    "${A}/rand_lib_${T}.tar.xz" \
+    "${A}/rand_run_${T}.tar.xz" \
+    "${A}/rccl_dbg_${T}.tar.xz" \
+    "${A}/rccl_dev_${T}.tar.xz" \
+    "${A}/rccl_lib_${T}.tar.xz" \
+    "${A}/rccl_run_${T}.tar.xz" \
+    # rccl_test_${T} artifact is included because of all_gather_perf and similar tools
+    "${A}/rccl_test_${T}.tar.xz" \
+    "${A}/rdc_dbg_generic.tar.xz" \
+    "${A}/rdc_dev_generic.tar.xz" \
+    "${A}/rdc_lib_generic.tar.xz" \
+    "${A}/rdc_run_generic.tar.xz" \
+    "${A}/rocdecode_dbg_generic.tar.xz" \
+    "${A}/rocdecode_dev_generic.tar.xz" \
+    "${A}/rocdecode_lib_generic.tar.xz" \
+    "${A}/rocgdb_dbg_generic.tar.xz" \
+    "${A}/rocgdb_dev_generic.tar.xz" \
+    "${A}/rocgdb_lib_generic.tar.xz" \
+    "${A}/rocgdb_run_generic.tar.xz" \
+    "${A}/rocjpeg_dbg_generic.tar.xz" \
+    "${A}/rocjpeg_dev_generic.tar.xz" \
+    "${A}/rocjpeg_lib_generic.tar.xz" \
+    "${A}/rocprofiler-compute_dbg_generic.tar.xz" \
+    "${A}/rocprofiler-compute_dev_generic.tar.xz" \
+    "${A}/rocprofiler-compute_lib_generic.tar.xz" \
+    "${A}/rocprofiler-compute_run_generic.tar.xz" \
+    "${A}/rocprofiler-sdk_dbg_generic.tar.xz" \
+    "${A}/rocprofiler-sdk_dev_generic.tar.xz" \
+    "${A}/rocprofiler-sdk_lib_generic.tar.xz" \
+    "${A}/rocprofiler-sdk_run_generic.tar.xz" \
+    "${A}/rocprofiler-systems_dbg_generic.tar.xz" \
+    "${A}/rocprofiler-systems_dev_generic.tar.xz" \
+    "${A}/rocprofiler-systems_lib_generic.tar.xz" \
+    "${A}/rocprofiler-systems_run_generic.tar.xz" \
+    "${A}/rocr-debug-agent_dbg_generic.tar.xz" \
+    "${A}/rocr-debug-agent_dev_generic.tar.xz" \
+    "${A}/rocr-debug-agent_lib_generic.tar.xz" \
+    "${A}/rocrtst_dbg_generic.tar.xz" \
+    "${A}/rocrtst_dev_generic.tar.xz" \
+    "${A}/rocrtst_lib_generic.tar.xz" \
+    "${A}/rocrtst_run_generic.tar.xz" \
+    "${A}/rocwmma_dbg_${T}.tar.xz" \
+    "${A}/rocwmma_dev_${T}.tar.xz" \
+    "${A}/rocwmma_lib_${T}.tar.xz" \
+    "${A}/sysdeps_dev_generic.tar.xz" \
+    "${A}/sysdeps_lib_generic.tar.xz" \
+    "${A}/sysdeps_run_generic.tar.xz" \
+    "${A}/sysdeps-amd-mesa_dev_generic.tar.xz" \
+    "${A}/sysdeps-amd-mesa_lib_generic.tar.xz" \
+    "${A}/sysdeps-expat_dev_generic.tar.xz" \
+    "${A}/sysdeps-expat_lib_generic.tar.xz" \
+    "${A}/sysdeps-gmp_dev_generic.tar.xz" \
+    "${A}/sysdeps-gmp_lib_generic.tar.xz" \
+    "${A}/sysdeps-hwloc_dev_generic.tar.xz" \
+    "${A}/sysdeps-hwloc_lib_generic.tar.xz" \
+    "${A}/sysdeps-libpciaccess_dev_generic.tar.xz" \
+    "${A}/sysdeps-libpciaccess_lib_generic.tar.xz" \
+    "${A}/sysdeps-mpfr_dev_generic.tar.xz" \
+    "${A}/sysdeps-mpfr_lib_generic.tar.xz" \
+    "${A}/sysdeps-ncurses_dev_generic.tar.xz" \
+    "${A}/sysdeps-ncurses_lib_generic.tar.xz" \
+    -o "${O}"
 # Install amdsmi Python module
 RUN cd /opt/rocm/share/amd_smi && \
     pip install --no-cache-dir .
@@ -219,7 +363,7 @@ ENV PATH="/opt/rocm/bin:/opt/rocm/libexec/rocprofiler-compute:$PATH" \
     ROCM_PATH=/opt/rocm \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
 
-FROM rocm_only AS build_torch_stack
+FROM rocm_devel AS build_torch_stack
 ARG TRITON_COMMIT
 ARG PYTORCH_COMMIT
 ARG PYTORCH_VISION_COMMIT
@@ -348,7 +492,7 @@ RUN python -m pip install \
     --no-cache-dir \
     /install/*.whl
 
-FROM rocm_only AS core
+FROM rocm_devel AS core
 COPY --from=install_torch_stack /venv /venv
 # torchcodec: install FFmpeg and runtime dependencies
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
