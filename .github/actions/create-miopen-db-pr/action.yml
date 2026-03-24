@@ -8,9 +8,6 @@ inputs:
   run_number:
     description: 'GitHub Actions run number'
     required: true
-  arch:
-    description: 'Architecture (e.g., mi300, mi325, mi355)'
-    required: true
   gh_token:
     description: 'GitHub token for creating PR'
     required: true
@@ -50,7 +47,7 @@ runs:
       if: steps.check_changes.outputs.has_changes == 'true'
       shell: bash
       run: |
-        COMMIT_MSG="Update MIOpen database for ${{ inputs.arch }} (run #${{ inputs.run_number }})"
+        COMMIT_MSG="Update MIOpen database (run #${{ inputs.run_number }})"
         echo "Committing with message: ${COMMIT_MSG}"
         git commit -m "${COMMIT_MSG}"
     
@@ -69,7 +66,7 @@ runs:
         GH_TOKEN: ${{ inputs.gh_token }}
       run: |
         BRANCH_NAME="${{ inputs.branch_name }}"
-        PR_TITLE="MIOpen tuning for ${{ inputs.arch }}, run #${{ inputs.run_number }}"
+        PR_TITLE="MIOpen tuning, run #${{ inputs.run_number }}"
         PR_BODY="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         gh pr create \
           --repo ${{ github.repository }} \
