@@ -617,6 +617,13 @@ FROM core AS final
 COPY --from=deps /venv /venv
 COPY --from=deps /app /app
 
+# install basic terminal utilities
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    less \
+    nano \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 # copy assets
 COPY src/flux/cat.png /app/data/flux_cat.png
