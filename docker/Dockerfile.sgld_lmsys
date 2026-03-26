@@ -1,0 +1,36 @@
+ARG BASE_IMAGE="lmsysorg/sglang-rocm"
+FROM ${BASE_IMAGE}
+
+ARG XDIT_COMMIT
+
+WORKDIR /app
+
+# Basic utilities
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    less \
+    vim \
+    nano && \
+    rm -rf /var/lib/apt/lists/*
+
+# Opinionated utilities
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    zsh \
+    locales && \
+    sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Other dependencies
+RUN pip install --no-cache-dir remote_pdb imageio
+
+# Envs
+ENV SGLANG_TORCH_COMPILE_MODE="default"
+ENV MIOPEN_DEBUG_CONV_DIRECT=0
+
+# copy CI scripts and bench configs
+COPY .ci/run.py /app/.ci/run.py
+COPY .ci/integrations/sgld/ /app/.ci/integrations/sgld/
+COPY benchmark_configs/ /app/.ci/benchmark_configs/
+# copy assets
+COPY src/flux/cat.png /app/data/flux_cat.png
+COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
