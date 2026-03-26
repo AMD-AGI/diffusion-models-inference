@@ -1,4 +1,5 @@
-FROM amdsiloai/pytorch-xdit:v26.3
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.4"
+FROM ${BASE_IMAGE}
 
 ARG VLLM_COMMIT="2d5be1d" # v0.16.0
 ARG SGL_COMMIT="46b5584" # v0.5.9 + more commits
