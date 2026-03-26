@@ -594,6 +594,7 @@ jobs:
         uses: ./.github/actions/delete-jit-runner
         with:
           runner: ${{ matrix.runner }}
+          run_number: ${{ github.run_number }}
           repository: ${{ github.repository }}
           gh_token: ${{ secrets.GH_PAT }}
       
@@ -727,6 +728,7 @@ jobs:
         uses: ./.github/actions/delete-jit-runner
         with:
           runner: ${{ matrix.runner }}
+          run_number: ${{ github.run_number }}
           repository: ${{ github.repository }}
           gh_token: ${{ secrets.GH_PAT }}
 
