@@ -13,6 +13,8 @@ ARG THEROCK_COMMIT="9b611c60e4e4125d86e381b20ee332afb10452bd"
 # Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
 # This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
+# Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
+ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
 ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
 ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
 ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
@@ -181,6 +183,7 @@ RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 FROM base AS setup_therock
 ARG THEROCK_COMMIT
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
+ARG ROCM_SYSTEMS_COMMIT_OVERRIDE
 
 WORKDIR /app
 RUN git clone https://github.com/ROCm/TheRock.git && \
@@ -189,6 +192,10 @@ RUN git clone https://github.com/ROCm/TheRock.git && \
     if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
         echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
         git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
+    fi && \
+    if [ -n "$ROCM_SYSTEMS_COMMIT_OVERRIDE" ]; then \
+        echo "Force updating rocm-systems commit to ${ROCM_SYSTEMS_COMMIT_OVERRIDE}" && \
+        git update-index --cacheinfo 160000,${ROCM_SYSTEMS_COMMIT_OVERRIDE},rocm-systems ; \
     fi
 
 FROM base AS build_rocm
