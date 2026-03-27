@@ -431,6 +431,7 @@ jobs:
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
           token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
           submodules: ${{ inputs.quality_check && 'recursive' || 'false' }}
           
       - name: Log in to Docker Hub
@@ -575,15 +576,6 @@ jobs:
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
           artifact_name: ${{ github.run_number }}--${{ matrix.arch }}-${{ steps.metadata.outputs. }}
       
-      - name: Workspace cleanup
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-workspace
-        with:
-          images: '${{ steps.metadata.outputs. }}'
-          containers: 'xdit-bench'
-          skip_workspace_cleanup: 'false'
-      
       - name: Cleanup Allocator resources
         if: ${{ (always() || cancelled()) && steps.conditions.outputs.should_cleanup_allocator == 'true' }}
         continue-on-error: true
@@ -613,6 +605,15 @@ jobs:
           run_number: ${{ github.run_number }}
           repository: ${{ github.repository }}
           gh_token: ${{ secrets.GH_PAT }}
+
+      - name: Workspace cleanup
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: '${{ steps.metadata.outputs. }}'
+          containers: 'xdit-bench'
+          skip_workspace_cleanup: 'false'
 
   build-final:
     name: Build final tuned image
