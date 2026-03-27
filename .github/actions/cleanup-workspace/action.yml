@@ -42,7 +42,7 @@ runs:
       if: ${{ inputs.skip_workspace_cleanup != 'true' }}
       shell: bash
       run: |
-        sudo rm -rf ${{ github.workspace }}/* || true
+        sudo rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.??* || true
     
     - name: Show GPU status
       shell: bash
