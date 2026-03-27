@@ -59,6 +59,11 @@ on:
         type: boolean
         required: false
         default: false
+      add_to_metrics:
+        description: 'Add this run to the benchmark metrics database'
+        type: boolean
+        required: false
+        default: true
       trigger_benchmark_metrics_refresh:
         description: 'Trigger benchmarking metrics refresh after completion'
         type: boolean
@@ -283,6 +288,7 @@ jobs:
           prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
           prebuilt_untuned_image_tag: ${{ inputs.prebuilt_untuned_image_tag }}
           git_branch: ${{ inputs.git_branch }}
+          add_to_metrics: ${{ inputs.add_to_metrics }}
           run_number: ${{ github.run_number }}
           
       - name: Write summary
