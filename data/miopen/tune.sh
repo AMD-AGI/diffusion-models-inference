@@ -12,6 +12,7 @@ ROOTDIR="${ROOTDIR:-/app/diffusion-models-inference}"
 MIOPEN_USER_DB_PATH=${MIOPEN_USER_DB_PATH:-$ROOTDIR/data/miopen/userdb}
 MIOPEN_FIND_MODE=${MIOPEN_FIND_MODE:-1}
 MIOPEN_FIND_ENFORCE=${MIOPEN_FIND_ENFORCE:-4}
+MIOPEN_DEBUG_CONV_DIRECT=${MIOPEN_DEBUG_CONV_DIRECT:-0}
 
 ARCH=${ARCH:-unknown}
 FORCE_RETUNING=${FORCE_RETUNING:-false}
@@ -70,7 +71,8 @@ echo "Executing MIOpen tuning"
 cd $ROOTDIR/src/distrituner
 python miopen_tuner.py $ROOTDIR/drivercmd_filtered.txt \
     --tuning-output-path $WORKDIR/tuning --log-dir $WORKDIR/logs \
-    --miopen-find-mode $MIOPEN_FIND_MODE --miopen-find-enforce $MIOPEN_FIND_ENFORCE
+    --miopen-find-mode $MIOPEN_FIND_MODE --miopen-find-enforce $MIOPEN_FIND_ENFORCE \
+    --miopen-debug-conv-direct $MIOPEN_DEBUG_CONV_DIRECT
 
 # concatenate results
 tuningdirs=($WORKDIR/tuning/device*/)

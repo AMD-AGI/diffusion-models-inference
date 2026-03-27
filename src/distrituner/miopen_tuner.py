@@ -14,6 +14,7 @@ def create_miopen_worker_environment(
     tuning_database_path: Path | str,
     miopen_find_mode: int = 1,
     miopen_find_enforce: int = 4,
+    miopen_debug_conv_direct: int | None = None,
 ) -> dict[str, str]:
     """Create environment variables for a worker for MIOpen tuning."""
     env = {
@@ -22,6 +23,8 @@ def create_miopen_worker_environment(
         "MIOPEN_FIND_ENFORCE": f"{miopen_find_enforce}",
         "MIOPEN_USER_DB_PATH": str(tuning_database_path),
     }
+    if miopen_debug_conv_direct is not None:
+        env["MIOPEN_DEBUG_CONV_DIRECT"] = str(miopen_debug_conv_direct)
     return env
 
 
@@ -53,6 +56,11 @@ def main():
         type=int,
         default=4,
         help="Value to set for MIOPEN_FIND_ENFORCE",
+    )
+    argparser.add_argument(
+        "--miopen-debug-conv-direct",
+        type=int,
+        help="Value to set for MIOPEN_DEBUG_CONV_DIRECT - if set to 0, will disable naive solver to speed up tuning",
     )
     argparser.add_argument(
         "--log-dir",
@@ -114,6 +122,7 @@ def main():
             tuning_database_path=tuning_database_path / f"device_{device_id}",
             miopen_find_mode=args.miopen_find_mode,
             miopen_find_enforce=args.miopen_find_enforce,
+            miopen_debug_conv_direct=args.miopen_debug_conv_direct,
         )
         worker_envs.append(env)
         logging.debug(f"Worker {ii} will use environment: {env}")
