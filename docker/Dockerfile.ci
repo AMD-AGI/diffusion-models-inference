@@ -395,10 +395,14 @@ RUN cd triton && \
     cp dist/*.whl /install
 # install pytorch
 RUN cd pytorch && \
+    UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
+    PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
     pip install -r requirements.txt && \
     USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
     USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
     PYTORCH_ROCM_ARCH="gfx942;gfx950" \
+    PYTORCH_BUILD_VERSION="${PYTORCH_VERSION}+git${UPSTREAM_HASH}" \
+    PYTORCH_BUILD_NUMBER=1 \
     CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
     LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
