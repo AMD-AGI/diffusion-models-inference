@@ -93,3 +93,6 @@ sort -u $MIOPEN_USER_DB_PATH/$filename.ufdb.txt -o $MIOPEN_USER_DB_PATH/$filenam
 
 # change permissions to host user
 chown -hR $HOST_UID:$HOST_GID $MIOPEN_USER_DB_PATH
+
+# signal success to the host
+touch $ROOTDIR/.tuning_successful
