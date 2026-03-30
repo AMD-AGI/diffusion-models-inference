@@ -701,7 +701,7 @@ jobs:
       - name: Create MIOpen database PR
         uses: ./.github/actions/create-miopen-db-pr
         with:
-          branch_name: miopen/${{ github.run_number }}
+          branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
           run_number: ${{ github.run_number }}
           gh_token: ${{ secrets.GH_PAT }}
 
