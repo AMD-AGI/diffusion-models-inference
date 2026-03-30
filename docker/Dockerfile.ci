@@ -208,6 +208,7 @@ RUN pip install -r requirements.txt && \
     python build_tools/fetch_sources.py --jobs 8 --depth 1
 RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
+    -DTHEROCK_TEST_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
     -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="gfx94X_gfx950_bundle" \
     -DTHEROCK_ENABLE_ALL=OFF \
     -DTHEROCK_ENABLE_CORE=ON \
