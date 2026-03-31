@@ -84,6 +84,9 @@ def get_database_filename(arch: str, db_dir: Path) -> Path:
         
     Returns:
         Path to the .ufdb.txt database file
+        
+    Raises:
+        FileNotFoundError: If no database file is found for the architecture
     """
     
     # TODO: add entries here as needed
@@ -102,23 +105,9 @@ def get_database_filename(arch: str, db_dir: Path) -> Path:
                 logger.info(f"Multiple matches found, using: {matching_files[0].name}")
             return matching_files[0]
         else:
-            logger.warning(f"No database file found for {arch} (prefix: {gfx_prefix})")
+            raise FileNotFoundError(f"No database file found for {arch} (prefix: {gfx_prefix}) in {db_dir}")
     else:
-        logger.warning(f"Unknown architecture '{arch}', trying auto-detection")
-    
-    ufdb_files = sorted(db_dir.glob('*.ufdb.txt'))
-    
-    if not ufdb_files:
-        logger.warning("No .ufdb.txt files found")
-        return db_dir / "placeholder.ufdb.txt"
-    
-    if len(ufdb_files) == 1:
-        logger.info(f"Auto-detected database file: {ufdb_files[0]}")
-        return ufdb_files[0]
-    
-    # Multiple files found, use first in a-z order
-    logger.warning(f"Multiple .ufdb.txt files found, using {ufdb_files[0]}")
-    return ufdb_files[0]
+        raise FileNotFoundError(f"Unknown architecture '{arch}', cannot determine database file")
 
 
 def main():
@@ -162,8 +151,12 @@ def main():
     logger.info(f"Read {len(commands)} total commands")
     
     db_dir = Path(args.db_path)
-    db_file = get_database_filename(args.arch, db_dir)
-    tuned_commands = load_database(db_file)
+    try:
+        db_file = get_database_filename(args.arch, db_dir)
+        tuned_commands = load_database(db_file)
+    except FileNotFoundError as e:
+        logger.warning(f"{e} — skipping filtering")
+        tuned_commands = set()
     
     untuned_commands, tuned_commands = filter_commands(commands, tuned_commands)
     output_path = Path(args.output_file)
