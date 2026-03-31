@@ -70,7 +70,7 @@ jobs:
           driver-opts: |
             env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
           use: true
-          cleanup: false
+          cleanup: true
       
       - name: Determine images to build
         id: images
