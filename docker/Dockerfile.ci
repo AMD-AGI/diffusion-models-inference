@@ -221,7 +221,69 @@ RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
     cmake --build /app/TheRock/build --target therock-archives
 
-FROM base AS rocm_devel
+FROM base AS rocm_runtime
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/build/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
+    "${A}/amd-llvm_lib_generic.tar.xz" \
+    "${A}/amd-llvm_run_generic.tar.xz" \
+    "${A}/base_lib_generic.tar.xz" \
+    "${A}/base_run_generic.tar.xz" \
+    "${A}/blas_lib_${T}.tar.xz" \
+    "${A}/blas_run_${T}.tar.xz" \
+    "${A}/composable-kernel_lib_${T}.tar.xz" \
+    "${A}/core-amdsmi_lib_generic.tar.xz" \
+    "${A}/core-amdsmi_run_generic.tar.xz" \
+    "${A}/core-hip_lib_generic.tar.xz" \
+    "${A}/core-hip_run_generic.tar.xz" \
+    "${A}/core-runtime_lib_generic.tar.xz" \
+    "${A}/core-runtime_run_generic.tar.xz" \
+    "${A}/fft_lib_${T}.tar.xz" \
+    "${A}/fft_run_${T}.tar.xz" \
+    "${A}/fftw3_lib_generic.tar.xz" \
+    "${A}/fftw3_run_generic.tar.xz" \
+    "${A}/hipblasltprovider_lib_generic.tar.xz" \
+    "${A}/hipdnn_lib_generic.tar.xz" \
+    "${A}/hipdnn_run_generic.tar.xz" \
+    "${A}/host-blas_lib_generic.tar.xz" \
+    "${A}/host-blas_run_generic.tar.xz" \
+    "${A}/host-suite-sparse_lib_generic.tar.xz" \
+    "${A}/host-suite-sparse_run_generic.tar.xz" \
+    "${A}/libhipcxx_lib_${T}.tar.xz" \
+    "${A}/miopen_lib_${T}.tar.xz" \
+    "${A}/miopen_run_${T}.tar.xz" \
+    "${A}/miopenprovider_lib_generic.tar.xz" \
+    "${A}/rand_lib_${T}.tar.xz" \
+    "${A}/rand_run_${T}.tar.xz" \
+    "${A}/rccl_lib_${T}.tar.xz" \
+    "${A}/rccl_run_${T}.tar.xz" \
+    # rocprofiler-sdk is needed at runtime: PyTorch Kineto (USE_KINETO=ON) depends
+    # on libroctracer64.so which in turn requires librocprofiler-sdk.so
+    "${A}/rocprofiler-sdk_lib_generic.tar.xz" \
+    "${A}/rocprofiler-sdk_run_generic.tar.xz" \
+    "${A}/rocwmma_lib_${T}.tar.xz" \
+    "${A}/sysdeps_lib_generic.tar.xz" \
+    "${A}/sysdeps_run_generic.tar.xz" \
+    "${A}/sysdeps-expat_lib_generic.tar.xz" \
+    "${A}/sysdeps-gmp_lib_generic.tar.xz" \
+    "${A}/sysdeps-hwloc_lib_generic.tar.xz" \
+    "${A}/sysdeps-libpciaccess_lib_generic.tar.xz" \
+    "${A}/sysdeps-mpfr_lib_generic.tar.xz" \
+    "${A}/sysdeps-ncurses_lib_generic.tar.xz" \
+    -o "${O}"
+# Install amdsmi Python module
+RUN cd /opt/rocm/share/amd_smi && \
+    pip install --no-cache-dir .
+RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
+    echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
+    ldconfig
+ENV PATH="/opt/rocm/bin:$PATH" \
+    ROCM_HOME=/opt/rocm \
+    ROCM_PATH=/opt/rocm \
+    HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
+
+FROM rocm_runtime AS rocm_devel
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
     A="/app/TheRock/build/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
@@ -231,79 +293,47 @@ RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     "${A}/amd-dbgapi_lib_generic.tar.xz" \
     "${A}/amd-llvm_dbg_generic.tar.xz" \
     "${A}/amd-llvm_dev_generic.tar.xz" \
-    "${A}/amd-llvm_lib_generic.tar.xz" \
-    "${A}/amd-llvm_run_generic.tar.xz" \
     "${A}/base_dbg_generic.tar.xz" \
     "${A}/base_dev_generic.tar.xz" \
-    "${A}/base_lib_generic.tar.xz" \
-    "${A}/base_run_generic.tar.xz" \
     "${A}/blas_dbg_${T}.tar.xz" \
     "${A}/blas_dev_${T}.tar.xz" \
-    "${A}/blas_lib_${T}.tar.xz" \
-    "${A}/blas_run_${T}.tar.xz" \
     # blas_test_${T} artifact is included because of hipblaslt-bench
     "${A}/blas_test_${T}.tar.xz" \
     "${A}/composable-kernel_dbg_${T}.tar.xz" \
     "${A}/composable-kernel_dev_${T}.tar.xz" \
-    "${A}/composable-kernel_lib_${T}.tar.xz" \
     "${A}/core-amdsmi_dbg_generic.tar.xz" \
     "${A}/core-amdsmi_dev_generic.tar.xz" \
-    "${A}/core-amdsmi_lib_generic.tar.xz" \
-    "${A}/core-amdsmi_run_generic.tar.xz" \
     "${A}/core-hip_dbg_generic.tar.xz" \
     "${A}/core-hip_dev_generic.tar.xz" \
-    "${A}/core-hip_lib_generic.tar.xz" \
-    "${A}/core-hip_run_generic.tar.xz" \
     "${A}/core-ocl_dev_generic.tar.xz" \
     "${A}/core-ocl_lib_generic.tar.xz" \
     "${A}/core-ocl_run_generic.tar.xz" \
     "${A}/core-runtime_dbg_generic.tar.xz" \
     "${A}/core-runtime_dev_generic.tar.xz" \
-    "${A}/core-runtime_lib_generic.tar.xz" \
-    "${A}/core-runtime_run_generic.tar.xz" \
     "${A}/fft_dbg_${T}.tar.xz" \
     "${A}/fft_dev_${T}.tar.xz" \
-    "${A}/fft_lib_${T}.tar.xz" \
-    "${A}/fft_run_${T}.tar.xz" \
     "${A}/fftw3_dbg_generic.tar.xz" \
     "${A}/fftw3_dev_generic.tar.xz" \
-    "${A}/fftw3_lib_generic.tar.xz" \
-    "${A}/fftw3_run_generic.tar.xz" \
     "${A}/hipblasltprovider_dbg_generic.tar.xz" \
-    "${A}/hipblasltprovider_lib_generic.tar.xz" \
     "${A}/hipdnn_dbg_generic.tar.xz" \
     "${A}/hipdnn_dev_generic.tar.xz" \
-    "${A}/hipdnn_lib_generic.tar.xz" \
-    "${A}/hipdnn_run_generic.tar.xz" \
     "${A}/hipify_dbg_generic.tar.xz" \
     "${A}/hipify_run_generic.tar.xz" \
     "${A}/host-blas_dbg_generic.tar.xz" \
     "${A}/host-blas_dev_generic.tar.xz" \
-    "${A}/host-blas_lib_generic.tar.xz" \
-    "${A}/host-blas_run_generic.tar.xz" \
     "${A}/host-suite-sparse_dbg_generic.tar.xz" \
     "${A}/host-suite-sparse_dev_generic.tar.xz" \
-    "${A}/host-suite-sparse_lib_generic.tar.xz" \
-    "${A}/host-suite-sparse_run_generic.tar.xz" \
     "${A}/libhipcxx_dbg_${T}.tar.xz" \
     "${A}/libhipcxx_dev_${T}.tar.xz" \
-    "${A}/libhipcxx_lib_${T}.tar.xz" \
     "${A}/miopen_dbg_${T}.tar.xz" \
     "${A}/miopen_dev_${T}.tar.xz" \
-    "${A}/miopen_lib_${T}.tar.xz" \
-    "${A}/miopen_run_${T}.tar.xz" \
     "${A}/miopenprovider_dbg_generic.tar.xz" \
-    "${A}/miopenprovider_lib_generic.tar.xz" \
     "${A}/prim_dbg_${T}.tar.xz" \
     "${A}/prim_dev_${T}.tar.xz" \
     "${A}/rand_dbg_${T}.tar.xz" \
     "${A}/rand_dev_${T}.tar.xz" \
-    "${A}/rand_lib_${T}.tar.xz" \
-    "${A}/rand_run_${T}.tar.xz" \
     "${A}/rccl_dbg_${T}.tar.xz" \
     "${A}/rccl_dev_${T}.tar.xz" \
-    "${A}/rccl_lib_${T}.tar.xz" \
-    "${A}/rccl_run_${T}.tar.xz" \
     # rccl_test_${T} artifact is included because of all_gather_perf and similar tools
     "${A}/rccl_test_${T}.tar.xz" \
     "${A}/rdc_dbg_generic.tar.xz" \
@@ -326,8 +356,6 @@ RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     "${A}/rocprofiler-compute_run_generic.tar.xz" \
     "${A}/rocprofiler-sdk_dbg_generic.tar.xz" \
     "${A}/rocprofiler-sdk_dev_generic.tar.xz" \
-    "${A}/rocprofiler-sdk_lib_generic.tar.xz" \
-    "${A}/rocprofiler-sdk_run_generic.tar.xz" \
     "${A}/rocprofiler-systems_dbg_generic.tar.xz" \
     "${A}/rocprofiler-systems_dev_generic.tar.xz" \
     "${A}/rocprofiler-systems_lib_generic.tar.xz" \
@@ -341,35 +369,18 @@ RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     "${A}/rocrtst_run_generic.tar.xz" \
     "${A}/rocwmma_dbg_${T}.tar.xz" \
     "${A}/rocwmma_dev_${T}.tar.xz" \
-    "${A}/rocwmma_lib_${T}.tar.xz" \
     "${A}/sysdeps_dev_generic.tar.xz" \
-    "${A}/sysdeps_lib_generic.tar.xz" \
-    "${A}/sysdeps_run_generic.tar.xz" \
     "${A}/sysdeps-amd-mesa_dev_generic.tar.xz" \
     "${A}/sysdeps-amd-mesa_lib_generic.tar.xz" \
     "${A}/sysdeps-expat_dev_generic.tar.xz" \
-    "${A}/sysdeps-expat_lib_generic.tar.xz" \
     "${A}/sysdeps-gmp_dev_generic.tar.xz" \
-    "${A}/sysdeps-gmp_lib_generic.tar.xz" \
     "${A}/sysdeps-hwloc_dev_generic.tar.xz" \
-    "${A}/sysdeps-hwloc_lib_generic.tar.xz" \
     "${A}/sysdeps-libpciaccess_dev_generic.tar.xz" \
-    "${A}/sysdeps-libpciaccess_lib_generic.tar.xz" \
     "${A}/sysdeps-mpfr_dev_generic.tar.xz" \
-    "${A}/sysdeps-mpfr_lib_generic.tar.xz" \
     "${A}/sysdeps-ncurses_dev_generic.tar.xz" \
-    "${A}/sysdeps-ncurses_lib_generic.tar.xz" \
     -o "${O}"
-# Install amdsmi Python module
-RUN cd /opt/rocm/share/amd_smi && \
-    pip install --no-cache-dir .
-RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
-    echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
-    ldconfig
-ENV PATH="/opt/rocm/bin:/opt/rocm/libexec/rocprofiler-compute:$PATH" \
-    ROCM_HOME=/opt/rocm \
-    ROCM_PATH=/opt/rocm \
-    HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
+RUN ldconfig
+ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM rocm_devel AS build_torch_stack
 ARG TRITON_COMMIT
@@ -504,7 +515,58 @@ RUN python -m pip install \
     --no-cache-dir \
     /install/*.whl
 
+FROM rocm_runtime AS core_runtime
+ARG AITER_COMMIT
+COPY --from=install_torch_stack /venv /venv
+# AITER JIT: install dev artifacts required for runtime kernel compilation
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/build/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
+    "${A}/base_dev_generic.tar.xz" \
+    "${A}/core-hip_dev_generic.tar.xz" \
+    "${A}/core-runtime_dev_generic.tar.xz" \
+    "${A}/blas_dev_${T}.tar.xz" \
+    "${A}/prim_dev_${T}.tar.xz" \
+    "${A}/rand_dev_${T}.tar.xz" \
+    -o "${O}"
+# torchcodec: install FFmpeg and runtime dependencies
+RUN apt-get update -qq && apt-get -y install --no-install-recommends \
+  libaom3 \
+  libass9 \
+  libdav1d7 \
+  libfreetype6 \
+  libgnutls30 \
+  libmp3lame0 \
+  libopenh264-7 \
+  libvorbis0a \
+  libvorbisenc2 \
+  && rm -rf /var/lib/apt/lists/*
+# Copy built FFmpeg artifacts from the builder stage
+COPY --from=ffmpeg_builder /ffmpeg/bin /usr/local/bin
+COPY --from=ffmpeg_builder /ffmpeg/build/lib /usr/local/lib
+COPY --from=ffmpeg_builder /ffmpeg/build/include /usr/local/include
+COPY --from=ffmpeg_builder /ffmpeg/build/share /usr/local/share
+# Update library cache
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
+    ldconfig
+COPY docker/libkineto.conf /config/libkineto.conf
+ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
+    KINETO_CONFIG="/config/libkineto.conf"
+# install aiter
+WORKDIR /app/external
+COPY ./src/patches /patches
+RUN pip install pandas
+RUN git clone https://github.com/ROCm/aiter.git && \
+    cd aiter && \
+    git reset --hard ${AITER_COMMIT} && \
+    git submodule update --init --recursive && \
+    git apply /patches/aiter_llvm_check_stray_object_file.patch && \
+    pip install -e .
+RUN rm -fr /patches
+
 FROM rocm_devel AS core
+ARG AITER_COMMIT
 COPY --from=install_torch_stack /venv /venv
 # torchcodec: install FFmpeg and runtime dependencies
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
@@ -518,23 +580,30 @@ RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libvorbis0a \
   libvorbisenc2 \
   && rm -rf /var/lib/apt/lists/*
-
 # Copy built FFmpeg artifacts from the builder stage
 COPY --from=ffmpeg_builder /ffmpeg/bin /usr/local/bin
 COPY --from=ffmpeg_builder /ffmpeg/build/lib /usr/local/lib
 COPY --from=ffmpeg_builder /ffmpeg/build/include /usr/local/include
 COPY --from=ffmpeg_builder /ffmpeg/build/share /usr/local/share
-
 # Update library cache
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
     ldconfig
-
 COPY docker/libkineto.conf /config/libkineto.conf
 ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
     KINETO_CONFIG="/config/libkineto.conf"
+# install aiter
+WORKDIR /app/external
+COPY ./src/patches /patches
+RUN pip install pandas
+RUN git clone https://github.com/ROCm/aiter.git && \
+    cd aiter && \
+    git reset --hard ${AITER_COMMIT} && \
+    git submodule update --init --recursive && \
+    git apply /patches/aiter_llvm_check_stray_object_file.patch && \
+    pip install -e .
+RUN rm -fr /patches
 
 FROM core AS deps
-ARG AITER_COMMIT
 ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
 ARG ACCELERATE_COMMIT
@@ -546,14 +615,6 @@ ARG ARBITER_COMMIT
 # setup
 WORKDIR /app/external
 COPY ./src/patches /patches
-# install aiter
-RUN pip install pandas
-RUN git clone https://github.com/ROCm/aiter.git && \
-    cd aiter && \
-    git reset --hard ${AITER_COMMIT} && \
-    git submodule update --init --recursive && \
-    git apply /patches/aiter_llvm_check_stray_object_file.patch && \
-    pip install -e .
 # install yunchang
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
