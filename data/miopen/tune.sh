@@ -74,6 +74,11 @@ python miopen_tuner.py $ROOTDIR/drivercmd_filtered.txt \
     --miopen-find-mode $MIOPEN_FIND_MODE --miopen-find-enforce $MIOPEN_FIND_ENFORCE \
     --miopen-debug-conv-direct $MIOPEN_DEBUG_CONV_DIRECT
 
+if [ $? -ne 0 ]; then
+    echo "MIOpen tuning failed"
+    exit 1
+fi
+
 # concatenate results
 tuningdirs=($WORKDIR/tuning/device*/)
 

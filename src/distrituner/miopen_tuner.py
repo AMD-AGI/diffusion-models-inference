@@ -127,9 +127,17 @@ def main():
         worker_envs.append(env)
         logging.debug(f"Worker {ii} will use environment: {env}")
 
-    results = distritune(tasks, worker_envs=worker_envs, stop_on_failure=args.stop_on_failure)
+    try:
+        results = distritune(tasks, worker_envs=worker_envs, stop_on_failure=args.stop_on_failure)
+    except Exception as e:
+        logging.error(f"Tuning failed: {e}")
+        sys.exit(1)
+
     failed_count = sum(1 for r in results if r.returncode != 0)
-    logging.info(f"Completed {len(results)} MIOpen tuning tasks ({failed_count} failed)")
+    logging.info(f"Completed {len(results)} MIOpen tuning tasks successfully")
+    if failed_count > 0:
+        sys.exit(1)
+
     if len(results) > 0:
         logging.info(f"Sum of task durations: {sum(result.duration_ms for result in results):.2f} ms")
         logging.info(f"Average duration: {sum(result.duration_ms for result in results) / len(results):.2f} ms")
