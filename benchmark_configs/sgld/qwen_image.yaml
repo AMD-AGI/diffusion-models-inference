@@ -1,7 +1,8 @@
 - name: qwen_image.default
-  tags: [release, lucid, mad, instinct, gfx942, gfx950, sgld]
+  tags: [release, lucid, instinct, gfx942, gfx950]
   model: Qwen/Qwen-Image-2512
-  runner: xdit
+  runner: python
+  entrypoint: /app/.ci/runner.py
   args:
     prompt: A cat holding a sign that says hello world
     height: 2048
@@ -17,7 +18,8 @@
 - name: qwen_image.default.hopper
   tags: [lucid, hopper, h100, h200]
   model: Qwen/Qwen-Image-2512
-  runner: xdit
+  runner: python
+  entrypoint: /app/.ci/runner.py
   args:
     prompt: A cat holding a sign that says hello world
     height: 2048
@@ -33,7 +35,8 @@
 - name: qwen_image.default.blackwell
   tags: [lucid, blackwell, b200, b300]
   model: Qwen/Qwen-Image-2512
-  runner: xdit
+  runner: python
+  entrypoint: /app/.ci/runner.py
   args:
     prompt: A cat holding a sign that says hello world
     height: 2048

@@ -1,5 +1,5 @@
 - name: qwen_image_edit.default
-  tags: [release, lucid, mad, instinct, gfx942, gfx950, sgld]
+  tags: [release, lucid, mad, instinct, gfx942, gfx950]
   model: Qwen/Qwen-Image-Edit
   runner: xdit
   args:

@@ -344,7 +344,7 @@ def command(e: Experiment, override_args: dict, override_runner: Optional[str] =
 
     if e.runner == "xdit":
         if e.entrypoint is not None:
-            raise ValueError("entrypoint is not supported for xdit runner")
+            logger.warning(f"Entrypoint {e.entrypoint} provided not used with xdit runner.")
         cmd = ["xdit"]
         if e.num_gpus is not None:
             cmd.append(f"--nproc_per_node={e.num_gpus}")

@@ -393,22 +393,3 @@
     use_torch_compile: True
     attention_backend: sage
     use_fp8_gemms: True
-
-- name: wan2_2.sgld # Custom config for SGL-D due to the different input image size + xDiT requires the resize flag
-  tags: [sgld]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
-  runner: xdit
-  args:
-    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
-    height: 544
-    width: 720
-    input_images: /app/data/wan_input.jpg
-    num_frames: 81
-    ulysses_degree: 8
-    seed: 42
-    num_iterations: 1
-    guidance_scale: 3.0
-    num_inference_steps: 40
-    use_torch_compile: True
-    attention_backend: aiter
-    resize_input_images: True

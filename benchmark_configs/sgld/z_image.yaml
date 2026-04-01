@@ -1,0 +1,18 @@
+- name: z_image.default
+  tags: [instinct, gfx942, gfx950]
+  model: Tongyi-MAI/Z-Image
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    seed: 42
+    prompt: A crowded beach
+    height: 1088
+    width: 1920
+    num_inference_steps: 50
+    ulysses_degree: 2
+    ring_degree: 2
+    use_torch_compile: True
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter
+    use_cfg_parallel: True

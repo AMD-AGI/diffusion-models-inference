@@ -1,0 +1,14 @@
+ARG BASE_IMAGE="lmsysorg/sglang:v0.5.10rc0"
+FROM ${BASE_IMAGE}
+
+# Envs
+ENV SGLANG_TORCH_COMPILE_MODE="default"
+
+WORKDIR /app
+# copy assets
+COPY src/flux/cat.png /app/data/flux_cat.png
+COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+# Include CI
+COPY .ci/run.py /app/.ci/run.py
+COPY .ci/integrations/sgld/runner.py /app/.ci/runner.py
+COPY benchmark_configs/sgld/ /app/.ci/benchmark_configs/
