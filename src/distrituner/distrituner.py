@@ -145,20 +145,21 @@ def distritune(
                 task = future_to_task[future]
                 try:
                     result = future.result()
-                    results.append(result)
-                    if result.returncode != 0:
-                        logger.error(f"{task=} exited with non-zero code: {result.returncode}")
-                        if stop_on_failure:
-                            for f in future_to_task:
-                                if not f.done():
-                                    f.cancel()
-                            raise RuntimeError(f"Task {task} failed with exit code {result.returncode}")
                 except Exception as exc:
                     logger.error(f"{task=} generated an exception: {exc}")
                     for f in future_to_task:
                         if not f.done():
                             f.cancel()
                     raise
+
+                results.append(result)
+                if result.returncode != 0:
+                    logger.error(f"{task=} exited with non-zero code: {result.returncode}")
+                    if stop_on_failure:
+                        for f in future_to_task:
+                            if not f.done():
+                                f.cancel()
+                        raise RuntimeError(f"Task {task} failed with exit code {result.returncode}")
 
     failed_count = sum(1 for r in results if r.returncode != 0)
     if not stop_on_failure and failed_count > 0:
