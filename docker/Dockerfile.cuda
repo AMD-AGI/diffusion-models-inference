@@ -110,7 +110,7 @@ COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
 # copy instructions and CI prerequisites
 COPY docs/pytorch-xdit/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
-COPY benchmark_configs/ /app/.ci/benchmark_configs/
+COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 # apex causes rms_forward_affine crash in SD3.5
 # numpy>2 causes a runtime error in Hunyuanvideo

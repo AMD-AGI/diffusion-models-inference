@@ -1,5 +1,5 @@
 - name: wan2_1.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950, sgld]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
   runner: xdit
   args:

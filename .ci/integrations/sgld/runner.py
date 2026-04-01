@@ -82,6 +82,24 @@ def parse_args() -> argparse.Namespace:
         help="The Ulysses degree to run",
     )
     parser.add_argument(
+        "--ring_degree",
+        type=int,
+        default=1,
+        help="The ring degree to run",
+    )
+    parser.add_argument(
+        "--use_cfg_parallel",
+        action="store_true",
+        required=False,
+        help="Use CFG parallel to run",
+    )
+    parser.add_argument(
+        "--use_parallel_vae",
+        required=False,
+        action="store_true",
+        help="Run with parallilized VAE decode",
+    )
+    parser.add_argument(
         "--output-directory",
         type=str,
         required=True,
@@ -180,15 +198,25 @@ def save_output(output, elapsed_times, args):
         imageio.mimsave(os.path.join(args.output_directory, "output.mp4"), output, fps=24, codec="libx264")
 
 
+def _parallel_degree(ulysses_degree: int, ring_degree: int, use_cfg_parallel: bool) -> int:
+    return (int(use_cfg_parallel) + 1) * ulysses_degree * ring_degree
+
+
 def run_cli(args):
     cmd = ["sglang", "generate"]
+
+
+    num_gpus = _parallel_degree(
+        args.ulysses_degree, args.ring_degree, args.use_cfg_parallel
+    )
 
     values = {
         "model-path": args.model,
         "height": args.height,
         "width": args.width,
         "ulysses-degree": args.ulysses_degree,
-        "num-gpus": args.ulysses_degree,
+        "ring-degree": args.ring_degree,
+        "num-gpus": num_gpus,
         "num-inference-steps": args.num_inference_steps,
         "guidance-scale": args.guidance_scale,
         "prompt": f'"{args.prompt}"',
@@ -219,6 +247,9 @@ def run_cli(args):
 
     if args.use_torch_compile:
         cmd.append("--enable-torch-compile")
+
+    if args.use_cfg_parallel:
+        cmd.append("--enable-cfg-parallel")
 
     if args.enable_slicing:
         cmd.append("--vae-slicing")
