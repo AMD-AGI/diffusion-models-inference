@@ -459,7 +459,7 @@ jobs:
       - name: Upload version artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.run_number }}-versions
+          name: ${{ github.run_number }}-versions-${{ matrix.arch }}
           path: versions/**
           overwrite: true
 
