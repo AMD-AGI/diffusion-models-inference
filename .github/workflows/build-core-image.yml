@@ -3,6 +3,17 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '.github/**'
+      - '.gitignore'
+      - '.gitmodules'
+      - 'benchmark_common/**'
+      - 'metrics/**'
+      - 'integrations/**'
+      - 'env_automation/**'
+      - 'reproducers/**'
+      - 'Makefile'
+      - 'README.md'
   workflow_dispatch:
     inputs:
       tag:
