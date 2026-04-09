@@ -108,7 +108,7 @@ runs:
     
     - name: Upload benchmark results
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.artifact_name }}
         path: ${{ inputs.output_dir }}/${{ inputs.arch }}/**
