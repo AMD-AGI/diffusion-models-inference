@@ -60,13 +60,13 @@ runs:
         fi
     
     - name: Upload MIOpen tuning results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.artifact_name }}
         path: data/miopen/userdb/gfx*
     
     - name: Upload driver commands
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: drivercmd-${{ inputs.arch }}
         path: |
