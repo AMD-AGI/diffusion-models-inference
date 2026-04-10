@@ -49,6 +49,8 @@ jobs:
     name: Build images
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 1440
+    env:
+      BUILDX_BUILDER_NAME: xdit-core-builder
     outputs:
       core_image_with_tag: ${{ steps.set_outputs.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.set_outputs.outputs.staging_image_with_tag }}
@@ -67,10 +69,35 @@ jobs:
       - name: Set up Docker Buildx with custom log size
         uses: docker/setup-buildx-action@v4
         with:
+          name: ${{ env.BUILDX_BUILDER_NAME }}
+          driver: docker-container
           driver-opts: |
             env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
+          buildkitd-config-inline: |
+            [worker.oci]
+              gc = true
+              [[worker.oci.gcpolicy]]
+                filters = ["type==exec.cachemount"]
+                keepDuration = "720h"
+                maxUsedSpace = "60GB"
+              [[worker.oci.gcpolicy]]
+                all = false
+                keepDuration = "1440h"
+                reservedSpace = "9.313GiB"
+                maxUsedSpace = "93.13GiB"
+                minFreeSpace = "655.7GiB"
+              [[worker.oci.gcpolicy]]
+                all = false
+                reservedSpace = "9.313GiB"
+                maxUsedSpace = "93.13GiB"
+                minFreeSpace = "655.7GiB"
+              [[worker.oci.gcpolicy]]
+                all = true
+                reservedSpace = "9.313GiB"
+                maxUsedSpace = "93.13GiB"
+                minFreeSpace = "655.7GiB"
           use: true
-          cleanup: true
+          cleanup: false
       
       - name: Determine images to build
         id: images
@@ -91,6 +118,7 @@ jobs:
         env:
           BUILDKIT_PROGRESS: plain
         with:
+          builder: ${{ env.BUILDX_BUILDER_NAME }}
           file: docker/Dockerfile.ci
           context: .
           target: core
@@ -106,7 +134,7 @@ jobs:
         if: ${{ steps.images.outputs.skip_core_build == 'true' }}
         run: |
           docker pull ${{ steps.images.outputs.cache_source }}
-          docker buildx build --cache-from type=registry,ref=${{ steps.images.outputs.cache_source }} \
+          docker buildx build --builder ${{ env.BUILDX_BUILDER_NAME }} --cache-from type=registry,ref=${{ steps.images.outputs.cache_source }} \
             --cache-to type=local,dest=/tmp/.buildx-cache,mode=max \
             --target core \
             -f docker/Dockerfile.ci . || true
@@ -117,6 +145,7 @@ jobs:
         env:
           BUILDKIT_PROGRESS: plain
         with:
+          builder: ${{ env.BUILDX_BUILDER_NAME }}
           file: docker/Dockerfile.ci
           context: .
           push: true

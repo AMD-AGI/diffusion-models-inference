@@ -10,6 +10,7 @@
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
 ARG THEROCK_COMMIT="9b611c60e4e4125d86e381b20ee332afb10452bd"
+ARG CCACHE_VERSION="4.11.2"
 # Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
 # This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
@@ -100,6 +101,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     cmake \
+    curl \
     flex \
     freeglut3-dev \
     gfortran \
@@ -199,6 +201,7 @@ RUN git clone https://github.com/ROCm/TheRock.git && \
     fi
 
 FROM base AS build_rocm
+ARG CCACHE_VERSION
 COPY --from=setup_therock /app/TheRock /app/TheRock
 WORKDIR /app/TheRock
 # if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
@@ -206,7 +209,16 @@ RUN pip install -r requirements.txt && \
     pip freeze | grep -E 'botocore' > constraints.txt && \
     pip install --no-cache-dir -c constraints.txt "pathspec<0.13.0" "dvc[s3]==3.62.0" && \
     python build_tools/fetch_sources.py --jobs 8 --depth 1
-RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
+RUN bash dockerfiles/install_ccache.sh ${CCACHE_VERSION}
+RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=locked \
+    --mount=type=cache,target=/app/TheRock/build,id=therock-build,sharing=locked \
+    eval "$(python build_tools/setup_ccache.py --init --local)" && \
+    ccache -o max_size=50G && \
+    ccache -o sloppiness=include_file_ctime,include_file_mtime && \
+    ccache -o compiler_check=content && \
+    cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
     -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
     -DTHEROCK_TEST_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
     -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="gfx94X_gfx950_bundle" \
@@ -219,12 +231,14 @@ RUN cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DTHEROCK_ENABLE_PROFILER=ON \
     -DTHEROCK_ENABLE_DC_TOOLS=ON \
     -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
-    cmake --build /app/TheRock/build --target therock-archives
+    cmake --build /app/TheRock/build --target therock-archives && \
+    echo "CCache stats:" && ccache -s -v && \
+    cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
 
 FROM base AS rocm_runtime
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/build/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
     python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
     "${A}/amd-llvm_lib_generic.tar.xz" \
     "${A}/amd-llvm_run_generic.tar.xz" \
@@ -286,7 +300,7 @@ ENV PATH="/opt/rocm/bin:$PATH" \
 FROM rocm_runtime AS rocm_devel
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/build/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
     python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
     "${A}/amd-dbgapi_dbg_generic.tar.xz" \
     "${A}/amd-dbgapi_dev_generic.tar.xz" \
@@ -521,7 +535,7 @@ COPY --from=install_torch_stack /venv /venv
 # AITER JIT: install dev artifacts required for runtime kernel compilation
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/build/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
     python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
     "${A}/base_dev_generic.tar.xz" \
     "${A}/core-hip_dev_generic.tar.xz" \
