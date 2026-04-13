@@ -236,56 +236,12 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
 
 FROM base AS rocm_runtime
+COPY docker/rocm_runtime_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
     A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
-    python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
-    "${A}/amd-llvm_lib_generic.tar.xz" \
-    "${A}/amd-llvm_run_generic.tar.xz" \
-    "${A}/base_lib_generic.tar.xz" \
-    "${A}/base_run_generic.tar.xz" \
-    "${A}/blas_lib_${T}.tar.xz" \
-    "${A}/blas_run_${T}.tar.xz" \
-    "${A}/composable-kernel_lib_${T}.tar.xz" \
-    "${A}/core-amdsmi_lib_generic.tar.xz" \
-    "${A}/core-amdsmi_run_generic.tar.xz" \
-    "${A}/core-hip_lib_generic.tar.xz" \
-    "${A}/core-hip_run_generic.tar.xz" \
-    "${A}/core-runtime_lib_generic.tar.xz" \
-    "${A}/core-runtime_run_generic.tar.xz" \
-    "${A}/fft_lib_${T}.tar.xz" \
-    "${A}/fft_run_${T}.tar.xz" \
-    "${A}/fftw3_lib_generic.tar.xz" \
-    "${A}/fftw3_run_generic.tar.xz" \
-    "${A}/hipblasltprovider_lib_generic.tar.xz" \
-    "${A}/hipdnn_lib_generic.tar.xz" \
-    "${A}/hipdnn_run_generic.tar.xz" \
-    "${A}/host-blas_lib_generic.tar.xz" \
-    "${A}/host-blas_run_generic.tar.xz" \
-    "${A}/host-suite-sparse_lib_generic.tar.xz" \
-    "${A}/host-suite-sparse_run_generic.tar.xz" \
-    "${A}/libhipcxx_lib_${T}.tar.xz" \
-    "${A}/miopen_lib_${T}.tar.xz" \
-    "${A}/miopen_run_${T}.tar.xz" \
-    "${A}/miopenprovider_lib_generic.tar.xz" \
-    "${A}/rand_lib_${T}.tar.xz" \
-    "${A}/rand_run_${T}.tar.xz" \
-    "${A}/rccl_lib_${T}.tar.xz" \
-    "${A}/rccl_run_${T}.tar.xz" \
-    # rocprofiler-sdk is needed at runtime: PyTorch Kineto (USE_KINETO=ON) depends
-    # on libroctracer64.so which in turn requires librocprofiler-sdk.so
-    "${A}/rocprofiler-sdk_lib_generic.tar.xz" \
-    "${A}/rocprofiler-sdk_run_generic.tar.xz" \
-    "${A}/rocwmma_lib_${T}.tar.xz" \
-    "${A}/sysdeps_lib_generic.tar.xz" \
-    "${A}/sysdeps_run_generic.tar.xz" \
-    "${A}/sysdeps-expat_lib_generic.tar.xz" \
-    "${A}/sysdeps-gmp_lib_generic.tar.xz" \
-    "${A}/sysdeps-hwloc_lib_generic.tar.xz" \
-    "${A}/sysdeps-libpciaccess_lib_generic.tar.xz" \
-    "${A}/sysdeps-mpfr_lib_generic.tar.xz" \
-    "${A}/sysdeps-ncurses_lib_generic.tar.xz" \
-    -o "${O}"
+    ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
 # Install amdsmi Python module
 RUN cd /opt/rocm/share/amd_smi && \
     pip install --no-cache-dir .
@@ -298,101 +254,12 @@ ENV PATH="/opt/rocm/bin:$PATH" \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
 
 FROM rocm_runtime AS rocm_devel
+COPY docker/rocm_devel_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
     A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
-    python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
-    "${A}/amd-dbgapi_dbg_generic.tar.xz" \
-    "${A}/amd-dbgapi_dev_generic.tar.xz" \
-    "${A}/amd-dbgapi_lib_generic.tar.xz" \
-    "${A}/amd-llvm_dbg_generic.tar.xz" \
-    "${A}/amd-llvm_dev_generic.tar.xz" \
-    "${A}/base_dbg_generic.tar.xz" \
-    "${A}/base_dev_generic.tar.xz" \
-    "${A}/blas_dbg_${T}.tar.xz" \
-    "${A}/blas_dev_${T}.tar.xz" \
-    # blas_test_${T} artifact is included because of hipblaslt-bench
-    "${A}/blas_test_${T}.tar.xz" \
-    "${A}/composable-kernel_dbg_${T}.tar.xz" \
-    "${A}/composable-kernel_dev_${T}.tar.xz" \
-    "${A}/core-amdsmi_dbg_generic.tar.xz" \
-    "${A}/core-amdsmi_dev_generic.tar.xz" \
-    "${A}/core-hip_dbg_generic.tar.xz" \
-    "${A}/core-hip_dev_generic.tar.xz" \
-    "${A}/core-ocl_dev_generic.tar.xz" \
-    "${A}/core-ocl_lib_generic.tar.xz" \
-    "${A}/core-ocl_run_generic.tar.xz" \
-    "${A}/core-runtime_dbg_generic.tar.xz" \
-    "${A}/core-runtime_dev_generic.tar.xz" \
-    "${A}/fft_dbg_${T}.tar.xz" \
-    "${A}/fft_dev_${T}.tar.xz" \
-    "${A}/fftw3_dbg_generic.tar.xz" \
-    "${A}/fftw3_dev_generic.tar.xz" \
-    "${A}/hipblasltprovider_dbg_generic.tar.xz" \
-    "${A}/hipdnn_dbg_generic.tar.xz" \
-    "${A}/hipdnn_dev_generic.tar.xz" \
-    "${A}/hipify_dbg_generic.tar.xz" \
-    "${A}/hipify_run_generic.tar.xz" \
-    "${A}/host-blas_dbg_generic.tar.xz" \
-    "${A}/host-blas_dev_generic.tar.xz" \
-    "${A}/host-suite-sparse_dbg_generic.tar.xz" \
-    "${A}/host-suite-sparse_dev_generic.tar.xz" \
-    "${A}/libhipcxx_dbg_${T}.tar.xz" \
-    "${A}/libhipcxx_dev_${T}.tar.xz" \
-    "${A}/miopen_dbg_${T}.tar.xz" \
-    "${A}/miopen_dev_${T}.tar.xz" \
-    "${A}/miopenprovider_dbg_generic.tar.xz" \
-    "${A}/prim_dbg_${T}.tar.xz" \
-    "${A}/prim_dev_${T}.tar.xz" \
-    "${A}/rand_dbg_${T}.tar.xz" \
-    "${A}/rand_dev_${T}.tar.xz" \
-    "${A}/rccl_dbg_${T}.tar.xz" \
-    "${A}/rccl_dev_${T}.tar.xz" \
-    # rccl_test_${T} artifact is included because of all_gather_perf and similar tools
-    "${A}/rccl_test_${T}.tar.xz" \
-    "${A}/rdc_dbg_generic.tar.xz" \
-    "${A}/rdc_dev_generic.tar.xz" \
-    "${A}/rdc_lib_generic.tar.xz" \
-    "${A}/rdc_run_generic.tar.xz" \
-    "${A}/rocdecode_dbg_generic.tar.xz" \
-    "${A}/rocdecode_dev_generic.tar.xz" \
-    "${A}/rocdecode_lib_generic.tar.xz" \
-    "${A}/rocgdb_dbg_generic.tar.xz" \
-    "${A}/rocgdb_dev_generic.tar.xz" \
-    "${A}/rocgdb_lib_generic.tar.xz" \
-    "${A}/rocgdb_run_generic.tar.xz" \
-    "${A}/rocjpeg_dbg_generic.tar.xz" \
-    "${A}/rocjpeg_dev_generic.tar.xz" \
-    "${A}/rocjpeg_lib_generic.tar.xz" \
-    "${A}/rocprofiler-compute_dbg_generic.tar.xz" \
-    "${A}/rocprofiler-compute_dev_generic.tar.xz" \
-    "${A}/rocprofiler-compute_lib_generic.tar.xz" \
-    "${A}/rocprofiler-compute_run_generic.tar.xz" \
-    "${A}/rocprofiler-sdk_dbg_generic.tar.xz" \
-    "${A}/rocprofiler-sdk_dev_generic.tar.xz" \
-    "${A}/rocprofiler-systems_dbg_generic.tar.xz" \
-    "${A}/rocprofiler-systems_dev_generic.tar.xz" \
-    "${A}/rocprofiler-systems_lib_generic.tar.xz" \
-    "${A}/rocprofiler-systems_run_generic.tar.xz" \
-    "${A}/rocr-debug-agent_dbg_generic.tar.xz" \
-    "${A}/rocr-debug-agent_dev_generic.tar.xz" \
-    "${A}/rocr-debug-agent_lib_generic.tar.xz" \
-    "${A}/rocrtst_dbg_generic.tar.xz" \
-    "${A}/rocrtst_dev_generic.tar.xz" \
-    "${A}/rocrtst_lib_generic.tar.xz" \
-    "${A}/rocrtst_run_generic.tar.xz" \
-    "${A}/rocwmma_dbg_${T}.tar.xz" \
-    "${A}/rocwmma_dev_${T}.tar.xz" \
-    "${A}/sysdeps_dev_generic.tar.xz" \
-    "${A}/sysdeps-amd-mesa_dev_generic.tar.xz" \
-    "${A}/sysdeps-amd-mesa_lib_generic.tar.xz" \
-    "${A}/sysdeps-expat_dev_generic.tar.xz" \
-    "${A}/sysdeps-gmp_dev_generic.tar.xz" \
-    "${A}/sysdeps-hwloc_dev_generic.tar.xz" \
-    "${A}/sysdeps-libpciaccess_dev_generic.tar.xz" \
-    "${A}/sysdeps-mpfr_dev_generic.tar.xz" \
-    "${A}/sysdeps-ncurses_dev_generic.tar.xz" \
-    -o "${O}"
+    ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
 RUN ldconfig
 ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
@@ -499,7 +366,7 @@ ENV FFMPEG_SRC_DIR=/ffmpeg/src
 ENV FFMPEG_BIN_DIR=/ffmpeg/bin
 RUN mkdir -p ${FFMPEG_BUILD_DIR} ${FFMPEG_SRC_DIR}
 WORKDIR ${FFMPEG_SRC_DIR}
-# Never set --enable-gpl or --enagle-nonfree to maintain non-GPL license compliance!
+# Never set --enable-gpl or --enable-nonfree to maintain non-GPL license compliance!
 RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
     tar xjvf ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
     cd ffmpeg-${FFMPEG_VERSION} && \
@@ -537,7 +404,7 @@ COPY --from=install_torch_stack /venv /venv
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
     A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
-    python3 app/TheRock/build_tools/fileset_tool.py artifact-flatten \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten \
     "${A}/base_dev_generic.tar.xz" \
     "${A}/core-hip_dev_generic.tar.xz" \
     "${A}/core-runtime_dev_generic.tar.xz" \
@@ -580,43 +447,17 @@ RUN git clone https://github.com/ROCm/aiter.git && \
     pip install -e .
 RUN rm -fr /patches
 
-FROM rocm_devel AS core
-ARG AITER_COMMIT
-COPY --from=install_torch_stack /venv /venv
-# torchcodec: install FFmpeg and runtime dependencies
-RUN apt-get update -qq && apt-get -y install --no-install-recommends \
-  libaom3 \
-  libass9 \
-  libdav1d7 \
-  libfreetype6 \
-  libgnutls30 \
-  libmp3lame0 \
-  libopenh264-7 \
-  libvorbis0a \
-  libvorbisenc2 \
-  && rm -rf /var/lib/apt/lists/*
-# Copy built FFmpeg artifacts from the builder stage
-COPY --from=ffmpeg_builder /ffmpeg/bin /usr/local/bin
-COPY --from=ffmpeg_builder /ffmpeg/build/lib /usr/local/lib
-COPY --from=ffmpeg_builder /ffmpeg/build/include /usr/local/include
-COPY --from=ffmpeg_builder /ffmpeg/build/share /usr/local/share
-# Update library cache
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
-    ldconfig
-COPY docker/libkineto.conf /config/libkineto.conf
-ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
-    KINETO_CONFIG="/config/libkineto.conf"
-# install aiter
-WORKDIR /app/external
-COPY ./src/patches /patches
-RUN pip install pandas
-RUN git clone https://github.com/ROCm/aiter.git && \
-    cd aiter && \
-    git reset --hard ${AITER_COMMIT} && \
-    git submodule update --init --recursive && \
-    git apply /patches/aiter_llvm_check_stray_object_file.patch && \
-    pip install -e .
-RUN rm -fr /patches
+FROM core_runtime AS core
+# Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
+# archives are re-extracted idempotently). Uses the same manifest as rocm_devel.
+COPY docker/rocm_devel_artifacts.txt /tmp/
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
+RUN ldconfig
+ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT

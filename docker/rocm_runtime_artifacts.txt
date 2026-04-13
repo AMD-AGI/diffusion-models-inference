@@ -1,0 +1,49 @@
+# ROCm runtime artifacts installed in the rocm_runtime stage.
+# Lines starting with '#' are comments; blank lines are ignored.
+# BUNDLE is replaced at build time with the GPU target bundle name.
+
+amd-llvm_lib_generic.tar.xz
+amd-llvm_run_generic.tar.xz
+base_lib_generic.tar.xz
+base_run_generic.tar.xz
+blas_lib_BUNDLE.tar.xz
+blas_run_BUNDLE.tar.xz
+composable-kernel_lib_BUNDLE.tar.xz
+core-amdsmi_lib_generic.tar.xz
+core-amdsmi_run_generic.tar.xz
+core-hip_lib_generic.tar.xz
+core-hip_run_generic.tar.xz
+core-runtime_lib_generic.tar.xz
+core-runtime_run_generic.tar.xz
+fft_lib_BUNDLE.tar.xz
+fft_run_BUNDLE.tar.xz
+fftw3_lib_generic.tar.xz
+fftw3_run_generic.tar.xz
+hipblasltprovider_lib_generic.tar.xz
+hipdnn_lib_generic.tar.xz
+hipdnn_run_generic.tar.xz
+host-blas_lib_generic.tar.xz
+host-blas_run_generic.tar.xz
+host-suite-sparse_lib_generic.tar.xz
+host-suite-sparse_run_generic.tar.xz
+libhipcxx_lib_BUNDLE.tar.xz
+miopen_lib_BUNDLE.tar.xz
+miopen_run_BUNDLE.tar.xz
+miopenprovider_lib_generic.tar.xz
+rand_lib_BUNDLE.tar.xz
+rand_run_BUNDLE.tar.xz
+rccl_lib_BUNDLE.tar.xz
+rccl_run_BUNDLE.tar.xz
+# rocprofiler-sdk is needed at runtime: PyTorch Kineto (USE_KINETO=ON) depends
+# on libroctracer64.so which in turn requires librocprofiler-sdk.so
+rocprofiler-sdk_lib_generic.tar.xz
+rocprofiler-sdk_run_generic.tar.xz
+rocwmma_lib_BUNDLE.tar.xz
+sysdeps_lib_generic.tar.xz
+sysdeps_run_generic.tar.xz
+sysdeps-expat_lib_generic.tar.xz
+sysdeps-gmp_lib_generic.tar.xz
+sysdeps-hwloc_lib_generic.tar.xz
+sysdeps-libpciaccess_lib_generic.tar.xz
+sysdeps-mpfr_lib_generic.tar.xz
+sysdeps-ncurses_lib_generic.tar.xz
