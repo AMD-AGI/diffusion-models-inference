@@ -11,6 +11,14 @@ ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
 ARG THEROCK_COMMIT="9b611c60e4e4125d86e381b20ee332afb10452bd"
 ARG CCACHE_VERSION="4.11.2"
+# AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
+# at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
+ARG AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu"
+# AMDGPU_BUNDLE_NAME must be explicitly set when building for multiple AMDGPU targets
+ARG AMDGPU_BUNDLE_NAME="gfx94X_gfx950_bundle"
+# PYTORCH_ROCM_ARCH is a ";" separated list of values, choices for LLVM targets can
+# be found at https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
+ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
 # Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
 # This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
@@ -202,6 +210,8 @@ RUN git clone https://github.com/ROCm/TheRock.git && \
 
 FROM base AS build_rocm
 ARG CCACHE_VERSION
+ARG AMDGPU_FAMILIES
+ARG AMDGPU_BUNDLE_NAME
 COPY --from=setup_therock /app/TheRock /app/TheRock
 WORKDIR /app/TheRock
 # if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
@@ -219,9 +229,9 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DCMAKE_C_COMPILER_LAUNCHER=ccache \
     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-    -DTHEROCK_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
-    -DTHEROCK_TEST_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu" \
-    -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="gfx94X_gfx950_bundle" \
+    -DTHEROCK_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
+    -DTHEROCK_TEST_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
+    -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="${AMDGPU_BUNDLE_NAME}" \
     -DTHEROCK_ENABLE_ALL=OFF \
     -DTHEROCK_ENABLE_CORE=ON \
     -DTHEROCK_ENABLE_COMM_LIBS=ON \
@@ -236,10 +246,11 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
 
 FROM base AS rocm_runtime
+ARG AMDGPU_BUNDLE_NAME
 COPY docker/rocm_runtime_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
     ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
 # Install amdsmi Python module
@@ -254,10 +265,11 @@ ENV PATH="/opt/rocm/bin:$PATH" \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
 
 FROM rocm_runtime AS rocm_devel
+ARG AMDGPU_BUNDLE_NAME
 COPY docker/rocm_devel_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
     ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
 RUN ldconfig
@@ -269,6 +281,7 @@ ARG PYTORCH_COMMIT
 ARG PYTORCH_VISION_COMMIT
 ARG PYTORCH_AUDIO_COMMIT
 ARG PYTORCH_CODEC_COMMIT
+ARG PYTORCH_ROCM_ARCH
 COPY --from=setup_therock /app/TheRock /app/TheRock
 
 # needed for HIPIFY commits created by the build process
@@ -301,7 +314,7 @@ RUN cd pytorch && \
     BUILD_TEST=0 \
     USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
     USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
-    PYTORCH_ROCM_ARCH="gfx942;gfx950" \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" \
     PYTORCH_BUILD_VERSION="${PYTORCH_VERSION}+git${UPSTREAM_HASH}" \
     PYTORCH_BUILD_NUMBER=1 \
     CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
@@ -318,14 +331,14 @@ RUN cd pytorch_vision && \
     cp dist/*.whl /install
 # install audio
 RUN cd pytorch_audio && \
-    PYTORCH_ROCM_ARCH="gfx942;gfx950" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
 # install torchcodec
 RUN pip install --no-cache-dir pybind11 pybind11[global] && \
     cd pytorch_codec && \
-    PYTORCH_ROCM_ARCH="gfx942;gfx950" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
     python -m build --wheel -vvv --no-isolation -o dist && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
@@ -399,11 +412,12 @@ RUN python -m pip install \
 
 FROM rocm_runtime AS core_runtime
 ARG AITER_COMMIT
+ARG AMDGPU_BUNDLE_NAME
 COPY --from=install_torch_stack /venv /venv
 # AITER JIT: install dev artifacts required for runtime kernel compilation
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten \
     "${A}/base_dev_generic.tar.xz" \
     "${A}/core-hip_dev_generic.tar.xz" \
@@ -448,12 +462,13 @@ RUN git clone https://github.com/ROCm/aiter.git && \
 RUN rm -fr /patches
 
 FROM core_runtime AS core
+ARG AMDGPU_BUNDLE_NAME
 # Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
 # archives are re-extracted idempotently). Uses the same manifest as rocm_devel.
 COPY docker/rocm_devel_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="gfx94X_gfx950_bundle"; O="/opt/rocm"; \
+    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
     ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
 RUN ldconfig
