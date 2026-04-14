@@ -404,16 +404,11 @@ RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-
     make install && \
     hash -r
 
-FROM base AS install_torch_stack
-COPY --from=build_torch_stack /install/*.whl /install/
-RUN python -m pip install \
-    --no-cache-dir \
-    /install/*.whl
-
 FROM rocm_runtime AS core_runtime
 ARG AITER_COMMIT
 ARG AMDGPU_BUNDLE_NAME
-COPY --from=install_torch_stack /venv /venv
+RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
+    pip install --no-cache-dir /install/*.whl
 # AITER JIT: install dev artifacts required for runtime kernel compilation
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
