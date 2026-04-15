@@ -36,6 +36,11 @@ on:
         required: false
         type: string
         default: 'build-only'
+      disable_docker_cache:
+        description: 'Disable Docker cache on core build (equivalent to --no-cache)'
+        required: false
+        type: boolean
+        default: false
     outputs:
       core_image_with_tag:
         description: 'Full core image with tag'
@@ -124,6 +129,7 @@ jobs:
           target: core
           push: true
           pull: true
+          no-cache: ${{ inputs.disable_docker_cache }}
           tags: ${{ steps.images.outputs.cache_source }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
