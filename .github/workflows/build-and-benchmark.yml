@@ -59,6 +59,11 @@ on:
         type: boolean
         required: false
         default: false
+      disable_docker_cache:
+        description: 'Disable Docker cache on core build'
+        type: boolean
+        required: false
+        default: false
       add_to_metrics:
         description: 'Add this run to the benchmark metrics database'
         type: boolean
@@ -315,6 +320,7 @@ jobs:
       staging_image_name: amdsiloai/pytorch-xdit-staging
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
+      disable_docker_cache: ${{ inputs.disable_docker_cache }}
       runner: build-only
     secrets: inherit
 

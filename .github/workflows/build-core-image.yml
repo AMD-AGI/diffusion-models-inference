@@ -33,6 +33,11 @@ on:
         type: boolean
         required: false
         default: false
+      disable_docker_cache:
+        description: "Disable Docker cache on core build"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   get-short-sha:
@@ -74,6 +79,7 @@ jobs:
       staging_image_name: amdsiloai/pytorch-xdit-staging
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
+      disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
       runner: ${{ inputs.runner || 'build-only' }}
     secrets: inherit
   
