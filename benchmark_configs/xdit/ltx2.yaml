@@ -44,4 +44,4 @@
     use_torch_compile: True
     guidance_scale: 4.0
     num_iterations: 1
-    attention_backend: flash_4
+    attention_backend: cudnn
