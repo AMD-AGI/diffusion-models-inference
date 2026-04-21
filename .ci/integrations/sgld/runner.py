@@ -227,6 +227,8 @@ def run_cli(args):
         "vae-cpu-offload": "False",
         "warmup": "True",
         "warmup-steps": 2,
+        "vae-precision": "bf16",
+        "image-encoder-precision": "bf16",
         "output-path": args.output_directory,
     }
 

@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir remote_pdb imageio
 
 # Envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"
+ENV SGLANG_USE_ROCM_VAE=1
 ENV MIOPEN_DEBUG_CONV_DIRECT=0
 
 # copy CI scripts and bench configs
