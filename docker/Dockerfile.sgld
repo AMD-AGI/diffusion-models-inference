@@ -36,6 +36,7 @@ RUN pip3 install remote_pdb imageio
 
 # Envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"
+ENV SGLANG_USE_ROCM_VAE=1
 ENV MIOPEN_DEBUG_CONV_DIRECT=0
 
 WORKDIR /app
