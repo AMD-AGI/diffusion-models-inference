@@ -32,10 +32,10 @@ ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
 # deps image arguments
 ARG AITER_COMMIT="a169e14"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG DIFFUSERS_COMMIT="a80b19218b4bd4faf2d6d8c428dcf1ae6f11e43d"
+ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
 ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
 ARG DISTVAE_COMMIT="bf7531e"
-ARG XDIT_COMMIT="5db664d"
+ARG XDIT_COMMIT="096d5c1c9cc0a59941874acfe08a4cfa16014a1c"
 ARG AO_COMMIT="8b72284"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -487,13 +487,19 @@ RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
     git apply /patches/yunchang_aiter_round_mode.patch && \
     pip install -e .
+# install transformers with [sentencepiece] extras that brings in protobuf, required for T5 tokenizers
+RUN pip install --no-cache-dir "transformers[sentencepiece]==5.5.4"
 # install diffusers
+# ftfy is an optional dependency, we install it as needed for StableDiffusion 3.5 (CLIP-based encoder pipelines)
 # final rm step is needed presently to pass a release process image scan
 RUN git clone https://github.com/huggingface/diffusers.git && \
     cd diffusers && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
     pip install -e ".[torch]" && \
-    rm scripts/convert_vq_diffusion_to_diffusers.py
+    rm scripts/convert_vq_diffusion_to_diffusers.py && \
+    pip install --no-cache-dir "ftfy" && \
+    # hotfix: peft<0.19.0 needed until torchao update to run LTX.2
+    pip install --no-cache-dir "peft<0.19.0"
 # install accelerate
 RUN git clone https://github.com/huggingface/accelerate.git && \
     cd accelerate && \
@@ -538,12 +544,6 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
 # Due to https://github.com/ROCm/rocm-systems/pull/2821 drop numpy to avoid installing numpy<2
 RUN sed -i '/numpy/d' ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt && \
     pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt
-# hotfix: until diffusers installs ftfy
-RUN pip install ftfy
-# hotfix: transformers<5.0.0 required for good output quality
-RUN pip uninstall -y transformers && pip install --no-cache-dir "transformers==4.57.6"
-# hotfix: transformers needs protobuf
-RUN pip install --no-cache-dir "protobuf==6.33.5"
 # imageio + imageio-ffmpeg for diffusers export_to_video H.264 encoding
 # --no-binary avoids shipping imageio-ffmpeg's bundled GPL ffmpeg binary
 RUN pip install --no-cache-dir --no-binary :all: imageio-ffmpeg
