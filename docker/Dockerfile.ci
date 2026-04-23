@@ -221,7 +221,6 @@ RUN pip install -r requirements.txt && \
     python build_tools/fetch_sources.py --jobs 8 --depth 1
 RUN bash dockerfiles/install_ccache.sh ${CCACHE_VERSION}
 RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=locked \
-    --mount=type=cache,target=/app/TheRock/build,id=therock-build,sharing=locked \
     eval "$(python build_tools/setup_ccache.py --init --local)" && \
     ccache -o max_size=50G && \
     ccache -o sloppiness=include_file_ctime,include_file_mtime && \
@@ -229,6 +228,7 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
     -DCMAKE_C_COMPILER_LAUNCHER=ccache \
     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
     -DTHEROCK_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
     -DTHEROCK_TEST_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
     -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="${AMDGPU_BUNDLE_NAME}" \

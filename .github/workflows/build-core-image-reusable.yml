@@ -55,7 +55,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 1440
     env:
-      BUILDX_BUILDER_NAME: xdit-core-builder
+      BUILDX_BUILDER_NAME: xdit-core-image-builder
     outputs:
       core_image_with_tag: ${{ steps.set_outputs.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.set_outputs.outputs.staging_image_with_tag }}
@@ -84,23 +84,23 @@ jobs:
               [[worker.oci.gcpolicy]]
                 filters = ["type==exec.cachemount"]
                 keepDuration = "720h"
-                maxUsedSpace = "60GB"
+                maxUsedSpace = "200GB"
               [[worker.oci.gcpolicy]]
                 all = false
                 keepDuration = "1440h"
-                reservedSpace = "9.313GiB"
-                maxUsedSpace = "93.13GiB"
-                minFreeSpace = "655.7GiB"
+                reservedSpace = "20GiB"
+                maxUsedSpace = "200GiB"
+                minFreeSpace = "200GiB"
               [[worker.oci.gcpolicy]]
                 all = false
-                reservedSpace = "9.313GiB"
-                maxUsedSpace = "93.13GiB"
-                minFreeSpace = "655.7GiB"
+                reservedSpace = "20GiB"
+                maxUsedSpace = "200GiB"
+                minFreeSpace = "200GiB"
               [[worker.oci.gcpolicy]]
                 all = true
-                reservedSpace = "9.313GiB"
-                maxUsedSpace = "93.13GiB"
-                minFreeSpace = "655.7GiB"
+                reservedSpace = "20GiB"
+                maxUsedSpace = "200GiB"
+                minFreeSpace = "200GiB"
           use: true
           cleanup: false
       
