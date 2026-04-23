@@ -36,7 +36,7 @@ ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
 ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
 ARG DISTVAE_COMMIT="bf7531e"
 ARG XDIT_COMMIT="096d5c1c9cc0a59941874acfe08a4cfa16014a1c"
-ARG AO_COMMIT="8b72284"
+ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
 FROM ${BASE_IMAGE} AS build_python
@@ -497,9 +497,7 @@ RUN git clone https://github.com/huggingface/diffusers.git && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
     pip install -e ".[torch]" && \
     rm scripts/convert_vq_diffusion_to_diffusers.py && \
-    pip install --no-cache-dir "ftfy" && \
-    # hotfix: peft<0.19.0 needed until torchao update to run LTX.2
-    pip install --no-cache-dir "peft<0.19.0"
+    pip install --no-cache-dir "ftfy"
 # install accelerate
 RUN git clone https://github.com/huggingface/accelerate.git && \
     cd accelerate && \
@@ -509,7 +507,6 @@ RUN git clone https://github.com/huggingface/accelerate.git && \
 RUN git clone https://github.com/pytorch/ao.git && \
     cd ao && \
     git reset --hard ${AO_COMMIT} && \
-    git apply /patches/ao.patch && \
     pip install -e . --no-build-isolation
 # install arbiter
 RUN git clone https://github.com/fal-ai/arbiter.git && \
