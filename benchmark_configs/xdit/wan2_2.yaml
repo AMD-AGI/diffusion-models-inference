@@ -178,7 +178,7 @@
     use_torch_compile: True
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: aiter_fp8
-    hybrid_attn_high_precision_backend: aiter
+    hybrid_attn_high_precision_backend: aiter_sage
 
 - name: wan2_2.fp8attn.hopper.h100
   tags: [lucid, hopper, h100]
@@ -256,7 +256,7 @@
     use_fp8_gemms: True
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: aiter_fp8
-    hybrid_attn_high_precision_backend: aiter
+    hybrid_attn_high_precision_backend: aiter_sage
 
 - name: wan2_2.quantgemm_fp8attn.hopper.h100  
   tags: [lucid, hopper, h100]
@@ -354,7 +354,7 @@
     use_torch_compile: True
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: aiter_sage_v2
-    hybrid_attn_high_precision_backend: aiter
+    hybrid_attn_high_precision_backend: aiter_sage
     cross_attention_backend: aiter
     use_fp4_gemms: True
 
