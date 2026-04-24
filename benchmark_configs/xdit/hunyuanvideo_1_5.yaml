@@ -54,3 +54,81 @@
     enable_slicing: True
     use_torch_compile: True
     attention_backend: flash_4
+
+- name: hunyuanvideo_1_5.distilled.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
+  model: hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_i2v_distilled
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    input_images: /app/data/wan_input.jpg
+    task: i2v
+    height: 720
+    width: 1280
+    num_frames: 129
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    enable_tiling: True
+    enable_slicing: True
+    use_torch_compile: True
+    attention_backend: aiter_sage
+
+- name: hunyuanvideo_1_5.distilled_sparse.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
+  model: Hunyuanvideo-1.5-Sparse
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    input_images: /app/data/wan_input.jpg
+    task: i2v
+    height: 720
+    width: 1280
+    num_frames: 129
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    enable_tiling: True
+    enable_slicing: True
+    use_torch_compile: True
+    attention_backend: aiter_sparse_sage
+    use_ssta_sparse_text_to_image: True
+
+- name: hunyuanvideo_1_5.distilled.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_i2v_distilled
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    input_images: /app/data/wan_input.jpg
+    task: i2v
+    height: 720
+    width: 1280
+    num_frames: 129
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    enable_tiling: True
+    enable_slicing: True
+    use_torch_compile: True
+    attention_backend: aiter_sage_v2
+
+- name: hunyuanvideo_1_5.distilled_sparse.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: Hunyuanvideo-1.5-Sparse
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    input_images: /app/data/wan_input.jpg
+    task: i2v
+    height: 720
+    width: 1280
+    num_frames: 129
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    enable_tiling: True
+    enable_slicing: True
+    use_torch_compile: True
+    attention_backend: aiter_sparse_sage_v2
+    use_ssta_sparse_text_to_image: True
