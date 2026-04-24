@@ -24,6 +24,16 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Models whose YAML "model" field is a registered alias (not a real HF repo ID)
+# and which pull weights from multiple underlying HF repos at load time.
+# Each entry maps the alias to list of real repos to download/cache/delete.
+_COMPOSITE_MODEL_REPOS: Dict[str, List[str]] = {
+    "Hunyuanvideo-1.5-Sparse": [
+        "tencent/HunyuanVideo-1.5",
+        "hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_i2v_distilled",
+    ],
+}
+
 
 @dataclass
 class Experiment:
@@ -445,16 +455,30 @@ def main():
         logger.info(f"Running experiments for model: {model_name}")
 
         revision = exps[0].revision # Remark: assumes model experiments uses same revision.
-        model_existed_before = _model_in_cache(model_name, revision)
-        try:
-            t0 = time.monotonic()
-            _download_model(model_name, revision, args.dry_run)
-            timing["download_model"][model_name] = round(time.monotonic() - t0, 2)
-        except Exception as e:
-            logger.error(e, stack_info=True, exc_info=True)
-            msg = f"Skipped experiments for {model_name}. Failed to download model. See logs for more details."
-            errors.append(msg)
-            continue
+        component_repos = _COMPOSITE_MODEL_REPOS.get(model_name)
+        if component_repos:
+            model_existed_before = all(_model_in_cache(r) for r in component_repos)
+            try:
+                t0 = time.monotonic()
+                for repo in component_repos:
+                    _download_model(repo, dry_run=args.dry_run)
+                timing["download_model"][model_name] = round(time.monotonic() - t0, 2)
+            except Exception as e:
+                logger.error(e, stack_info=True, exc_info=True)
+                msg = f"Skipped experiments for {model_name}. Failed to download model. See logs for more details."
+                errors.append(msg)
+                continue
+        else:
+            model_existed_before = _model_in_cache(model_name, revision)
+            try:
+                t0 = time.monotonic()
+                _download_model(model_name, revision, args.dry_run)
+                timing["download_model"][model_name] = round(time.monotonic() - t0, 2)
+            except Exception as e:
+                logger.error(e, stack_info=True, exc_info=True)
+                msg = f"Skipped experiments for {model_name}. Failed to download model. See logs for more details."
+                errors.append(msg)
+                continue
 
         override_args = json.loads(args.override_args_json)
 
@@ -492,11 +516,13 @@ def main():
             preserve_original_state and not model_existed_before
         )
         if should_clear_cache:
-            try:
-                _delete_model_cache(model_name, revision, args.dry_run)
-            except Exception as e:
-                logger.error(e, stack_info=True, exc_info=True)
-                continue
+            repos_to_delete = component_repos if component_repos else [model_name]
+            revisions_to_delete = [None] * len(repos_to_delete) if component_repos else [revision]
+            for repo, rev in zip(repos_to_delete, revisions_to_delete):
+                try:
+                    _delete_model_cache(repo, rev, args.dry_run)
+                except Exception as e:
+                    logger.error(e, stack_info=True, exc_info=True)
 
     if args.print_timing_summary and (timing.get("download_model") or timing.get("experiments")):
         _print_timing_summary(timing)
