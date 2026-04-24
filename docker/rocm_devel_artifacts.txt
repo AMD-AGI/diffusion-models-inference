@@ -20,6 +20,8 @@ core-amdsmi_dbg_generic.tar.xz
 core-amdsmi_dev_generic.tar.xz
 core-hip_dbg_generic.tar.xz
 core-hip_dev_generic.tar.xz
+core-kpack_dbg_generic.tar.xz
+core-kpack_dev_generic.tar.xz
 core-ocl_dev_generic.tar.xz
 core-ocl_lib_generic.tar.xz
 core-ocl_run_generic.tar.xz
