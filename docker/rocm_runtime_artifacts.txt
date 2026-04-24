@@ -13,6 +13,7 @@ core-amdsmi_lib_generic.tar.xz
 core-amdsmi_run_generic.tar.xz
 core-hip_lib_generic.tar.xz
 core-hip_run_generic.tar.xz
+core-kpack_lib_generic.tar.xz
 core-runtime_lib_generic.tar.xz
 core-runtime_run_generic.tar.xz
 fft_lib_BUNDLE.tar.xz
