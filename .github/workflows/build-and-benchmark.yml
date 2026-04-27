@@ -748,15 +748,22 @@ jobs:
   trigger-benchmark-metrics-refresh:
     name: Trigger benchmark metrics refresh
     needs: [validate, tune-and-benchmark]
-    runs-on: ubuntu-latest
     if: ${{ always() && needs.validate.result == 'success' && inputs.trigger_benchmark_metrics_refresh }}
-    steps:
-      - name: Trigger benchmark metrics refresh workflow
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          gh workflow run "Publish benchmark results to GitHub Pages" \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref }} \
-            --field source_branch="${{ inputs.git_branch || github.ref_name }}"
+    uses: ./.github/workflows/publish-pages.yml
+    with:
+      source_branch: ${{ inputs.git_branch || github.ref_name }}
+    secrets: inherit
+
+  update-quality-references:
+    name: Update quality references
+    needs: [tune-and-benchmark]
+    if: >-
+      !cancelled() &&
+      needs.tune-and-benchmark.result == 'success' &&
+      inputs.run_mode != 'MIOpen tuning only' &&
+      startsWith(github.ref_name, 'release/')
+    uses: ./.github/workflows/update-quality-references.yml
+    with:
+      run_id: ${{ github.run_id }}
+    secrets: inherit
 
