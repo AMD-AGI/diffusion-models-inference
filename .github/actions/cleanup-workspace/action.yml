@@ -38,11 +38,12 @@ runs:
       shell: bash
       run: docker image prune -f || true
     
+    # Use containerized cleanup to avoid permission issues on self-hosted runners
     - name: Clean workspace
       if: ${{ inputs.skip_workspace_cleanup != 'true' }}
       shell: bash
       run: |
-        sudo rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.??* || true
+        docker run --rm -v "${{ github.workspace }}:/workspace" ubuntu:24.04 sh -c 'rm -rf /workspace/* /workspace/.??*' || true
     
     - name: Show GPU status
       shell: bash
