@@ -132,4 +132,4 @@
     enable_slicing: True
     guidance_scale: 6.0
     use_torch_compile: True
-    attention_backend: flash_4
+    attention_backend: cudnn

@@ -53,7 +53,7 @@
     enable_tiling: True
     enable_slicing: True
     use_torch_compile: True
-    attention_backend: flash_4
+    attention_backend: cudnn
 
 - name: hunyuanvideo_1_5.distilled.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
