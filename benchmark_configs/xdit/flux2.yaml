@@ -147,7 +147,7 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp8_gemms: True
+    use_fp4_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
     input_images: /app/data/flux_cat.png

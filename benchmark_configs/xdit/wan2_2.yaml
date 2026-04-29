@@ -158,7 +158,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_fp8_gemms: True
+    use_fp4_gemms: True
     attention_backend: cudnn
 
 - name: wan2_2.fp8attn.gfx942
@@ -313,7 +313,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_fp8_gemms: True
+    use_fp4_gemms: True
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: nvte_fp8
     hybrid_attn_high_precision_backend: cudnn

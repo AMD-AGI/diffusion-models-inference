@@ -15,6 +15,7 @@ ARG DISTVAE_COMMIT="5a0fcbb"
 ARG XDIT_COMMIT="051db68f769efa5b1aa691e5eec133f1b8bf3f1f"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG SAGEATTENTION_COMMIT="d1a57a5"
+ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.03-py3
 FROM ${BASE_IMAGE} AS core
@@ -34,6 +35,7 @@ ARG ACCELERATE_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG AO_COMMIT
+ARG MSLK_COMMIT
 
 # setup
 WORKDIR /app/external
@@ -71,6 +73,13 @@ RUN git clone https://github.com/pytorch/ao.git && \
     cd ao && \
     git reset --hard ${AO_COMMIT} && \
     pip install -e . --no-build-isolation
+# install mslk from source (pip wheels are ABI-incompatible with NGC PyTorch)
+RUN pip install --no-cache-dir setuptools_git_versioning scikit-build patchelf && \
+    git clone --recursive https://github.com/meta-pytorch/MSLK.git && \
+    cd MSLK && \
+    git reset --hard ${MSLK_COMMIT} && \
+    TORCH_CUDA_ARCH_LIST="10.0" python3 setup.py install && \
+    cd .. && rm -rf MSLK
 # install distvae
 RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
