@@ -125,9 +125,15 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+  actions: write
+  pages: write
+  id-token: write
+
 env:
-  CORE_IMAGE: amdsiloai/pytorch-xdit-core
-  STAGING_IMAGE: amdsiloai/pytorch-xdit-staging
+  CORE_IMAGE: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
+  STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
 
 jobs:
   validate:
@@ -162,10 +168,14 @@ jobs:
       
       - name: Check architectures
         id: check-archs
+        env:
+          MI300_RUNNER: ${{ inputs.mi300_runner }}
+          MI325_RUNNER: ${{ inputs.mi325_runner }}
+          MI355_RUNNER: ${{ inputs.mi355_runner }}
         run: |
-          MI300_RUNNER=$(echo "${{ inputs.mi300_runner }}" | xargs)
-          MI325_RUNNER=$(echo "${{ inputs.mi325_runner }}" | xargs)
-          MI355_RUNNER=$(echo "${{ inputs.mi355_runner }}" | xargs)
+          MI300_RUNNER=$(echo "$MI300_RUNNER" | xargs)
+          MI325_RUNNER=$(echo "$MI325_RUNNER" | xargs)
+          MI355_RUNNER=$(echo "$MI355_RUNNER" | xargs)
           
           ANY_ENABLED=false
           if [ -n "$MI300_RUNNER" ] || \
@@ -181,12 +191,15 @@ jobs:
           fi
       
       - name: Validate Allocator parameters
+        env:
+          MI300_TYPE: ${{ inputs.mi300_runner_type }}
+          MI325_TYPE: ${{ inputs.mi325_runner_type }}
+          MI355_TYPE: ${{ inputs.mi355_runner_type }}
+          ALLOCATOR_ID: ${{ inputs.allocator_id }}
+          ALLOCATOR_HOURS: ${{ inputs.allocator_reservation_hours }}
         run: |
           # Check if any architecture needs Allocator reservation
           NEEDS_RESERVATION=false
-          MI300_TYPE="${{ inputs.mi300_runner_type }}"
-          MI325_TYPE="${{ inputs.mi325_runner_type }}"
-          MI355_TYPE="${{ inputs.mi355_runner_type }}"
           
           if [ "$MI300_TYPE" = "Standard runner" ] || \
              [ "$MI325_TYPE" = "Standard runner" ] || \
@@ -195,9 +208,6 @@ jobs:
           fi
           
           if [ "$NEEDS_RESERVATION" = "true" ]; then
-            ALLOCATOR_ID="${{ inputs.allocator_id }}"
-            ALLOCATOR_HOURS="${{ inputs.allocator_reservation_hours }}"
-            
             if [ -z "$ALLOCATOR_ID" ]; then
               echo "Error: Allocator reservation requested but no ALLOCATOR_ID specified"
               exit 1
@@ -226,8 +236,10 @@ jobs:
       
       - name: Determine benchmark image
         id: determine_benchmark
+        env:
+          INPUT_BENCHMARK_IMAGE: ${{ inputs.benchmark_image }}
         run: |
-          BENCHMARK=$(echo "${{ inputs.benchmark_image }}" | xargs)
+          BENCHMARK=$(echo "$INPUT_BENCHMARK_IMAGE" | xargs)
           if [ -z "$BENCHMARK" ]; then
             echo "benchmark_image=" >> $GITHUB_OUTPUT
             echo "benchmark_image_tag=" >> $GITHUB_OUTPUT
@@ -253,8 +265,10 @@ jobs:
       
       - name: Determine baseline image
         id: determine_baseline
+        env:
+          : ${{ inputs. }}
         run: |
-          BASELINE=$(echo "${{ inputs. }}" | xargs)
+          BASELINE=$(echo "$" | xargs)
           if [ -z "$BASELINE" ]; then
             echo "=" >> $GITHUB_OUTPUT
             echo "=" >> $GITHUB_OUTPUT
@@ -302,7 +316,17 @@ jobs:
           title: 'Workflow Configuration'
           tables: |
             {
-              "Workflow Inputs": ${{ toJSON(inputs) }},
+              "Workflow Inputs": {
+                "run_mode": "${{ inputs.run_mode }}",
+                "quality_check": "${{ inputs.quality_check }}",
+                "force_retuning": "${{ inputs.force_retuning }}",
+                "add_to_metrics": "${{ inputs.add_to_metrics }}",
+                "trigger_benchmark_metrics_refresh": "${{ inputs.trigger_benchmark_metrics_refresh }}",
+                "benchmark_image": "${{ inputs.benchmark_image }}",
+                "": "${{ inputs. }}",
+                "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag }}",
+                "prebuilt_untuned_image_tag": "${{ inputs.prebuilt_untuned_image_tag }}"
+              },
               "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
               "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }},
               "Baseline Image": ${{ toJSON(steps.determine_baseline.outputs) }}
@@ -316,13 +340,15 @@ jobs:
     with:
       git_ref: ${{ inputs.git_branch || github.ref_name }}
       image_tag: ${{ needs.validate.outputs.image_tag }}
-      core_image_name: amdsiloai/pytorch-xdit-core
-      staging_image_name: amdsiloai/pytorch-xdit-staging
+      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
+      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache }}
-      runner: build-only
-    secrets: inherit
+      runner: ${{ vars.BUILD_RUNNER || 'build-only' }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
 
   generate-matrix:
     name: Generate architecture matrix
@@ -363,7 +389,7 @@ jobs:
       !cancelled() &&
       needs.generate-matrix.result == 'success' &&
       fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null
-    runs-on: jump-host
+    runs-on: ${{ vars.JUMP_HOST_RUNNER || 'jump-host' }}
     concurrency:
       group: allocator-jump-host
       cancel-in-progress: false
@@ -410,6 +436,7 @@ jobs:
           amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
           ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
           run_number: ${{ github.run_number }}
+          allocation_team: ${{ vars.ALLOCATOR_ALLOCATION_TEAM }}
       
       - name: Upload reservation metadata
         uses: actions/upload-artifact@v6
@@ -479,40 +506,49 @@ jobs:
       
       - name: Determine step conditions
         id: conditions
+        env:
+          BENCHMARK_IMAGE: ${{ steps.metadata.outputs.benchmark_image }}
+          RUN_MODE: ${{ inputs.run_mode }}
+          : ${{ steps.metadata.outputs. }}
+          SKIP_BASELINE_DUP_CHECK: ${{ inputs.skip_baseline_duplicate_check }}
+          BASELINE_EXISTS: ${{ steps.check_baseline.outputs.exists }}
+          ALLOCATOR_RESERVE: ${{ matrix.allocator_reserve }}
+          IS_ALLOCATOR_NODE: ${{ matrix.is_allocator_node }}
+          IS_ALLOCATOR_POOL: ${{ matrix.is_allocator_pool }}
         run: |
-          if [ -z "${{ steps.metadata.outputs.benchmark_image }}" ]; then
+          if [ -z "$BENCHMARK_IMAGE" ]; then
             echo "should_run_miopen_tuning=true" >> $GITHUB_OUTPUT
           else
             echo "should_run_miopen_tuning=false" >> $GITHUB_OUTPUT
           fi
           
-          if [ "${{ inputs.run_mode }}" != "MIOpen tuning only" ]; then
+          if [ "$RUN_MODE" != "MIOpen tuning only" ]; then
             echo "should_run_benchmarks=true" >> $GITHUB_OUTPUT
           else
             echo "should_run_benchmarks=false" >> $GITHUB_OUTPUT
           fi
           
-          if [ "${{ inputs.run_mode }}" != "MIOpen tuning only" ] && \
-             [ -n "${{ steps.metadata.outputs. }}" ] && \
-             { [ "${{ inputs.skip_baseline_duplicate_check }}" = "true" ] || [ "${{ steps.check_baseline.outputs.exists }}" != "1" ]; }; then
+          if [ "$RUN_MODE" != "MIOpen tuning only" ] && \
+             [ -n "$" ] && \
+             { [ "$SKIP_BASELINE_DUP_CHECK" = "true" ] || [ "$BASELINE_EXISTS" != "1" ]; }; then
             echo "should_run_baseline=true" >> $GITHUB_OUTPUT
           else
             echo "should_run_baseline=false" >> $GITHUB_OUTPUT
           fi
           
-          if [ "${{ matrix.allocator_reserve }}" = "true" ]; then
+          if [ "$ALLOCATOR_RESERVE" = "true" ]; then
             echo "should_cleanup_allocator=true" >> $GITHUB_OUTPUT
           else
             echo "should_cleanup_allocator=false" >> $GITHUB_OUTPUT
           fi
           
-          if [ "${{ matrix.is_allocator_node }}" = "true" ] || [ "${{ matrix.is_allocator_pool }}" = "true" ]; then
+          if [ "$IS_ALLOCATOR_NODE" = "true" ] || [ "$IS_ALLOCATOR_POOL" = "true" ]; then
             echo "should_delete_jit_runner=true" >> $GITHUB_OUTPUT
           else
             echo "should_delete_jit_runner=false" >> $GITHUB_OUTPUT
           fi
           
-          if [ "${{ matrix.allocator_reserve }}" = "true" ]; then
+          if [ "$ALLOCATOR_RESERVE" = "true" ]; then
             echo "should_delete_reservation=true" >> $GITHUB_OUTPUT
           else
             echo "should_delete_reservation=false" >> $GITHUB_OUTPUT
@@ -583,7 +619,7 @@ jobs:
           artifact_name: ${{ github.run_number }}--${{ matrix.arch }}-${{ steps.metadata.outputs. }}
       
       - name: Cleanup Allocator resources
-        if: ${{ (always() || cancelled()) && steps.conditions.outputs.should_cleanup_allocator == 'true' }}
+        if: ${{ always() && steps.conditions.outputs.should_cleanup_allocator == 'true' }}
         continue-on-error: true
         uses: ./.github/actions/cleanup-allocator
         with:
@@ -593,7 +629,7 @@ jobs:
           ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
       
       - name: Delete JIT runner
-        if: ${{ (always() || cancelled()) && steps.conditions.outputs.should_delete_jit_runner == 'true' }}
+        if: ${{ always() && steps.conditions.outputs.should_delete_jit_runner == 'true' }}
         continue-on-error: true
         uses: ./.github/actions/delete-jit-runner
         with:
@@ -603,7 +639,7 @@ jobs:
           gh_token: ${{ secrets.GH_PAT }}
       
       - name: Delete reservation artifact
-        if: ${{ (always() || cancelled()) && steps.conditions.outputs.should_delete_reservation == 'true' }}
+        if: ${{ always() && steps.conditions.outputs.should_delete_reservation == 'true' }}
         continue-on-error: true
         uses: ./.github/actions/delete-reservation-artifact
         with:
@@ -624,7 +660,7 @@ jobs:
   build-final:
     name: Build final tuned image
     needs: [validate, build-core, tune-and-benchmark]
-    runs-on: build-only
+    runs-on: ${{ vars.BUILD_RUNNER || 'build-only' }}
     if: ${{ inputs.benchmark_image == '' && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
@@ -714,9 +750,9 @@ jobs:
   cleanup-allocator-resources:
     name: Cleanup Allocator resources for ${{ matrix.arch }}
     needs: [generate-matrix, allocate-allocator-resources, tune-and-benchmark]
-    runs-on: jump-host
+    runs-on: ${{ vars.JUMP_HOST_RUNNER || 'jump-host' }}
     if: |
-      (always() || cancelled()) &&
+      always() &&
       (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped' || needs.tune-and-benchmark.result == 'failure') &&
       fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null
     strategy:
@@ -752,7 +788,6 @@ jobs:
     uses: ./.github/workflows/publish-pages.yml
     with:
       source_branch: ${{ inputs.git_branch || github.ref_name }}
-    secrets: inherit
 
   update-quality-references:
     name: Update quality references
@@ -765,5 +800,6 @@ jobs:
     uses: ./.github/workflows/update-quality-references.yml
     with:
       run_id: ${{ github.run_id }}
-    secrets: inherit
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}
 

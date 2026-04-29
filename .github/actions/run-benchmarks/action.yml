@@ -40,17 +40,21 @@ runs:
   steps:
     - name: Create benchmark output directory
       shell: bash
+      env:
+        OUTPUT_DIR: ${{ inputs.output_dir }}
+        ARCH: ${{ inputs.arch }}
       run: |
-        rm -rf $GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}
-        mkdir -p $GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}
+        rm -rf "$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH"
+        mkdir -p "$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH"
     
     - name: Get HF cache path for node
       id: hf_cache
       shell: bash
+      env:
+        CACHE_PATHS: ${{ inputs.hf_cache_map }}
       run: |
         HF_CACHE_ARGS=""
         RUN_PY_FLAGS=""
-        CACHE_PATHS='${{ inputs.hf_cache_map }}'
         if [ -n "$CACHE_PATHS" ]; then
           HOSTNAME=$(hostname)
           cache_path=$(echo "$CACHE_PATHS" | jq -r --arg host "$HOSTNAME" '.[$host] // empty')
@@ -69,15 +73,25 @@ runs:
     
     - name: Run benchmarks
       shell: bash
+      env:
+        BENCHMARK_ONLY: ${{ inputs.benchmark_only }}
+        RUN_PY_FLAGS: ${{ steps.hf_cache.outputs.run_py_flags }}
+        INPUT_BENCHMARK_FLAGS: ${{ inputs.benchmark_flags }}
+        GFX_ARCH: ${{ inputs.gfx_arch }}
+        OUTPUT_DIR: ${{ inputs.output_dir }}
+        ARCH: ${{ inputs.arch }}
+        HF_CACHE_ARGS: ${{ steps.hf_cache.outputs.hf_cache_args }}
+        HF_TOKEN: ${{ inputs.hf_token }}
+        DOCKER_IMAGE: ${{ inputs.image }}
       run: |
         MIOPEN_USER_DB_PATH_ENV=""
-        if [ "${{ inputs.benchmark_only }}" != "true" ]; then
+        if [ "$BENCHMARK_ONLY" != "true" ]; then
           MIOPEN_USER_DB_PATH_ENV="-e MIOPEN_USER_DB_PATH=/app/diffusion-models-inference/data/miopen/userdb"
         fi
         
-        EFFECTIVE_BENCHMARK_FLAGS="${{ steps.hf_cache.outputs.run_py_flags }} ${{ inputs.benchmark_flags }}"
-        if [ -n "${{ inputs.gfx_arch }}" ] && [[ "$EFFECTIVE_BENCHMARK_FLAGS" != *"--name"* ]]; then
-          EFFECTIVE_BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS} --tag ${{ inputs.gfx_arch }}"
+        EFFECTIVE_BENCHMARK_FLAGS="$RUN_PY_FLAGS $INPUT_BENCHMARK_FLAGS"
+        if [ -n "$GFX_ARCH" ] && [[ "$EFFECTIVE_BENCHMARK_FLAGS" != *"--name"* ]]; then
+          EFFECTIVE_BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS} --tag $GFX_ARCH"
         fi
         
         docker run \
@@ -93,16 +107,16 @@ runs:
           --privileged \
           --shm-size 128G \
           --name xdit-bench \
-          --mount type=bind,src="$GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}",dst=/outputs \
+          --mount type=bind,src="$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH",dst=/outputs \
           --mount type=bind,src="$(pwd)",dst=/app/diffusion-models-inference \
           --mount type=bind,src="$GITHUB_WORKSPACE/references",dst=/app/references \
-          ${{ steps.hf_cache.outputs.hf_cache_args }} \
+          $HF_CACHE_ARGS \
           $MIOPEN_USER_DB_PATH_ENV \
           -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
           -e OMP_NUM_THREADS=16 \
-          -e HF_TOKEN=${{ inputs.hf_token }} \
+          -e HF_TOKEN="$HF_TOKEN" \
           -e BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS}" \
-          ${{ inputs.image }} \
+          "$DOCKER_IMAGE" \
           sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && \
                  python3 /app/.ci/quality_check.py --reference-path /app/references --benchmark-output-path /outputs'
     

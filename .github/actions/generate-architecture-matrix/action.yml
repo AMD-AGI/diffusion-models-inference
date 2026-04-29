@@ -19,18 +19,20 @@ runs:
     - name: Generate matrix
       id: generate
       shell: bash
+      env:
+        WORKFLOW_INPUTS: ${{ inputs.workflow_inputs }}
       run: |
         # Parse inputs from JSON
-        MI300_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_runner // ""' | xargs)
-        MI300_RUNNER_TYPE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi300_runner_type // "Standard runner"')
+        MI300_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi300_runner // ""' | xargs)
+        MI300_RUNNER_TYPE=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi300_runner_type // "Standard runner"')
         
-        MI325_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_runner // ""' | xargs)
-        MI325_RUNNER_TYPE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi325_runner_type // "Standard runner"')
+        MI325_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi325_runner // ""' | xargs)
+        MI325_RUNNER_TYPE=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi325_runner_type // "Standard runner"')
         
-        MI355_RUNNER=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_runner // ""' | xargs)
-        MI355_RUNNER_TYPE=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.mi355_runner_type // "Standard runner"')
+        MI355_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi355_runner // ""' | xargs)
+        MI355_RUNNER_TYPE=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi355_runner_type // "Standard runner"')
         
-        ALLOCATOR_RESERVATION_HOURS=$(echo '${{ inputs.workflow_inputs }}' | jq -r '.allocator_reservation_hours // "4"')
+        ALLOCATOR_RESERVATION_HOURS=$(echo "$WORKFLOW_INPUTS" | jq -r '.allocator_reservation_hours // "4"')
         
         # Function to parse runner type into constituent flags
         parse_runner_type() {

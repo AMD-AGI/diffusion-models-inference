@@ -19,19 +19,23 @@ runs:
     - name: Remove containers
       if: ${{ inputs.containers != '' }}
       shell: bash
+      env:
+        CONTAINERS: ${{ inputs.containers }}
       run: |
-        for container in ${{ inputs.containers }}; do
+        for container in $CONTAINERS; do
           echo "Removing container: $container"
-          docker rm -f $container || true
+          docker rm -f "$container" || true
         done
     
     - name: Remove images
       if: ${{ inputs.images != '' }}
       shell: bash
+      env:
+        IMAGES: ${{ inputs.images }}
       run: |
-        for image in ${{ inputs.images }}; do
+        for image in $IMAGES; do
           echo "Removing image: $image"
-          docker rmi -f $image || true
+          docker rmi -f "$image" || true
         done
     
     - name: Prune Docker images
@@ -42,8 +46,10 @@ runs:
     - name: Clean workspace
       if: ${{ inputs.skip_workspace_cleanup != 'true' }}
       shell: bash
+      env:
+        WORKSPACE: ${{ github.workspace }}
       run: |
-        docker run --rm -v "${{ github.workspace }}:/workspace" ubuntu:24.04 sh -c 'rm -rf /workspace/* /workspace/.??*' || true
+        docker run --rm -v "${WORKSPACE}:/workspace" ubuntu:24.04 sh -c 'rm -rf /workspace/* /workspace/.??*' || true
     
     - name: Show GPU status
       shell: bash

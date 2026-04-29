@@ -23,7 +23,7 @@ on:
       runner:
         description: "Runner label"
         required: false
-        default: "build-only"
+        default: ""
       prebuilt_core_image_tag:
         description: "Prebuilt core image tag (build untuned only)"
         required: false
@@ -38,6 +38,10 @@ on:
         type: boolean
         required: false
         default: false
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   get-short-sha:
@@ -75,13 +79,15 @@ jobs:
     with:
       git_ref: ${{ github.ref_name }}
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
-      core_image_name: amdsiloai/pytorch-xdit-core
-      staging_image_name: amdsiloai/pytorch-xdit-staging
+      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
+      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
-      runner: ${{ inputs.runner || 'build-only' }}
-    secrets: inherit
+      runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
   
   check-changes:
     name: Check for MIOpen changes
@@ -128,33 +134,35 @@ jobs:
       
       - name: Determine image tag
         id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          SHORT_SHA: ${{ needs.get-short-sha.outputs.short_sha }}
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          if [ -n "$INPUT_TAG" ]; then
+            echo "tag=$INPUT_TAG" >> $GITHUB_OUTPUT
           else
-            echo "tag=${{ needs.get-short-sha.outputs.short_sha }}" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Determine runner
-        id: config
-        run: |
-          if [ -n "${{ github.event.inputs.runner }}" ]; then
-            echo "runner=${{ github.event.inputs.runner }}" >> $GITHUB_OUTPUT
-          else
-            echo "runner=build-only" >> $GITHUB_OUTPUT
+            echo "tag=$SHORT_SHA" >> $GITHUB_OUTPUT
           fi
       
       - name: Prepare tuning configuration
         id: tuning_config
+        env:
+          VAR_ALLOCATOR_ID: ${{ vars.DEFAULT_ALLOCATOR_ID }}
+          VAR_MI300_RUNNER: ${{ vars.DEFAULT_MI300_RUNNER }}
+          VAR_MI300_RUNNER_TYPE: ${{ vars.DEFAULT_MI300_RUNNER_TYPE }}
+          VAR_MI325_RUNNER: ${{ vars.DEFAULT_MI325_RUNNER }}
+          VAR_MI325_RUNNER_TYPE: ${{ vars.DEFAULT_MI325_RUNNER_TYPE }}
+          VAR_MI355_RUNNER: ${{ vars.DEFAULT_MI355_RUNNER }}
+          VAR_MI355_RUNNER_TYPE: ${{ vars.DEFAULT_MI355_RUNNER_TYPE }}
         run: |
           # Trim whitespace from repository variables
-          ALLOCATOR_ID=$(echo "${{ vars.DEFAULT_ALLOCATOR_ID }}" | xargs)
-          MI300_RUNNER=$(echo "${{ vars.DEFAULT_MI300_RUNNER }}" | xargs)
-          MI300_RUNNER_TYPE=$(echo "${{ vars.DEFAULT_MI300_RUNNER_TYPE }}" | xargs)
-          MI325_RUNNER=$(echo "${{ vars.DEFAULT_MI325_RUNNER }}" | xargs)
-          MI325_RUNNER_TYPE=$(echo "${{ vars.DEFAULT_MI325_RUNNER_TYPE }}" | xargs)
-          MI355_RUNNER=$(echo "${{ vars.DEFAULT_MI355_RUNNER }}" | xargs)
-          MI355_RUNNER_TYPE=$(echo "${{ vars.DEFAULT_MI355_RUNNER_TYPE }}" | xargs)
+          ALLOCATOR_ID=$(echo "$VAR_ALLOCATOR_ID" | xargs)
+          MI300_RUNNER=$(echo "$VAR_MI300_RUNNER" | xargs)
+          MI300_RUNNER_TYPE=$(echo "$VAR_MI300_RUNNER_TYPE" | xargs)
+          MI325_RUNNER=$(echo "$VAR_MI325_RUNNER" | xargs)
+          MI325_RUNNER_TYPE=$(echo "$VAR_MI325_RUNNER_TYPE" | xargs)
+          MI355_RUNNER=$(echo "$VAR_MI355_RUNNER" | xargs)
+          MI355_RUNNER_TYPE=$(echo "$VAR_MI355_RUNNER_TYPE" | xargs)
           
           # Output values
           echo "allocator_id=${ALLOCATOR_ID}" >> $GITHUB_OUTPUT
@@ -212,28 +220,35 @@ jobs:
                 "miopen_find_mode": "${{ vars.DEFAULT_MIOPEN_FIND_MODE }}",
                 "miopen_find_enforce": "${{ vars.DEFAULT_MIOPEN_FIND_ENFORCE }}"
               },
-              "Allocator ID": {
-                "allocator_id": "${{ needs.prepare.outputs.allocator_id }}"
-              },
-              "MI300 runner": {
-                "runner": "${{ needs.prepare.outputs.mi300_runner }}",
-                "runner_type": "${{ needs.prepare.outputs.mi300_runner_type }}"
-              },
-              "MI325 runner": {
-                "runner": "${{ needs.prepare.outputs.mi325_runner }}",
-                "runner_type": "${{ needs.prepare.outputs.mi325_runner_type }}"
-              },
-              "MI355 runner": {
-                "runner": "${{ needs.prepare.outputs.mi355_runner }}",
-                "runner_type": "${{ needs.prepare.outputs.mi355_runner_type }}"
+              "Tuning configuration": {
+                "allocator_configured": "${{ needs.prepare.outputs.allocator_id != '' }}",
+                "mi300_enabled": "${{ needs.prepare.outputs.mi300_runner != '' }}",
+                "mi300_runner_type": "${{ needs.prepare.outputs.mi300_runner_type }}",
+                "mi325_enabled": "${{ needs.prepare.outputs.mi325_runner != '' }}",
+                "mi325_runner_type": "${{ needs.prepare.outputs.mi325_runner_type }}",
+                "mi355_enabled": "${{ needs.prepare.outputs.mi355_runner != '' }}",
+                "mi355_runner_type": "${{ needs.prepare.outputs.mi355_runner_type }}"
               }
             }
       
       - name: Trigger build-and-benchmark workflow
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          BENCHMARK_AFTER_TUNING_VAR: ${{ vars.BENCHMARK_AFTER_AUTOMATIC_TUNING }}
+          MIOPEN_FIND_MODE_VAR: ${{ vars.DEFAULT_MIOPEN_FIND_MODE }}
+          MIOPEN_FIND_ENFORCE_VAR: ${{ vars.DEFAULT_MIOPEN_FIND_ENFORCE }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          ALLOCATOR_ID: ${{ needs.prepare.outputs.allocator_id }}
+          MI300_RUNNER: ${{ needs.prepare.outputs.mi300_runner }}
+          MI300_RUNNER_TYPE: ${{ needs.prepare.outputs.mi300_runner_type }}
+          MI325_RUNNER: ${{ needs.prepare.outputs.mi325_runner }}
+          MI325_RUNNER_TYPE: ${{ needs.prepare.outputs.mi325_runner_type }}
+          MI355_RUNNER: ${{ needs.prepare.outputs.mi355_runner }}
+          MI355_RUNNER_TYPE: ${{ needs.prepare.outputs.mi355_runner_type }}
         run: |
-          BENCHMARK_AFTER_TUNING=$(echo "${{ vars.BENCHMARK_AFTER_AUTOMATIC_TUNING }}" | xargs)
+          BENCHMARK_AFTER_TUNING=$(echo "$BENCHMARK_AFTER_TUNING_VAR" | xargs)
           if [ "${BENCHMARK_AFTER_TUNING}" = "true" ]; then
             RUN_MODE="MIOpen tuning + benchmarking"
           else
@@ -241,22 +256,22 @@ jobs:
           fi
           
           # Get MIOpen parameters from repository variables
-          MIOPEN_FIND_MODE=$(echo "${{ vars.DEFAULT_MIOPEN_FIND_MODE }}" | xargs)
-          MIOPEN_FIND_ENFORCE=$(echo "${{ vars.DEFAULT_MIOPEN_FIND_ENFORCE }}" | xargs)
+          MIOPEN_FIND_MODE=$(echo "$MIOPEN_FIND_MODE_VAR" | xargs)
+          MIOPEN_FIND_ENFORCE=$(echo "$MIOPEN_FIND_ENFORCE_VAR" | xargs)
           
           gh workflow run "build-and-benchmark.yml" \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref_name }} \
-            --field git_branch="${{ github.ref_name }}" \
-            --field prebuilt_untuned_image_tag="${{ needs.prepare.outputs.image_tag }}-temp" \
+            --repo "$REPOSITORY" \
+            --ref "$REF_NAME" \
+            --field git_branch="$REF_NAME" \
+            --field prebuilt_untuned_image_tag="${IMAGE_TAG}-temp" \
             --field run_mode="${RUN_MODE}" \
             --field miopen_find_mode="${MIOPEN_FIND_MODE}" \
             --field miopen_find_enforce="${MIOPEN_FIND_ENFORCE}" \
             --field trigger_benchmark_metrics_refresh=false \
-            --field allocator_id="${{ needs.prepare.outputs.allocator_id }}" \
-            --field mi300_runner="${{ needs.prepare.outputs.mi300_runner }}" \
-            --field mi300_runner_type="${{ needs.prepare.outputs.mi300_runner_type }}" \
-            --field mi325_runner="${{ needs.prepare.outputs.mi325_runner }}" \
-            --field mi325_runner_type="${{ needs.prepare.outputs.mi325_runner_type }}" \
-            --field mi355_runner="${{ needs.prepare.outputs.mi355_runner }}" \
-            --field mi355_runner_type="${{ needs.prepare.outputs.mi355_runner_type }}"
+            --field allocator_id="$ALLOCATOR_ID" \
+            --field mi300_runner="$MI300_RUNNER" \
+            --field mi300_runner_type="$MI300_RUNNER_TYPE" \
+            --field mi325_runner="$MI325_RUNNER" \
+            --field mi325_runner_type="$MI325_RUNNER_TYPE" \
+            --field mi355_runner="$MI355_RUNNER" \
+            --field mi355_runner_type="$MI355_RUNNER_TYPE"

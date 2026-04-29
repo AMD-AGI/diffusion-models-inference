@@ -23,8 +23,9 @@ runs:
     
     - name: Create and checkout branch
       shell: bash
+      env:
+        BRANCH_NAME: ${{ inputs.branch_name }}
       run: |
-        BRANCH_NAME="${{ inputs.branch_name }}"
         echo "Creating branch: ${BRANCH_NAME}"
         git checkout -b "${BRANCH_NAME}"
     
@@ -46,16 +47,19 @@ runs:
     - name: Commit changes
       if: steps.check_changes.outputs.has_changes == 'true'
       shell: bash
+      env:
+        RUN_NUMBER: ${{ inputs.run_number }}
       run: |
-        COMMIT_MSG="Update MIOpen database (run #${{ inputs.run_number }})"
+        COMMIT_MSG="Update MIOpen database (run #${RUN_NUMBER})"
         echo "Committing with message: ${COMMIT_MSG}"
         git commit -m "${COMMIT_MSG}"
     
     - name: Push branch
       if: steps.check_changes.outputs.has_changes == 'true'
       shell: bash
+      env:
+        BRANCH_NAME: ${{ inputs.branch_name }}
       run: |
-        BRANCH_NAME="${{ inputs.branch_name }}"
         echo "Pushing branch: ${BRANCH_NAME}"
         git push origin "${BRANCH_NAME}"
     
@@ -64,13 +68,17 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.gh_token }}
+        BRANCH_NAME: ${{ inputs.branch_name }}
+        RUN_NUMBER: ${{ inputs.run_number }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        REPOSITORY: ${{ github.repository }}
+        BASE_REF: ${{ github.ref_name }}
       run: |
-        BRANCH_NAME="${{ inputs.branch_name }}"
-        PR_TITLE="MIOpen tuning, run ${{ inputs.run_number }}"
-        PR_BODY="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        PR_TITLE="MIOpen tuning, run ${RUN_NUMBER}"
+        PR_BODY="Run: ${RUN_URL}"
         gh pr create \
-          --repo ${{ github.repository }} \
-          --base ${{ github.ref_name }} \
+          --repo "$REPOSITORY" \
+          --base "$BASE_REF" \
           --head "${BRANCH_NAME}" \
           --title "${PR_TITLE}" \
           --body "${PR_BODY}"

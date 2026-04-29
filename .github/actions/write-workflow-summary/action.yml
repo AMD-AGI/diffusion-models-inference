@@ -24,18 +24,23 @@ runs:
   steps:
     - name: Generate summary
       shell: bash
+      env:
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_TEXT: ${{ inputs.text }}
+        INPUT_TABLES: ${{ inputs.tables }}
+        INPUT_CODE: ${{ inputs.code }}
       run: |
-        echo "## ${{ inputs.title }}" >> $GITHUB_STEP_SUMMARY
+        echo "## ${INPUT_TITLE}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
         # Process text content
-        if [ -n "${{ inputs.text }}" ]; then
-          echo "${{ inputs.text }}" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${INPUT_TEXT}" ]; then
+          echo "${INPUT_TEXT}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
         fi
         
         # Process table sections
-        echo '${{ inputs.tables }}' | jq -c 'to_entries[]' | while IFS= read -r section; do
+        echo "${INPUT_TABLES}" | jq -c 'to_entries[]' | while IFS= read -r section; do
           TITLE=$(echo "$section" | jq -r '.key')
           DATA=$(echo "$section" | jq -c '.value')
           
@@ -47,7 +52,7 @@ runs:
         done
         
         # Process code sections
-        echo '${{ inputs.code }}' | jq -c 'to_entries[]' | while IFS= read -r section; do
+        echo "${INPUT_CODE}" | jq -c 'to_entries[]' | while IFS= read -r section; do
           TITLE=$(echo "$section" | jq -r '.key')
           DATA=$(echo "$section" | jq -c '.value')
           

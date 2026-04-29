@@ -35,7 +35,7 @@ on:
         description: 'Runner label to use'
         required: false
         type: string
-        default: 'build-only'
+        default: ''
       disable_docker_cache:
         description: 'Disable Docker cache on core build (equivalent to --no-cache)'
         required: false
@@ -48,11 +48,18 @@ on:
       staging_image_with_tag:
         description: 'Full staging image with tag (untuned, with -temp suffix)'
         value: ${{ jobs.build.outputs.staging_image_with_tag }}
+    secrets:
+      DOCKERHUB_ORGANIZATION:
+        description: 'Docker Hub username/organization'
+        required: true
+      DOCKERHUB_OAT:
+        description: 'Docker Hub access token'
+        required: true
 
 jobs:
   build:
     name: Build images
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner || 'build-only' }}
     timeout-minutes: 1440
     env:
       BUILDX_BUILDER_NAME: xdit-core-image-builder
@@ -106,15 +113,19 @@ jobs:
       
       - name: Determine images to build
         id: images
+        env:
+          PREBUILT_CORE_TAG_INPUT: ${{ inputs.prebuilt_core_image_tag }}
+          CORE_IMAGE_NAME: ${{ inputs.core_image_name }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          PREBUILT_CORE_TAG=$(echo "${{ inputs.prebuilt_core_image_tag }}" | xargs)
+          PREBUILT_CORE_TAG=$(echo "$PREBUILT_CORE_TAG_INPUT" | xargs)
           
           if [ -n "$PREBUILT_CORE_TAG" ]; then
             echo "skip_core_build=true" >> $GITHUB_OUTPUT
-            echo "cache_source=${{ inputs.core_image_name }}:${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+            echo "cache_source=${CORE_IMAGE_NAME}:${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
           else
             echo "skip_core_build=false" >> $GITHUB_OUTPUT
-            echo "cache_source=${{ inputs.core_image_name }}:${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+            echo "cache_source=${CORE_IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
           fi
       
       - name: Build core image

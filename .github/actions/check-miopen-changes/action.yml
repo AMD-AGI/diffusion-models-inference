@@ -21,10 +21,13 @@ runs:
     - name: Check for MIOpen changes
       id: check
       shell: bash
+      env:
+        BASE_REF: ${{ inputs.base_ref }}
+        HEAD_REF: ${{ inputs.head_ref }}
       run: |
         DOCKERFILE_CHANGED="false"
         MIOPEN_CHANGED="false"
-        CHANGED_FILES=$(git diff --name-only ${{ inputs.base_ref }} ${{ inputs.head_ref }})
+        CHANGED_FILES=$(git diff --name-only "$BASE_REF" "$HEAD_REF")
 
         if echo "$CHANGED_FILES" | grep -q "^docker/Dockerfile.ci$"; then
           DOCKERFILE_CHANGED="true"
