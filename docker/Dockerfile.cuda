@@ -16,7 +16,7 @@ ARG XDIT_COMMIT="051db68f769efa5b1aa691e5eec133f1b8bf3f1f"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG SAGEATTENTION_COMMIT="d1a57a5"
 
-ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.02-py3
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.03-py3
 FROM ${BASE_IMAGE} AS core
 
 # For ImportError: libGL.so.1: cannot open shared object file on nvcr.io/nvidia/pytorch:25.06-py3

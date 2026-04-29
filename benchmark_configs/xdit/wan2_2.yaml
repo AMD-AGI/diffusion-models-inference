@@ -69,7 +69,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    attention_backend: flash_4
+    attention_backend: cudnn
 
 - name: wan2_2.quantgemm.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -159,7 +159,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_fp8_gemms: True
-    attention_backend: flash_4
+    attention_backend: cudnn
 
 - name: wan2_2.fp8attn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -236,7 +236,7 @@
     use_torch_compile: True
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: nvte_fp8
-    hybrid_attn_high_precision_backend: flash_4
+    hybrid_attn_high_precision_backend: cudnn
 
 - name: wan2_2.quantgemm_fp8attn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -316,7 +316,7 @@
     use_fp8_gemms: True
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: nvte_fp8
-    hybrid_attn_high_precision_backend: flash_4
+    hybrid_attn_high_precision_backend: cudnn
 
 - name: wan2_2.quantgemm_sageattn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
