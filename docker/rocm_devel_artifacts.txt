@@ -49,10 +49,10 @@ prim_dbg_BUNDLE.tar.xz
 prim_dev_BUNDLE.tar.xz
 rand_dbg_BUNDLE.tar.xz
 rand_dev_BUNDLE.tar.xz
-rccl_dbg_BUNDLE.tar.xz
-rccl_dev_BUNDLE.tar.xz
+rccl_dbg_generic.tar.xz
+rccl_dev_generic.tar.xz
 # rccl_test artifact is included because of all_gather_perf and similar tools
-rccl_test_BUNDLE.tar.xz
+rccl_test_generic.tar.xz
 rdc_dbg_generic.tar.xz
 rdc_dev_generic.tar.xz
 rdc_lib_generic.tar.xz

@@ -33,8 +33,8 @@ miopen_run_BUNDLE.tar.xz
 miopenprovider_lib_generic.tar.xz
 rand_lib_BUNDLE.tar.xz
 rand_run_BUNDLE.tar.xz
-rccl_lib_BUNDLE.tar.xz
-rccl_run_BUNDLE.tar.xz
+rccl_lib_generic.tar.xz
+rccl_run_generic.tar.xz
 # rocprofiler-sdk is needed at runtime: PyTorch Kineto (USE_KINETO=ON) depends
 # on libroctracer64.so which in turn requires librocprofiler-sdk.so
 rocprofiler-sdk_lib_generic.tar.xz

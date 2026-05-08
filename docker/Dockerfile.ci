@@ -9,7 +9,7 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="cbff3d118045c1f1ab593543dc29a377a2b198fc"
+ARG THEROCK_COMMIT="64b9f0aeb10d41b16e18039600fe20783fdec898"
 ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
@@ -21,9 +21,9 @@ ARG AMDGPU_BUNDLE_NAME="gfx94X_gfx950_bundle"
 ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
 # Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
 # This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
-ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE="125f524a82fa99fe188b489b5a65eedf97560431"
 # Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
-ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
+ARG ROCM_SYSTEMS_COMMIT_OVERRIDE="444cadec35a8bfed2842f2fd519572c26e81dfcf"
 ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
 ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
 ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
@@ -122,7 +122,6 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libopenblas-dev \
     libtool \
     ninja-build \
-    patchelf \
     texinfo \
     wget \
     xxd && \
@@ -215,10 +214,14 @@ ARG AMDGPU_BUNDLE_NAME
 COPY --from=setup_therock /app/TheRock /app/TheRock
 WORKDIR /app/TheRock
 # if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
-RUN pip install -r requirements.txt && \
-    pip freeze | grep -E 'botocore' > constraints.txt && \
-    pip install --no-cache-dir -c constraints.txt "pathspec<0.13.0" "dvc[s3]==3.62.0"
+# Mirroring TheRock's manylinux Dockerfile pin of aiobotocore so dvc[s3]'s
+# botocore window stays aligned with the boto3 range pinned in
+# requirements.txt (>=1.42.79,<1.42.85). aiobotocore==3.4.0 requires
+# botocore>=1.42.79,<1.42.85; resolving everything in one pip call lets
+# pip pick a botocore (1.42.84) that satisfies both pins.
+RUN pip install --no-cache-dir -r requirements.txt "pathspec<0.13.0" "dvc[s3]==3.67.1" "aiobotocore==3.4.0"
 RUN bash dockerfiles/install_ccache.sh ${CCACHE_VERSION}
+RUN bash dockerfiles/install_pinned_patchelf.sh
 RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=locked \
     --mount=type=cache,target=/app/TheRock/git-mirror,id=therock-git-mirrors,sharing=locked \
     python build_tools/setup_git_mirrors.py --mirror-dir /app/TheRock/git-mirror --update --jobs 8 && \
@@ -234,6 +237,7 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     -DTHEROCK_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
     -DTHEROCK_TEST_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
     -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="${AMDGPU_BUNDLE_NAME}" \
+    -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF \
     -DTHEROCK_ENABLE_ALL=OFF \
     -DTHEROCK_ENABLE_CORE=ON \
     -DTHEROCK_ENABLE_COMM_LIBS=ON \
