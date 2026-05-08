@@ -3,7 +3,7 @@
 # Last matching rule wins. Prefer GitHub Teams over individuals.
 
 # Default — every file requires project-team approval
-*                            @AMD-AGI/siloai
+*                            @AMD-AGI/siloai-diffusion-inference
 
 # Stricter paths — leads must approve
-.github/CODEOWNERS           @AMD-AGI/siloai
+.github/CODEOWNERS           @AMD-AGI/siloai-diffusion-inference
