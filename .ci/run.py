@@ -14,6 +14,8 @@ from dataclasses import asdict, dataclass
 from typing import List, Dict, Any, Optional
 import subprocess
 
+import pandas as pd
+
 from huggingface_hub import snapshot_download, scan_cache_dir
 
 logging.basicConfig(
@@ -133,6 +135,16 @@ def _parse_args():
         help="Print wall-clock timing summary",
     )
     parser.add_argument(
+        "--collect-hipblaslt-logs",
+        action="store_true",
+        help=(
+            "Collect hipBLASLt GEMM logs per experiment as "
+            "<results-directory>/<experiment_name>/hipblaslt_gemms_pid<PID>.yaml "
+            "(one file per worker process). "
+            "Adds runtime overhead, intended for ad-hoc GEMM tuning data collection only."
+        ),
+    )
+    parser.add_argument(
         "configs",
         nargs="+",
         help="YAML config files containing experiment definitions",
@@ -246,7 +258,13 @@ def _delete_model_cache(model: str, revision: Optional[str] = None, dry_run: boo
         logger.error(e, stack_info=True, exc_info=True)
 
 
-def _run_experiment(exp: Experiment, cmd: List[str], dry_run: bool, benchmark_output_directory: Path) -> bool:
+def _run_experiment(
+    exp: Experiment,
+    cmd: List[str],
+    dry_run: bool,
+    benchmark_output_directory: Path,
+    collect_hipblaslt_logs: bool = False,
+) -> bool:
     """Runs a single experiment."""
 
     if dry_run:
@@ -256,6 +274,13 @@ def _run_experiment(exp: Experiment, cmd: List[str], dry_run: bool, benchmark_ou
     benchmark_output_directory.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["TQDM_DISABLE"] = "1"
+    if collect_hipblaslt_logs:
+        # %i is substituted with the worker process ID by hipBLASLt at runtime,
+        # so multi-rank benchmarks (e.g. ulysses_degree > 1) get one file per process.
+        env["HIPBLASLT_LOG_MASK"] = "64"
+        env["HIPBLASLT_LOG_FILE"] = str(
+            benchmark_output_directory / "hipblaslt_gemms_pid%i.yaml"
+        )
     stdout_path = benchmark_output_directory / "stdout.txt"
     stderr_path = benchmark_output_directory / "stderr.txt"
     with open(stdout_path, "w", buffering=1) as stdout_file, open(stderr_path, "w", buffering=1) as stderr_file:
@@ -343,6 +368,48 @@ def _print_timing_summary(timing: Dict[str, Any]) -> None:
             print(f"{entry['name']:<{name_width}} {entry['seconds']:>{time_col_width}.2f}")
         print(f"{'Sum':<{name_width}} {experiments_sum:>{time_col_width}.2f}")
         print("-" * sep_width)
+
+def _merge_hipblaslt_logs(directory: Path) -> None:
+    """
+    Merge per-PID hipBLASLt GEMM log files into a single hipblaslt_gemms.yaml.
+
+    Each worker process writes its own hipblaslt_gemms_pid<PID>.yaml. Across
+    ranks, the GEMM problem shapes are identical, so the files are redundant
+    except for call_count, which is summed across all PIDs. The per-PID files
+    are deleted after merging.
+    """
+    pid_files = sorted(directory.glob("hipblaslt_gemms_pid*.yaml"))
+    if not pid_files:
+        return
+
+    records = []
+    for path in pid_files:
+        with open(path) as f:
+            records.extend(yaml.safe_load(f))
+
+    df = pd.DataFrame(records)
+    key_cols = [c for c in df.columns if c != "call_count"]
+    merged = (
+        df.groupby(key_cols, dropna=False)["call_count"]
+        .sum()
+        .reset_index()
+    )
+
+    out_path = directory / "hipblaslt_gemms.yaml"
+    merged_records = merged.to_dict(orient="records")
+    with open(out_path, "w") as f:
+        for record in merged_records:
+            f.write("- " + yaml.dump(record, default_flow_style=True, sort_keys=False, width=float("inf")).rstrip() + "\n")
+
+    for path in pid_files:
+        path.unlink()
+
+    logger.info(
+        "Merged %d per-PID hipBLASLt log files into %s (%d unique GEMMs).",
+        len(pid_files),
+        out_path,
+        len(merged_records),
+    )
 
 
 def command(e: Experiment, override_args: dict, override_runner: Optional[str] = None, override_entrypoint: Optional[str] = None) -> List[str]:
@@ -490,7 +557,13 @@ def main():
             cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + ["--output-directory", benchmark_output_directory]
 
             t0 = time.monotonic()
-            if not _run_experiment(exp, cmd, args.dry_run, benchmark_output_directory):
+            if not _run_experiment(
+                exp,
+                cmd,
+                args.dry_run,
+                benchmark_output_directory,
+                collect_hipblaslt_logs=args.collect_hipblaslt_logs,
+            ):
                 timing["experiments"].append({"name": exp.name, "seconds": round(time.monotonic() - t0, 2)})
                 msg = f"Experiment {exp.name} failed to complete. Reason: Failed to run command: {cmd}. See {benchmark_output_directory}/stderr.txt for stderr logs."
                 errors.append(msg)
@@ -507,6 +580,9 @@ def main():
                     errors.append(msg)
                     logger.error(msg)
                     continue
+
+                if args.collect_hipblaslt_logs:
+                    _merge_hipblaslt_logs(benchmark_output_directory)
 
                 logger.info(f"Average latency for {exp.name}: {avg_latency} seconds")
 

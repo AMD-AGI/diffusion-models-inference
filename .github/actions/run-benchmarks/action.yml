@@ -20,6 +20,10 @@ inputs:
     description: 'Whether running in benchmark-only mode'
     required: false
     default: 'false'
+  collect_hipblaslt_logs:
+    description: 'Collect hipBLASLt GEMM logs per benchmark (adds runtime overhead). Files are written per-experiment as hipblaslt_gemms_pid<PID>.yaml (one file per worker process) under each experiments output directory.'
+    required: false
+    default: 'false'
   output_dir:
     description: 'Output directory name for benchmark results (e.g., benchmarks, )'
     required: false
@@ -92,6 +96,9 @@ runs:
         EFFECTIVE_BENCHMARK_FLAGS="$RUN_PY_FLAGS $INPUT_BENCHMARK_FLAGS"
         if [ -n "$GFX_ARCH" ] && [[ "$EFFECTIVE_BENCHMARK_FLAGS" != *"--name"* ]]; then
           EFFECTIVE_BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS} --tag $GFX_ARCH"
+        fi
+        if [ "${{ inputs.collect_hipblaslt_logs }}" = "true" ]; then
+          EFFECTIVE_BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS} --collect-hipblaslt-logs"
         fi
         
         docker run \

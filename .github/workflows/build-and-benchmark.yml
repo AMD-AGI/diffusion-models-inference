@@ -46,6 +46,11 @@ on:
         description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
         required: false
         default: ''
+      collect_hipblaslt_logs:
+        description: 'Collect hipBLASLt GEMM logs per benchmark (adds runtime overhead, intended for ad-hoc GEMM tuning data collection only)'
+        type: boolean
+        required: false
+        default: false
       benchmark_image:
         description: 'Image tag or full Docker Hub path for benchmark-only mode'
         required: false
@@ -573,6 +578,7 @@ jobs:
           gfx_arch: ${{ matrix.gfx_arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: ${{ steps.metadata.outputs.benchmark_image != '' }}
+          collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
           artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
@@ -612,6 +618,7 @@ jobs:
           gfx_arch: ${{ matrix.gfx_arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: true
+          collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
           output_dir: ''
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
