@@ -12,10 +12,11 @@ ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
 ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
 ARG DISTVAE_COMMIT="5a0fcbb"
-ARG XDIT_COMMIT="051db68f769efa5b1aa691e5eec133f1b8bf3f1f"
+ARG XDIT_COMMIT="f1c694d5c18797d7e8fd2e4b09d6c156b48397b5"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG SAGEATTENTION_COMMIT="d1a57a5"
 ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
+ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.03-py3
 FROM ${BASE_IMAGE} AS core
@@ -36,7 +37,7 @@ ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG AO_COMMIT
 ARG MSLK_COMMIT
-
+ARG FLEX_BLOCK_ATTENTION_COMMIT
 # setup
 WORKDIR /app/external
 COPY src/patches /patches
@@ -49,6 +50,13 @@ RUN pip uninstall -y flash_attn && \
     python setup.py install && \
     (cd hopper && python setup.py install) && \
     (cd flash_attn/cute && pip install -e .)
+# install flex-block-attention
+RUN git clone https://github.com/Tencent-Hunyuan/flex-block-attn.git && \
+    cd flex-block-attn && \
+    git reset --hard ${FLEX_BLOCK_ATTENTION_COMMIT} && \
+    git submodule update --init --recursive && \
+    git apply /patches/flex_block_attn_setup.patch && \
+    python setup.py install
 # install yunchang
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
