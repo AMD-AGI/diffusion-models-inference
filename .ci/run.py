@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import List, Dict, Any, Optional
 import subprocess
 
+import numpy as np
 import pandas as pd
 
 from huggingface_hub import snapshot_download, scan_cache_dir
@@ -311,17 +312,17 @@ def _export_config(experiments: List[Experiment], export_config_path: str) -> No
         yaml.dump(data, f, sort_keys=False)
 
 
-def _get_average_latency(file_path: Path) -> Optional[float]:
+def _get_median_latency(file_path: Path) -> Optional[float]:
         try:
             with open(file_path, 'r') as f:
                 data = json.load(f)
 
-            average = sum(data) / len(data)
+            median = np.median(data)
         except Exception as e:
-            logger.error(f"Failed to compute average latency from {file_path}: {e}")
+            logger.error(f"Failed to compute median latency from {file_path}: {e}")
             return None
 
-        return average
+        return median
 
 
 def _save_mad_latency_metric(csv_output_path: str, experiment_name: str, latency: float):
@@ -574,9 +575,9 @@ def main():
 
             if not args.dry_run:
                 latency_output_filepath = Path(benchmark_output_directory) / "timings.json" # benchmark scripts are expected to write latencies to "timings.json"
-                avg_latency = _get_average_latency(latency_output_filepath)
-                if not avg_latency:
-                    msg = f"Experiment {exp.name} failed to complete. Reason: Failed to compute average latency from output files. See logs for more details."
+                median_latency = _get_median_latency(latency_output_filepath)
+                if not median_latency:
+                    msg = f"Experiment {exp.name} failed to complete. Reason: Failed to compute median latency from output files. See logs for more details."
                     errors.append(msg)
                     logger.error(msg)
                     continue
@@ -584,9 +585,9 @@ def main():
                 if args.collect_hipblaslt_logs:
                     _merge_hipblaslt_logs(benchmark_output_directory)
 
-                logger.info(f"Average latency for {exp.name}: {avg_latency} seconds")
+                logger.info(f"Median latency for {exp.name}: {median_latency} seconds")
 
-                _save_mad_latency_metric(args.csv_output_path, exp.name, avg_latency)
+                _save_mad_latency_metric(args.csv_output_path, exp.name, median_latency)
 
         should_clear_cache = args.clear_model_cache or (
             preserve_original_state and not model_existed_before
