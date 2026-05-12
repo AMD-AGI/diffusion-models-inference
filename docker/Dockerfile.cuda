@@ -57,12 +57,25 @@ RUN pip uninstall -y flash_attn && \
     (cd hopper && python setup.py install) && \
     (cd flash_attn/cute && pip install -e .)
 # install flex-block-attention
-RUN git clone https://github.com/Tencent-Hunyuan/flex-block-attn.git && \
-    cd flex-block-attn && \
-    git reset --hard ${FLEX_BLOCK_ATTENTION_COMMIT} && \
-    git submodule update --init --recursive && \
-    git apply /patches/flex_block_attn_setup.patch && \
-    python setup.py install
+# flex-block-attn (built on ThunderKittens) is Hopper-only: it hardcodes
+# target=h100 / sm_90a and uses wgmma/TMA intrinsics that are not
+# forward-compatible to Blackwell. Skip on aarch64 hosts, which in this
+# stack means GB300 (Grace + Blackwell) where the kernels would not run.
+# It also does not currently build on aarch64: tk/include/common/base_types.cuh
+# uses char2{i, i} with const char& i, which is a narrowing conversion on
+# aarch64 (where char is unsigned by ABI) into char2's signed char members
+# and is rejected by C++11 brace-initialization. So gating here avoids a
+# hard compile-time failure on Grace in addition to building dead kernels.
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+        echo "Skipping flex-block-attn install on aarch64 (Hopper-only kernels)"; \
+    else \
+        git clone https://github.com/Tencent-Hunyuan/flex-block-attn.git && \
+        cd flex-block-attn && \
+        git reset --hard ${FLEX_BLOCK_ATTENTION_COMMIT} && \
+        git submodule update --init --recursive && \
+        git apply /patches/flex_block_attn_setup.patch && \
+        python setup.py install; \
+    fi
 # install yunchang
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
