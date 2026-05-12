@@ -38,6 +38,11 @@ ARG XDIT_COMMIT
 ARG AO_COMMIT
 ARG MSLK_COMMIT
 ARG FLEX_BLOCK_ATTENTION_COMMIT
+
+# On aarch64 hosts (e.g. GB300 / Grace-Blackwell) the flash-attention hopper and
+# cute builds OOM without limiting parallelism. x86 hosts keep the default.
+ARG FLASH_ATTN_MAX_JOBS_AARCH64=32
+
 # setup
 WORKDIR /app/external
 COPY src/patches /patches
@@ -48,6 +53,7 @@ RUN pip uninstall -y flash_attn && \
     cd flash-attention && \
     git reset --hard ${FLASHATTENTION_COMMIT} && \
     python setup.py install && \
+    if [ "$(uname -m)" = "aarch64" ]; then export MAX_JOBS=${FLASH_ATTN_MAX_JOBS_AARCH64}; fi && \
     (cd hopper && python setup.py install) && \
     (cd flash_attn/cute && pip install -e .)
 # install flex-block-attention
