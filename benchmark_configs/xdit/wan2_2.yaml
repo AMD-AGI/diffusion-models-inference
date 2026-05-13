@@ -122,6 +122,8 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
+    fully_shard_degree: 8
+    no_reshard_after_forward: True
     use_fp8_gemms: True
     attention_backend: flash_3
 
@@ -273,6 +275,8 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
+    fully_shard_degree: 8
+    no_reshard_after_forward: True
     use_fp8_gemms: True
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: flash_3_fp8
@@ -394,6 +398,8 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
+    fully_shard_degree: 8
+    no_reshard_after_forward: True
     attention_backend: sage
     use_fp8_gemms: True
 
