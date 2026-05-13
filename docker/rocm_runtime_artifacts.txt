@@ -4,6 +4,10 @@
 
 amd-llvm_lib_generic.tar.xz
 amd-llvm_run_generic.tar.xz
+# aqlprofile provides libhsa-amd-aqlprofile64.so, required at runtime by
+# rocprofiler-sdk for PMC sampling and by anything loading rocprof
+aqlprofile_lib_generic.tar.xz
+aqlprofile_run_generic.tar.xz
 base_lib_generic.tar.xz
 base_run_generic.tar.xz
 blas_lib_BUNDLE.tar.xz

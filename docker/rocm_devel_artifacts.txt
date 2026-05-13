@@ -8,6 +8,8 @@ amd-dbgapi_dev_generic.tar.xz
 amd-dbgapi_lib_generic.tar.xz
 amd-llvm_dbg_generic.tar.xz
 amd-llvm_dev_generic.tar.xz
+aqlprofile_dbg_generic.tar.xz
+aqlprofile_dev_generic.tar.xz
 base_dbg_generic.tar.xz
 base_dev_generic.tar.xz
 blas_dbg_BUNDLE.tar.xz
