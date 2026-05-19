@@ -13,12 +13,11 @@ ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
 ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
 ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
 ARG XDIT_COMMIT="b4e4054f7d5404f25355857c0fde43c08b6849ea"
-ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG SAGEATTENTION_COMMIT="d1a57a5"
 ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
 ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
 
-ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.03-py3
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.04-py3
 FROM ${BASE_IMAGE} AS core
 
 # For ImportError: libGL.so.1: cannot open shared object file on nvcr.io/nvidia/pytorch:25.06-py3
@@ -35,7 +34,6 @@ ARG DIFFUSERS_COMMIT
 ARG ACCELERATE_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
-ARG AO_COMMIT
 ARG MSLK_COMMIT
 ARG FLEX_BLOCK_ATTENTION_COMMIT
 
@@ -95,11 +93,6 @@ RUN git clone https://github.com/huggingface/accelerate.git && \
     cd accelerate && \
     git reset --hard ${ACCELERATE_COMMIT} && \
     pip install -e .
-# install torchao
-RUN git clone https://github.com/pytorch/ao.git && \
-    cd ao && \
-    git reset --hard ${AO_COMMIT} && \
-    pip install -e . --no-build-isolation
 # install mslk from source (pip wheels are ABI-incompatible with NGC PyTorch)
 RUN pip install --no-cache-dir setuptools_git_versioning scikit-build patchelf && \
     git clone --recursive https://github.com/meta-pytorch/MSLK.git && \
