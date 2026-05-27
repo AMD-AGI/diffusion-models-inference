@@ -14,7 +14,11 @@ ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
 ARG AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu"
-# AMDGPU_BUNDLE_NAME must be explicitly set when building for multiple AMDGPU targets
+# AMDGPU_BUNDLE_NAME disambiguates the cmake-level dist bundle name when more
+# than one AMDGPU family is selected. TheRock's therock_validate_amdgpu_targets()
+# FATAL_ERRORs if the bundle name cannot be inferred from a single family.
+# With KPACK_SPLIT_ARTIFACTS=ON it only appears in the intermediate
+# build/artifacts-unsplit/ tree and is not observable in the final image.
 ARG AMDGPU_BUNDLE_NAME="gfx94X_gfx950_bundle"
 # PYTORCH_ROCM_ARCH is a ";" separated list of values, choices for LLVM targets can
 # be found at https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
@@ -237,7 +241,6 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     -DTHEROCK_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
     -DTHEROCK_TEST_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
     -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="${AMDGPU_BUNDLE_NAME}" \
-    -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF \
     -DTHEROCK_ENABLE_ALL=OFF \
     -DTHEROCK_ENABLE_CORE=ON \
     -DTHEROCK_ENABLE_COMM_LIBS=ON \
@@ -247,18 +250,18 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     -DTHEROCK_ENABLE_PROFILER=ON \
     -DTHEROCK_ENABLE_DC_TOOLS=ON \
     -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
-    cmake --build /app/TheRock/build --target therock-archives && \
+    cmake --build /app/TheRock/build --target therock-artifacts && \
     echo "CCache stats:" && ccache -s -v && \
     cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
 
 FROM base AS rocm_runtime
-ARG AMDGPU_BUNDLE_NAME
 COPY docker/rocm_runtime_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
-    ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
 # Install amdsmi Python module
 RUN cd /opt/rocm/share/amd_smi && \
     pip install --no-cache-dir .
@@ -271,13 +274,13 @@ ENV PATH="/opt/rocm/bin:$PATH" \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
 
 FROM rocm_runtime AS rocm_devel
-ARG AMDGPU_BUNDLE_NAME
 COPY docker/rocm_devel_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
-    ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
 RUN ldconfig
 ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
@@ -412,21 +415,15 @@ RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-
 
 FROM rocm_runtime AS core_runtime
 ARG AITER_COMMIT
-ARG AMDGPU_BUNDLE_NAME
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
 # AITER JIT: install dev artifacts required for runtime kernel compilation
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten \
-    "${A}/base_dev_generic.tar.xz" \
-    "${A}/core-hip_dev_generic.tar.xz" \
-    "${A}/core-runtime_dev_generic.tar.xz" \
-    "${A}/blas_dev_${T}.tar.xz" \
-    "${A}/prim_dev_${T}.tar.xz" \
-    "${A}/rand_dev_${T}.tar.xz" \
-    -o "${O}"
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" \
+        base_dev core-hip_dev core-runtime_dev blas_dev prim_dev rand_dev
 # torchcodec: install FFmpeg and runtime dependencies
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
@@ -462,15 +459,15 @@ RUN git clone https://github.com/ROCm/aiter.git && \
 RUN rm -fr /patches
 
 FROM core_runtime AS core
-ARG AMDGPU_BUNDLE_NAME
 # Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
 # archives are re-extracted idempotently). Uses the same manifest as rocm_devel.
 COPY docker/rocm_devel_artifacts.txt /tmp/
 RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     set -eu; \
-    A="/app/TheRock/artifacts"; T="${AMDGPU_BUNDLE_NAME}"; O="/opt/rocm"; \
-    ARGS=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | sed "s/BUNDLE/${T}/g; s|^|${A}/|" | tr '\n' ' '); \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten ${ARGS} -o "${O}"
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
 RUN ldconfig
 ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
