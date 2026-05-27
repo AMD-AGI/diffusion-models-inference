@@ -450,11 +450,16 @@ ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
 # install aiter
 WORKDIR /app/external
 COPY ./src/patches /patches
-RUN pip install pandas
+# Keep the Triton wheel we built from TRITON_COMMIT against our PyTorch; otherwise
+# AITER's setup.py would uninstall it and pull a wheel from pypi.amd.com (see
+# https://github.com/ROCm/aiter/pull/3161). No-op on AITER_COMMIT pins predating
+# that PR, but safe and forward-compatible.
+ENV AITER_USE_SYSTEM_TRITON=1
 RUN git clone https://github.com/ROCm/aiter.git && \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
     git submodule update --init --recursive && \
+    pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
 RUN rm -fr /patches
 
