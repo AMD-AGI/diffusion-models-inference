@@ -1,0 +1,65 @@
+# Git metadata
+# Matches the top-level .git/ directory and the .git pointer file inside
+# submodules (e.g. references/.git). The submodule's actual history lives in
+# .git/modules/<name>/ which is excluded by the .git/ match above.
+**/.git
+**/.gitignore
+**/.gitattributes
+.gitmodules
+
+# CI / IDE / editor metadata not needed in images
+.github/
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python build artifacts and caches
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+develop-eggs/
+downloads/
+sdist/
+wheels/
+.installed.cfg
+.Python
+
+# Test / lint / type-check caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Joblib
+*.joblib
+
+# Local run outputs and logs
+outputs/
+outputs-*/
+logs/
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
