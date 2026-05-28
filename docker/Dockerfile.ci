@@ -449,7 +449,6 @@ ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
     KINETO_CONFIG="/config/libkineto.conf"
 # install aiter
 WORKDIR /app/external
-COPY ./src/patches /patches
 # Keep the Triton wheel we built from TRITON_COMMIT against our PyTorch; otherwise
 # AITER's setup.py would uninstall it and pull a wheel from pypi.amd.com (see
 # https://github.com/ROCm/aiter/pull/3161). No-op on AITER_COMMIT pins predating
@@ -461,7 +460,6 @@ RUN git clone https://github.com/ROCm/aiter.git && \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
-RUN rm -fr /patches
 
 FROM core_runtime AS core
 # Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
