@@ -37,7 +37,6 @@ ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
 ARG AITER_COMMIT="3a5261496c591b4fd7cf280d35d20dee713098fd"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
-ARG ACCELERATE_COMMIT="46ba4818cca2103195d7b953779c63ee4027ce61"
 ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
 ARG XDIT_COMMIT="0cf942150b19698f728951389e457f2a5d671075"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
@@ -477,7 +476,6 @@ ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
-ARG ACCELERATE_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG AO_COMMIT
@@ -503,11 +501,6 @@ RUN git clone https://github.com/huggingface/diffusers.git && \
     pip install -e ".[torch]" && \
     rm scripts/convert_vq_diffusion_to_diffusers.py && \
     pip install --no-cache-dir "ftfy"
-# install accelerate
-RUN git clone https://github.com/huggingface/accelerate.git && \
-    cd accelerate && \
-    git reset --hard ${ACCELERATE_COMMIT} && \
-    pip install -e .
 # install torchao
 RUN git clone https://github.com/pytorch/ao.git && \
     cd ao && \
