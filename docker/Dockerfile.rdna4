@@ -1,0 +1,166 @@
+# Build example image with
+#
+# docker build -f docker/Dockerfile.rdna4 \
+#              -t pytorch_xdit_rdna4 .
+#
+# when running from repository root.
+#
+# ROCm/PyTorch image for xDiT benchmarks on gfx1201 (RDNA4).
+#
+# Built on top of the official AMD `rocm/pytorch` image, which already ships
+# a properly installed `/opt/rocm` (real binaries, no pip-wheel launcher
+# stubs) and a vetted PyTorch + ROCm + Triton stack. We just layer the
+# benchmark-specific Python deps on top.
+#
+# Why no PIP_CONSTRAINT for torch?
+#   The base image's torch is `2.10.0+rocm7.2.3.lw.git...`. Public PyPI's
+#   latest is `2.12.0` (CUDA). Pip's resolver, when running editable
+#   installs (`pip install -e .`), eagerly upgrades any dep whose public
+#   version is below the latest available — pulling CUDA torch from PyPI
+#   and silently swapping out the ROCm wheel. A `==2.10.0` constraint
+#   doesn't help: pip happily satisfies it with PyPI's 2.10.0 (also CUDA).
+#   A `==2.10.0+rocm7.2.3.lw.git...` constraint doesn't help either: pip
+#   can't find that exact local version on any index and fails resolution.
+#   The only reliable fix is `--no-deps` on every editable install, with
+#   transitive deps pre-installed via plain `pip install` (which honors
+#   "already installed satisfies").
+
+ARG AITER_COMMIT="d47e4e6348b27df7871d2a7808325110b755effc"
+ARG LONGCONTEXTATTENTION_COMMIT="56118e0d8fe377d43441226dd8bdd07135c92c22"
+ARG DIFFUSERS_COMMIT="4b3dd3804274f37ee5d357e2d46d8161225e1580"
+ARG ARBITER_COMMIT="656b6689bdaea4f17afe7387f2d9f36e10867e32"
+ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
+ARG XDIT_COMMIT="6b9aec64e326ca7a19febc42a20c28c15d1412c5"
+
+ARG BASE_IMAGE="rocm/pytorch:rocm7.2.3_ubuntu24.04_py3.12_pytorch_release_2.10.0"
+
+FROM --platform=linux/amd64 ${BASE_IMAGE} AS core
+
+# Sanity check: the base image really did give us ROCm torch.
+RUN python -c "import torch; v=torch.__version__; print('base torch:', v); assert 'rocm' in v.lower(), v"
+
+FROM core AS deps
+
+ARG AITER_COMMIT
+ARG LONGCONTEXTATTENTION_COMMIT
+ARG DIFFUSERS_COMMIT
+ARG ARBITER_COMMIT
+ARG DISTVAE_COMMIT
+ARG XDIT_COMMIT
+
+# FlyDSL — pure-Python wheel from PyPI, has its own embedded MLIR runtime.
+RUN pip install --no-cache-dir flydsl && \
+    python -c "import torch; assert 'rocm' in torch.__version__.lower()"
+
+# Pre-install every transitive runtime dep our editable packages will need.
+# These are plain (non-editable) installs from PyPI; pip leaves the already-
+# installed ROCm torch alone because it satisfies every floor (>=2.0 / 2.4).
+# Doing this in one resolver pass is much faster than a dozen separate ones.
+RUN pip install --no-cache-dir \
+        accelerate \
+        ftfy \
+        huggingface_hub \
+        hf-xet \
+        peft \
+        requests \
+        safetensors \
+        "transformers[sentencepiece]" \
+        av \
+        beautifulsoup4 \
+        einops \
+        imageio \
+        imageio-ffmpeg \
+        numba \
+        psutil \
+        pybind11 \
+        lightning-utilities \
+        llvmlite \
+        opencv-python-headless \
+        piq \
+        tabulate \
+        timm \
+        torch-fidelity \
+        torchmetrics \
+        vmaf-torch \
+        optimum-quanto \
+        torchao \
+        yuvio && \
+    python -c "import torch; v=torch.__version__; print('after deps:', v); assert 'rocm' in v.lower(), v"
+
+WORKDIR /app/external
+
+# Prevent AITER from replacing the base image's Triton with an incompatible version.
+ENV AITER_USE_SYSTEM_TRITON=1
+
+# aiter — ROCm attention kernels (FlyDSL flash_attn_func for gfx1201).
+# Includes PR #2621 (gfx1200/gfx1201 FP8 support).
+RUN git clone https://github.com/ROCm/aiter.git && \
+    cd aiter && \
+    git reset --hard ${AITER_COMMIT} && \
+    git submodule update --init --recursive && \
+    pip install --no-cache-dir --no-build-isolation --no-deps -e . && \
+    python -c "import torch; assert 'rocm' in torch.__version__.lower()"
+
+# long-context-attention (yunchang) — sequence parallelism primitive.
+RUN git clone https://github.com/feifeibear/long-context-attention.git && \
+    cd long-context-attention && \
+    git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
+    pip install --no-cache-dir --no-build-isolation --no-deps -e . && \
+    python -c "import torch; assert 'rocm' in torch.__version__.lower()"
+
+# diffusers — needs newer features than the latest PyPI release.
+# final rm step is needed presently to pass a release process image scan
+RUN git clone https://github.com/huggingface/diffusers.git && \
+    cd diffusers && \
+    git reset --hard ${DIFFUSERS_COMMIT} && \
+    pip install --no-cache-dir --no-deps -e . && \
+    rm scripts/convert_vq_diffusion_to_diffusers.py && \
+    python -c "import torch; assert 'rocm' in torch.__version__.lower()"
+
+# arbiter — image quality eval. Drops incompatible deps via pyproject patch.
+RUN git clone https://github.com/fal-ai/arbiter.git && \
+    cd arbiter && \
+    git reset --hard ${ARBITER_COMMIT} && \
+    # too strict torch version, drop dependency
+    sed -i '/numpy/d' pyproject.toml && \
+    # the requested pyiqa version depends on transformers==4.37.2 which we cannot use
+    sed -i '/pyiqa/d' pyproject.toml && \
+    # numba dependency is not used
+    sed -i '/numba/d' pyproject.toml && \
+    # facexlib is not used
+    sed -i '/facexlib/d' pyproject.toml && \
+    # drop llvmlite
+    sed -i '/llvmlite/d' pyproject.toml && \
+    pip install --no-cache-dir --no-deps -e .
+
+# DistVAE — distributed VAE decode for video models.
+RUN git clone https://github.com/xdit-project/DistVAE.git && \
+    cd DistVAE && \
+    git reset --hard ${DISTVAE_COMMIT} && \
+    pip install --no-cache-dir --no-deps -e .
+
+# xDiT — official upstream.
+WORKDIR /app
+RUN git clone https://github.com/xdit-project/xDiT.git && \
+    cd xDiT && \
+    git reset --hard ${XDIT_COMMIT} && \
+    echo "xDiT built from $(git rev-parse HEAD)" && \
+    pip install --no-cache-dir --no-deps -e . && \
+    python -c "import torch; v=torch.__version__; print('final torch:', v); assert 'rocm' in v.lower(), v" && \
+    python -c "import flydsl, diffusers, transformers, accelerate; print('cpu imports OK')"
+
+FROM deps AS final
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    less \
+    nano \
+    vim && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+# copy assets
+COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+# copy CI prerequisites
+COPY .ci/run.py /app/.ci/run.py
+COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
+COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py

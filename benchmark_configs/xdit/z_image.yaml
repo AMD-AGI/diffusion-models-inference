@@ -45,3 +45,62 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+
+- name: z_image.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Tongyi-MAI/Z-Image
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A crowded beach
+    height: 1088
+    width: 1920
+    num_inference_steps: 50
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter_flydsl
+    use_torch_compile: true
+    enable_tiling: true
+    enable_slicing: true
+    use_fp8_gemms: true
+
+- name: z_image.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Tongyi-MAI/Z-Image
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A crowded beach
+    height: 1088
+    width: 1920
+    num_inference_steps: 50
+    warmup_calls: 1
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter_flydsl
+    ulysses_degree: 2
+    ring_degree: 1
+    use_torch_compile: true
+    enable_tiling: true
+    enable_slicing: true
+    use_fp8_gemms: true
+
+- name: z_image.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Tongyi-MAI/Z-Image
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A crowded beach
+    height: 1088
+    width: 1920
+    num_inference_steps: 50
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter_flydsl
+    ulysses_degree: 4
+    ring_degree: 1
+    use_torch_compile: true
+    enable_tiling: true
+    enable_slicing: true
+    use_fp8_gemms: true

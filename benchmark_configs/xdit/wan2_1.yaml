@@ -54,3 +54,53 @@
     num_inference_steps: 40
     use_torch_compile: True
     attention_backend: cudnn
+
+- name: wan2_1.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
+  runner: xdit
+  args:
+    prompt: "Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside."
+    height: 720
+    width: 1280
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    ulysses_degree: 2
+    ring_degree: 1
+    fully_shard_degree: 2
+    memory_efficient_sharding: true
+    use_parallel_vae: true
+    guidance_scale: 3.0
+    seed: 123456
+    num_iterations: 1
+    num_inference_steps: 40
+    use_torch_compile: true
+    attention_backend: aiter_flydsl
+    enable_tiling: true
+    enable_slicing: true
+    use_fp8_gemms: true
+
+- name: wan2_1.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
+  runner: xdit
+  args:
+    prompt: "Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside."
+    height: 720
+    width: 1280
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    ulysses_degree: 4
+    ring_degree: 1
+    fully_shard_degree: 4
+    memory_efficient_sharding: true
+    use_parallel_vae: true
+    guidance_scale: 3.0
+    seed: 123456
+    num_iterations: 1
+    num_inference_steps: 40
+    use_torch_compile: true
+    attention_backend: aiter_flydsl
+    enable_tiling: true
+    enable_slicing: true
+    use_fp8_gemms: true

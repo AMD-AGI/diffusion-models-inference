@@ -613,3 +613,420 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+
+- name: flux2.i2i_1k.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 1
+    ring_degree: 1
+    enable_sequential_cpu_offload: true
+    # re-evaluate use_fp8_gemms when benchmarking
+
+- name: flux2.i2i_1k.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 256
+    warmup_calls: 1
+    num_iterations: 1
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 2
+    ring_degree: 1
+    fully_shard_degree: 2
+    memory_efficient_sharding: true
+    use_torch_compile: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.i2i_1k.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 4
+    ring_degree: 1
+    fully_shard_degree: 4
+    memory_efficient_sharding: true
+    use_torch_compile: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.t2i_1k.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 1
+    ring_degree: 1
+    enable_sequential_cpu_offload: true
+    # re-evaluate use_fp8_gemms when benchmarking
+
+- name: flux2.t2i_1k.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 256
+    warmup_calls: 1
+    num_iterations: 1
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 2
+    ring_degree: 1
+    fully_shard_degree: 2
+    memory_efficient_sharding: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.t2i_1k.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 4
+    ring_degree: 1
+    fully_shard_degree: 4
+    memory_efficient_sharding: true
+    use_torch_compile: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.multi_1k.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 1
+    ring_degree: 1
+    enable_sequential_cpu_offload: true
+    # re-evaluate use_fp8_gemms when benchmarking
+
+- name: flux2.multi_1k.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 2
+    ring_degree: 1
+    fully_shard_degree: 2
+    memory_efficient_sharding: true
+    use_torch_compile: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.multi_1k.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 1024
+    width: 1024
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 4
+    ring_degree: 1
+    fully_shard_degree: 4
+    memory_efficient_sharding: true
+    use_torch_compile: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.i2i_2k.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 1
+    ring_degree: 1
+    enable_sequential_cpu_offload: true
+    enable_tiling: true
+    # re-evaluate use_fp8_gemms when benchmarking
+
+- name: flux2.i2i_2k.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 2
+    ring_degree: 1
+    fully_shard_degree: 2
+    memory_efficient_sharding: true
+    use_torch_compile: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.i2i_2k.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 4
+    ring_degree: 1
+    fully_shard_degree: 4
+    memory_efficient_sharding: true
+    use_torch_compile: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.t2i_2k.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 1
+    ring_degree: 1
+    enable_sequential_cpu_offload: true
+    enable_tiling: true
+    # re-evaluate use_fp8_gemms when benchmarking
+
+# NOTE: requires PYTORCH_HIP_ALLOC_CONF=expandable_segments:True to run successfully
+- name: flux2.t2i_2k.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 2
+    ring_degree: 1
+    fully_shard_degree: 2
+    memory_efficient_sharding: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.t2i_2k.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of moon
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    ulysses_degree: 4
+    ring_degree: 1
+    fully_shard_degree: 4
+    memory_efficient_sharding: true
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    enable_tiling: true
+
+- name: flux2.multi_2k.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 1
+    ring_degree: 1
+    enable_sequential_cpu_offload: true
+    enable_tiling: true
+    # re-evaluate use_fp8_gemms when benchmarking
+
+- name: flux2.multi_2k.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    ulysses_degree: 2
+    ring_degree: 1
+    fully_shard_degree: 2
+    memory_efficient_sharding: true
+    enable_tiling: true
+    use_fp8_gemms: true
+
+- name: flux2.multi_2k.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: the cat from image 1 has the same expression as cat on image 2
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    max_sequence_length: 512
+    warmup_calls: 1
+    num_iterations: 1
+    ulysses_degree: 4
+    ring_degree: 1
+    fully_shard_degree: 4
+    memory_efficient_sharding: true
+    input_images:
+      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
+    guidance_scale: 4.0
+    attention_backend: aiter_flydsl
+    enable_tiling: true

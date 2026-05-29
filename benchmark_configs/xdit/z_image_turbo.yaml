@@ -1,0 +1,54 @@
+- name: z_image_turbo.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Tongyi-MAI/Z-Image-Turbo
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 512
+    width: 320
+    num_inference_steps: 4
+    warmup_calls: 1
+    ulysses_degree: 1
+    ring_degree: 1
+    guidance_scale: 0.0
+    num_iterations: 1
+    attention_backend: aiter_flydsl
+    use_torch_compile: true
+
+- name: z_image_turbo.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Tongyi-MAI/Z-Image-Turbo
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 512
+    width: 320
+    num_inference_steps: 4
+    warmup_calls: 1
+    ulysses_degree: 2
+    ring_degree: 1
+    guidance_scale: 0.0
+    num_iterations: 1
+    attention_backend: aiter_flydsl
+    enable_tiling: true
+    enable_slicing: true
+
+- name: z_image_turbo.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Tongyi-MAI/Z-Image-Turbo
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 512
+    width: 320
+    num_inference_steps: 4
+    warmup_calls: 1
+    ulysses_degree: 2
+    ring_degree: 2
+    guidance_scale: 0.0
+    num_iterations: 1
+    attention_backend: aiter_flydsl
+    use_torch_compile: true
