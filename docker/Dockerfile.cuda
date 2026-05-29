@@ -98,8 +98,7 @@ RUN pip install --no-cache-dir setuptools_git_versioning scikit-build patchelf &
     git clone --recursive https://github.com/meta-pytorch/MSLK.git && \
     cd MSLK && \
     git reset --hard ${MSLK_COMMIT} && \
-    TORCH_CUDA_ARCH_LIST="10.0" python3 setup.py install && \
-    cd .. && rm -rf MSLK
+    TORCH_CUDA_ARCH_LIST="9.0a 10.0" python3 setup.py install
 # install distvae
 RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
@@ -115,6 +114,7 @@ WORKDIR /app
 RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
+    git apply /patches-private/xfuser.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # cleanup
