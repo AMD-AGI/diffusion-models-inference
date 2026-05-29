@@ -17,15 +17,17 @@ import subprocess
 import numpy as np
 import pandas as pd
 
-from huggingface_hub import snapshot_download, scan_cache_dir
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+from huggingface_hub import snapshot_download, scan_cache_dir, DryRunFileInfo
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.propagate = False
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter(
+    fmt='%(asctime)s - %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+))
+logger.addHandler(_handler)
 
 # Models whose YAML "model" field is a registered alias (not a real HF repo ID)
 # and which pull weights from multiple underlying HF repos at load time.
@@ -206,18 +208,32 @@ def _model_in_cache(model: str, revision: Optional[str] = None) -> bool:
         logger.warning("Could not scan cache for %s: %s", model, e)
         return False
 
+def _report_download_dry_run_statistics(result: List[DryRunFileInfo]) -> None:
+    n_downloaded_files = sum(1 for dryrun_info in result if dryrun_info.will_download)
+    download_size_bytes = sum(dryrun_info.file_size for dryrun_info in result if dryrun_info.will_download)
+    download_size_gigabytes = download_size_bytes // (1024 ** 3)
+    n_skipped_files = sum(1 for dryrun_info in result if not dryrun_info.will_download)
+    logger.info(f"[dry-run] Would have downloaded {n_downloaded_files} files with total size {download_size_gigabytes} GB.")
+    logger.info(f"[dry-run] Would have skipped downloading {n_skipped_files} files.")
 
 def _download_model(model: str, revision: Optional[str] = None, dry_run: bool = False) -> None:
     """
     Attempts to download a model from HuggingFace Hub. Skips download if already cached.
     """
-    if dry_run: # TODO using dry_run with snapshot_download requires huggingface_hub => 1.0 but version < 1.0 is needed for transformers 4.57.3
-        logger.info(f"[dry-run] Skipping download of model: {model}")
-        return
-
     logger.info(f"Downloading model: {model}")
-    cache_dir = snapshot_download(repo_id=model, revision=revision)
-    logger.info(f"Model {model} is stored in {cache_dir}.")
+    try:
+        cache_dir_or_dry_run_info = snapshot_download(repo_id=model, revision=revision, dry_run=dry_run)
+    finally:
+        # tqdm progress bars from huggingface_hub leave the cursor on a partially
+        # written stderr line (no trailing '\n'), which causes the next log
+        # record to render on the same line. Flush a newline so subsequent
+        # log output starts cleanly.
+        sys.stderr.write("\n")
+        sys.stderr.flush()
+    if not isinstance(cache_dir_or_dry_run_info, list):
+        logger.info(f"Model {model} is stored in {cache_dir_or_dry_run_info}.")
+    else:
+        _report_download_dry_run_statistics(cache_dir_or_dry_run_info)
 
 
 def _delete_model_cache(model: str, revision: Optional[str] = None, dry_run: bool = False) -> None:
