@@ -1,0 +1,10 @@
+--- a/torch/_dynamo/utils.py
++++ b/torch/_dynamo/utils.py
+@@ -1649,6 +1649,7 @@
+             "_autograd_backward_strict_mode_banned_ops",
+             "reorderable_logging_functions",
+             "ignore_logger_methods",
++            "ignore_logging_functions",
+             "traceable_tensor_subclasses",
+             "nontraceable_tensor_subclasses",
+             "_custom_ops_profile",

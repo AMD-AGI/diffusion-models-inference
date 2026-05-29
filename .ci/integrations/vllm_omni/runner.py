@@ -80,6 +80,27 @@ def parse_args() -> argparse.Namespace:
         help="The Ulysses degree to run",
     )
     parser.add_argument(
+        "--ring_degree",
+        type=int,
+        required=False,
+        default=1,
+        help="The ring degree for ring sequence parallelism",
+    )
+    parser.add_argument(
+        "--use_cfg_parallel",
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to use CFG parallelism",
+    )
+    parser.add_argument(
+        "--use_parallel_vae",
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to use VAE patch parallelism",
+    )
+    parser.add_argument(
         "--output-directory",
         type=str,
         required=True,
@@ -161,13 +182,13 @@ def run_omni(omni, generation_args, sampling_params):
     return output
 
 def save_output(output, elapsed_times, args):
+    os.makedirs(args.output_directory, exist_ok=True)
     json.dump(elapsed_times, open(os.path.join(args.output_directory, "timings.json"), "w"))
     if not output or len(output) == 0:
         raise ValueError("No output generated from omni.generate()")
 
     first_output = output[0]
-    req_out = first_output.request_output[0]
-    data = req_out.images[0]
+    data = first_output.images[0]
 
     if isinstance(data, Image.Image):
         image = data
@@ -205,7 +226,7 @@ def save_output(output, elapsed_times, args):
 
         video_name = f"output.mp4"
         video_path = os.path.join(args.output_directory, video_name)
-        export_to_video(video_array, video_path, fps=24)
+        export_to_video(video_array, video_path, fps=16)
         print(f"Saved video to {video_path}")
 
 
@@ -217,7 +238,25 @@ def main():
 
     parallel_config = DiffusionParallelConfig(
         ulysses_degree=args.ulysses_degree,
+        ring_degree=args.ring_degree,
+        cfg_parallel_size=2 if args.use_cfg_parallel else 1,
+        vae_patch_parallel_size=(
+            args.ulysses_degree * args.ring_degree * (2 if args.use_cfg_parallel else 1)
+            if args.use_parallel_vae else 1
+        ),
     )
+
+    profiler_config = None
+    if args.profile:
+        profile_dir = os.environ.get("VLLM_TORCH_PROFILER_DIR")
+        if profile_dir is None:
+            raise ValueError("VLLM_TORCH_PROFILER_DIR environment variable is not set")
+        profiler_config = {
+            "profiler": "torch",
+            "torch_profiler_dir": profile_dir,
+            "torch_profiler_with_stack": False,
+            "torch_profiler_record_shapes": True,
+        }
 
     omni = Omni(
         model=args.model,
@@ -225,6 +264,7 @@ def main():
         vae_use_tiling=args.enable_tiling,
         parallel_config=parallel_config,
         enforce_eager=not args.use_torch_compile,
+        profiler_config=profiler_config,
     )
 
     generation_args = {
@@ -262,10 +302,7 @@ def main():
     print(" ======================== Warmup / compilation complete ========================")
 
     if args.profile:
-        profile_dir = os.environ.get("VLLM_TORCH_PROFILER_DIR")
-        if profile_dir is None:
-            raise ValueError("VLLM_TORCH_PROFILER_DIR environment variable is not set")
-        print(f" ======================== Starting profile in {profile_dir}... ========================")
+        print(f" ======================== Starting profile in {profiler_config['torch_profiler_dir']}... ========================")
         omni.start_profile()
 
     elapsed_times = []
