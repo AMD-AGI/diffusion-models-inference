@@ -47,7 +47,6 @@ runs:
           --ipc=host \
           --network host \
           --rm \
-          --privileged \
           --shm-size 128G \
           --name miopen-tune \
           --mount type=bind,src="$(pwd)",dst=/app/diffusion-models-inference \

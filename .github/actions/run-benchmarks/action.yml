@@ -111,7 +111,6 @@ runs:
           --ipc=host \
           --network host \
           --rm \
-          --privileged \
           --shm-size 128G \
           --name xdit-bench \
           --mount type=bind,src="$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH",dst=/outputs \
