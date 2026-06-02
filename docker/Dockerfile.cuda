@@ -18,6 +18,10 @@ ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.04-py3
 FROM ${BASE_IMAGE} AS core
+ARG FLASHATTENTION_COMMIT
+ARG FLEX_BLOCK_ATTENTION_COMMIT
+ARG MSLK_COMMIT
+ARG SAGEATTENTION_COMMIT
 
 # For ImportError: libGL.so.1: cannot open shared object file on nvcr.io/nvidia/pytorch:25.06-py3
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,23 +30,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-FROM core AS deps
-ARG FLASHATTENTION_COMMIT
-ARG LONGCONTEXTATTENTION_COMMIT
-ARG DIFFUSERS_COMMIT
-ARG DISTVAE_COMMIT
-ARG XDIT_COMMIT
-ARG MSLK_COMMIT
-ARG FLEX_BLOCK_ATTENTION_COMMIT
-
 # On aarch64 hosts (e.g. GB300 / Grace-Blackwell) the flash-attention hopper and
 # cute builds OOM without limiting parallelism. x86 hosts keep the default.
 ARG FLASH_ATTN_MAX_JOBS_AARCH64=32
 
 # setup
 WORKDIR /app/external
-COPY src/patches /patches
-COPY src/patches-private /patches-private
+
 # install flash-attention
 RUN pip uninstall -y flash_attn && \
     git clone https://github.com/Dao-AILab/flash-attention.git && \
@@ -52,6 +46,14 @@ RUN pip uninstall -y flash_attn && \
     python setup.py install && \
     (cd hopper && python setup.py install) && \
     (cd flash_attn/cute && pip install -e .)
+
+# install mslk from source (pip wheels are ABI-incompatible with NGC PyTorch)
+RUN pip install --no-cache-dir setuptools_git_versioning scikit-build patchelf && \
+    git clone --recursive https://github.com/meta-pytorch/MSLK.git && \
+    cd MSLK && \
+    git reset --hard ${MSLK_COMMIT} && \
+    TORCH_CUDA_ARCH_LIST="9.0a 10.0" python3 setup.py install
+
 # install flex-block-attention
 # flex-block-attn (built on ThunderKittens) is Hopper-only: it hardcodes
 # target=h100 / sm_90a and uses wgmma/TMA intrinsics that are not
@@ -62,7 +64,8 @@ RUN pip uninstall -y flash_attn && \
 # aarch64 (where char is unsigned by ABI) into char2's signed char members
 # and is rejected by C++11 brace-initialization. So gating here avoids a
 # hard compile-time failure on Grace in addition to building dead kernels.
-RUN if [ "$(uname -m)" = "aarch64" ]; then \
+RUN --mount=type=bind,source=src/patches/flex_block_attn_setup.patch,target=/patches/flex_block_attn_setup.patch \
+    if [ "$(uname -m)" = "aarch64" ]; then \
         echo "Skipping flex-block-attn install on aarch64 (Hopper-only kernels)"; \
     else \
         git clone https://github.com/Tencent-Hunyuan/flex-block-attn.git && \
@@ -72,6 +75,22 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
         git apply /patches/flex_block_attn_setup.patch && \
         python setup.py install; \
     fi
+
+# install sageattention
+RUN git clone https://github.com/thu-ml/SageAttention.git && \
+    cd SageAttention && \
+    git reset --hard ${SAGEATTENTION_COMMIT} && \
+    TORCH_CUDA_ARCH_LIST="9.0" python3 setup.py install
+
+FROM core AS deps
+ARG LONGCONTEXTATTENTION_COMMIT
+ARG DIFFUSERS_COMMIT
+ARG DISTVAE_COMMIT
+ARG XDIT_COMMIT
+
+# setup
+WORKDIR /app/external
+
 # install yunchang
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
@@ -86,33 +105,20 @@ RUN git clone https://github.com/huggingface/diffusers.git && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
     pip install -e ".[torch]" && \
     pip install --no-cache-dir "ftfy"
-# install mslk from source (pip wheels are ABI-incompatible with NGC PyTorch)
-RUN pip install --no-cache-dir setuptools_git_versioning scikit-build patchelf && \
-    git clone --recursive https://github.com/meta-pytorch/MSLK.git && \
-    cd MSLK && \
-    git reset --hard ${MSLK_COMMIT} && \
-    TORCH_CUDA_ARCH_LIST="9.0a 10.0" python3 setup.py install
 # install distvae
 RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
     git reset --hard ${DISTVAE_COMMIT} && \
     pip install -e .
-# install sageattention
-RUN git clone https://github.com/thu-ml/SageAttention.git && \
-    cd SageAttention && \
-    git reset --hard ${SAGEATTENTION_COMMIT} && \
-    TORCH_CUDA_ARCH_LIST="9.0" python3 setup.py install
 # install xfuser
 WORKDIR /app
-RUN git clone https://github.com/xdit-project/xDiT.git && \
+RUN --mount=type=bind,source=src/patches-private/xfuser.patch,target=/patches-private/xfuser.patch \
+    git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches-private/xfuser.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
-# cleanup
-RUN rm -fr /patches
-RUN rm -fr /patches-private
 
 FROM deps AS final
 
