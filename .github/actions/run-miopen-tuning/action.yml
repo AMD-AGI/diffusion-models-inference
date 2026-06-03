@@ -38,14 +38,9 @@ runs:
       run: |
         rm -f .tuning_successful
         docker run \
-          --cap-add=SYS_PTRACE \
           --security-opt seccomp=unconfined \
-          --user root \
           --device=/dev/kfd \
           --device=/dev/dri \
-          --group-add video \
-          --ipc=host \
-          --network host \
           --rm \
           --shm-size 128G \
           --name miopen-tune \
