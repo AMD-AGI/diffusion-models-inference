@@ -1,9 +1,10 @@
-ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.4"
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.6"
 FROM ${BASE_IMAGE}
 
-ARG VLLM_COMMIT="2d5be1d" # v0.16.0
-ARG SGL_COMMIT="9b0c470" # v0.5.10rc0
-ARG AMDGPU_TARGET="gfx942"
+ARG VLLM_COMMIT="ad7125a" # v0.21.0
+ARG SGL_COMMIT="127b9e3" # v0.5.12
+ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
+ARG AMDGPU_TARGET="gfx950"
 
 WORKDIR /app/external
 # Install vLLM
@@ -15,9 +16,9 @@ RUN git clone https://github.com/vllm-project/vllm.git && \
     PYTORCH_ROCM_ARCH="gfx942;gfx950" python3 setup.py develop
 
 # Install SGL
-RUN git clone https://github.com/sgl-project/sglang.git && \
+RUN git clone ${SGL_REPO} sglang && \
     cd sglang && \
-    git reset --hard ${SGL_COMMIT} && \
+    git checkout ${SGL_COMMIT} && \
     cd sgl-kernel && \
     AMDGPU_TARGET="$AMDGPU_TARGET" python3 setup_rocm.py install && \
     cd .. && \
@@ -32,7 +33,9 @@ RUN git clone https://github.com/sgl-project/sglang.git && \
     pip install --no-cache-dir -e "python[all_hip,diffusion]"
 
 # Other dependencies
-RUN pip3 install remote_pdb imageio
+RUN pip3 install remote_pdb imageio && \
+    pip3 uninstall torch_c_dlpack_ext -y
+
 
 # Envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"

@@ -1,5 +1,17 @@
-ARG BASE_IMAGE="lmsysorg/sglang:v0.5.10rc0"
+ARG BASE_IMAGE="lmsysorg/sglang:v0.5.12"
 FROM ${BASE_IMAGE}
+
+ARG SGL_REPO=""
+ARG SGL_COMMIT=""
+
+# Optionally reinstall SGL from a custom repo/commit
+RUN if [ -n "${SGL_REPO}" ]; then \
+        pip uninstall -y sglang && \
+        git clone ${SGL_REPO} /app/sglang && \
+        cd /app/sglang && \
+        if [ -n "${SGL_COMMIT}" ]; then git checkout ${SGL_COMMIT}; fi && \
+        pip install --no-cache-dir -e "python[diffusion]"; \
+    fi
 
 # Envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"

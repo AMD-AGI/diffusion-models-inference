@@ -175,8 +175,44 @@ def parse_args() -> argparse.Namespace:
         choices=["cli", "api"],
         help="Whether to run through CLI or API",
     )
+    parser.add_argument(
+        "--use_hybrid_attn_schedule",
+        required=False,
+        action="store_true",
+        help="Whether to use hybrid attention or not"
+    )
+    parser.add_argument(
+        "--hybrid_attn_high_precision_backend",
+        required=False,
+        default=None,
+        help="High precision backend to be used in hybrid attention"
+    )
+    parser.add_argument(
+        "--hybrid_attn_low_precision_backend",
+        required=False,
+        default=None,
+        help="Low precision backend to be used in hybrid attention"
+    )
+    parser.add_argument(
+        "--use_fp8_gemms",
+        required=False,
+        action="store_true",
+        help="Whether to use FP8 quantized GEMMs"
+    )
+    parser.add_argument(
+        "--use_fp4_gemms",
+        required=False,
+        action="store_true",
+        help="Whether to use MXFP4 quantized GEMMs"
+    )
+    parser.add_argument(
+        "--quantization_ignored_layers",
+        nargs="+",
+        required=False,
+        default=None,
+        help="Layer name patterns to keep unquantized (e.g. blocks.0 blocks.1)"
+    )
     return parser.parse_args()
-
 
 def run_sgld(generator, sampling_params):
     output = generator.generate(
@@ -258,6 +294,20 @@ def run_cli(args):
 
     if args.enable_tiling:
         cmd.append("--vae-tiling")
+
+    if args.use_hybrid_attn_schedule:
+        num_high_start_steps, num_high_end_steps = 5, 5 # TODO: configurable
+        hybrid_cmd_value = f"{args.hybrid_attn_high_precision_backend}:{args.hybrid_attn_low_precision_backend}:{num_high_start_steps}:{num_high_end_steps}"
+        cmd.extend(["--hybrid-attention-schedule", hybrid_cmd_value])
+
+    if args.use_fp8_gemms:
+        cmd.extend(["--quantization", "fp8"])
+
+    if args.use_fp4_gemms:
+        cmd.extend(["--quantization", "mxfp4"])
+
+    if args.quantization_ignored_layers:
+        cmd.extend(["--quantization-ignored-layers"] + args.quantization_ignored_layers)
 
     print(f"Running command: {' '.join(cmd)}")
 
