@@ -9,7 +9,7 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="64b9f0aeb10d41b16e18039600fe20783fdec898"
+ARG THEROCK_COMMIT="f6823a1859d0f5ffaea71fdcd5f310807d0e8ea7"
 ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
@@ -25,9 +25,9 @@ ARG AMDGPU_BUNDLE_NAME="gfx94X_gfx950_bundle"
 ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
 # Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
 # This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
-ARG ROCM_LIBRARIES_COMMIT_OVERRIDE="125f524a82fa99fe188b489b5a65eedf97560431"
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
 # Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
-ARG ROCM_SYSTEMS_COMMIT_OVERRIDE="444cadec35a8bfed2842f2fd519572c26e81dfcf"
+ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
 ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
 ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
 ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
