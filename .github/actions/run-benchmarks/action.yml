@@ -59,12 +59,16 @@ runs:
       run: |
         HF_CACHE_ARGS=""
         RUN_PY_FLAGS=""
-        if [ -n "$CACHE_PATHS" ]; then
+        if [ -n "$HF_CACHE_HOST_PATH" ] && [ -d "$HF_CACHE_HOST_PATH" ]; then
+          echo "HF cache (from HF_CACHE_HOST_PATH): $HF_CACHE_HOST_PATH"
+          HF_CACHE_ARGS="--mount type=bind,src=$HF_CACHE_HOST_PATH,dst=/hf_cache -e HF_HOME=/hf_cache"
+          RUN_PY_FLAGS="--no-clear-model-cache"
+        elif [ -n "$CACHE_PATHS" ]; then
           HOSTNAME=$(hostname)
           cache_path=$(echo "$CACHE_PATHS" | jq -r --arg host "$HOSTNAME" '.[$host] // empty')
           if [ -n "$cache_path" ]; then
             if [ -d "$cache_path" ]; then
-              echo "HF cache: $cache_path"
+              echo "HF cache (from hf_cache_map): $cache_path"
               HF_CACHE_ARGS="--mount type=bind,src=$cache_path,dst=/hf_cache -e HF_HOME=/hf_cache"
               RUN_PY_FLAGS="--no-clear-model-cache"
             else
