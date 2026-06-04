@@ -119,7 +119,8 @@ runs:
           -e BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS}" \
           "$DOCKER_IMAGE" \
           sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && \
-                 python3 /app/.ci/quality_check.py --reference-path /app/references --benchmark-output-path /outputs'
+                 python3 /app/.ci/quality_check.py --reference-path /app/references --benchmark-output-path /outputs; \
+                 amd-smi || rocm-smi || true'
     
     - name: Upload benchmark results
       if: always()

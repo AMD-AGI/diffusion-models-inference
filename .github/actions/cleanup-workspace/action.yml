@@ -50,9 +50,4 @@ runs:
         WORKSPACE: ${{ github.workspace }}
       run: |
         docker run --rm -v "${WORKSPACE}:/workspace" ubuntu:24.04 sh -c 'rm -rf /workspace/* /workspace/.??*' || true
-    
-    - name: Show GPU status
-      shell: bash
-      run: |
-        amd-smi || true
-        rocm-smi || true
+

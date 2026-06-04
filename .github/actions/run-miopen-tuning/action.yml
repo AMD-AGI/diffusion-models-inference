@@ -54,7 +54,7 @@ runs:
           -e MIOPEN_FIND_ENFORCE="$MIOPEN_FIND_ENFORCE" \
           -e HOST_UID=$(id -g) \
           "$DOCKER_IMAGE" \
-          bash -c "/app/diffusion-models-inference/data/miopen/tune.sh"
+          bash -c "/app/diffusion-models-inference/data/miopen/tune.sh; amd-smi || rocm-smi || true"
         if [ ! -f .tuning_successful ]; then
           exit 1
         fi
