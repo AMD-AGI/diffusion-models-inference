@@ -61,8 +61,6 @@ jobs:
     name: Build images
     runs-on: ${{ inputs.runner || 'build-only' }}
     timeout-minutes: 1440
-    env:
-      BUILDX_BUILDER_NAME: xdit-core-image-builder
     outputs:
       core_image_with_tag: ${{ steps.set_outputs.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.set_outputs.outputs.staging_image_with_tag }}
@@ -77,39 +75,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
           password: ${{ secrets.DOCKERHUB_OAT }}
-      
-      - name: Set up Docker Buildx with custom log size
-        uses: docker/setup-buildx-action@v4
-        with:
-          name: ${{ env.BUILDX_BUILDER_NAME }}
-          driver: docker-container
-          driver-opts: |
-            env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
-          buildkitd-config-inline: |
-            [worker.oci]
-              gc = true
-              [[worker.oci.gcpolicy]]
-                filters = ["type==exec.cachemount"]
-                keepDuration = "720h"
-                maxUsedSpace = "200GB"
-              [[worker.oci.gcpolicy]]
-                all = false
-                keepDuration = "1440h"
-                reservedSpace = "20GiB"
-                maxUsedSpace = "200GiB"
-                minFreeSpace = "200GiB"
-              [[worker.oci.gcpolicy]]
-                all = false
-                reservedSpace = "20GiB"
-                maxUsedSpace = "200GiB"
-                minFreeSpace = "200GiB"
-              [[worker.oci.gcpolicy]]
-                all = true
-                reservedSpace = "20GiB"
-                maxUsedSpace = "200GiB"
-                minFreeSpace = "200GiB"
-          use: true
-          cleanup: false
       
       - name: Determine images to build
         id: images
@@ -130,49 +95,52 @@ jobs:
       
       - name: Build core image
         if: ${{ steps.images.outputs.skip_core_build == 'false' }}
-        uses: docker/build-push-action@v7
         env:
           BUILDKIT_PROGRESS: plain
-        with:
-          builder: ${{ env.BUILDX_BUILDER_NAME }}
-          file: docker/Dockerfile.ci
-          context: .
-          target: core
-          push: true
-          pull: true
-          no-cache: ${{ inputs.disable_docker_cache }}
-          tags: ${{ steps.images.outputs.cache_source }}
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=min
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_STEP_LOG_MAX_SIZE: '104857600'
+          DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
+          CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
+        run: |
+          # Pull previous image for cache (may not exist for first build)
+          docker pull "${CACHE_IMAGE}" || true
+          
+          NO_CACHE_FLAG=""
+          if [ "${DISABLE_CACHE}" = "true" ]; then
+            NO_CACHE_FLAG="--no-cache"
+          fi
+          
+          docker build \
+            -f docker/Dockerfile.ci \
+            --target core \
+            --pull \
+            ${NO_CACHE_FLAG} \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --cache-from "${CACHE_IMAGE}" \
+            -t "${CACHE_IMAGE}" \
+            .
+          docker push "${CACHE_IMAGE}"
       
       - name: Pull prebuilt core image
         if: ${{ steps.images.outputs.skip_core_build == 'true' }}
         run: |
           docker pull ${{ steps.images.outputs.cache_source }}
-          docker buildx build --builder ${{ env.BUILDX_BUILDER_NAME }} --cache-from type=registry,ref=${{ steps.images.outputs.cache_source }} \
-            --cache-to type=local,dest=/tmp/.buildx-cache,mode=max \
-            --target core \
-            -f docker/Dockerfile.ci . || true
       
       - name: Build untuned image
         if: ${{ inputs.build_untuned_image }}
-        uses: docker/build-push-action@v7
         env:
           BUILDKIT_PROGRESS: plain
-        with:
-          builder: ${{ env.BUILDX_BUILDER_NAME }}
-          file: docker/Dockerfile.ci
-          context: .
-          push: true
-          tags: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-          cache-from: |
-            type=local,src=/tmp/.buildx-cache
-            type=registry,ref=${{ steps.images.outputs.cache_source }}
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=min
+          DOCKER_BUILDKIT: 1
+          CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
+          IMAGE_TAG: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
+        run: |
+          docker build \
+            -f docker/Dockerfile.ci \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --cache-from "${CACHE_IMAGE}" \
+            -t "${IMAGE_TAG}" \
+            .
+          docker push "${IMAGE_TAG}"
       
       - name: Set outputs
         id: set_outputs

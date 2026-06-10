@@ -52,8 +52,6 @@ jobs:
     name: Build image
     runs-on: ${{ inputs.runner || 'build-only' }}
     timeout-minutes: 1440
-    env:
-      BUILDX_BUILDER_NAME: xdit-nv-image-builder
     outputs:
       image_with_tag: ${{ steps.set_outputs.outputs.image_with_tag }}
     steps:
@@ -98,42 +96,52 @@ jobs:
           echo "Detected ${NPROC} cores on build host"
           echo "nproc=${NPROC}" >> $GITHUB_OUTPUT
       
-      - name: Set up QEMU
+      - name: Verify QEMU binfmt support for arm64
         if: ${{ inputs.platform == 'linux/arm64' }}
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
-      
-      - name: Set up Docker Buildx with custom log size
-        uses: docker/setup-buildx-action@v4
-        with:
-          name: ${{ env.BUILDX_BUILDER_NAME }}
-          driver: docker-container
-          driver-opts: |
-            env.BUILDKIT_STEP_LOG_MAX_SIZE=104857600
-          use: true
-          cleanup: false
+        run: |
+          if [ ! -f /host-binfmt_misc/qemu-aarch64 ]; then
+            echo "::error::QEMU binfmt handler for aarch64 is not registered on this host. " \
+                 "The host kernel must have qemu-user-static binfmt handlers pre-registered " \
+                 "for cross-platform builds to work in restricted DinD environments."
+            exit 1
+          fi
+          echo "QEMU aarch64 binfmt handler is available:"
+          cat /host-binfmt_misc/qemu-aarch64
       
       - name: Build NV image
-        uses: docker/build-push-action@v7
         env:
           BUILDKIT_PROGRESS: plain
-        with:
-          builder: ${{ env.BUILDX_BUILDER_NAME }}
-          file: docker/Dockerfile.cuda
-          context: .
-          platforms: ${{ inputs.platform }}
-          push: true
-          pull: true
-          no-cache: ${{ inputs.disable_docker_cache }}
-          tags: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-            ${{ inputs.platform == 'linux/arm64' && format('FLASH_ATTN_MAX_JOBS_AARCH64={0}', steps.cores.outputs.nproc) || '' }}
-          cache-from: |
-            type=local,src=/tmp/.buildx-cache-${{ inputs.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
-            type=registry,ref=${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
-          cache-to: type=local,dest=/tmp/.buildx-cache-${{ inputs.platform == 'linux/amd64' && 'amd64' || 'arm64' }},mode=min
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_STEP_LOG_MAX_SIZE: '104857600'
+          PLATFORM: ${{ inputs.platform }}
+          DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
+          IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
+        run: |
+          # Pull previous image for cache (may not exist for first build)
+          docker pull "${IMAGE_TAG}" || true
+          
+          NO_CACHE_FLAG=""
+          if [ "${DISABLE_CACHE}" = "true" ]; then
+            NO_CACHE_FLAG="--no-cache"
+          fi
+          
+          EXTRA_BUILD_ARGS=""
+          if [ "${PLATFORM}" = "linux/arm64" ] && [ -n "${FLASH_ATTN_NPROC}" ]; then
+            EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}"
+          fi
+          
+          docker build \
+            -f docker/Dockerfile.cuda \
+            --platform "${PLATFORM}" \
+            --pull \
+            ${NO_CACHE_FLAG} \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            ${EXTRA_BUILD_ARGS} \
+            --cache-from "${IMAGE_TAG}" \
+            -t "${IMAGE_TAG}" \
+            .
+          docker push "${IMAGE_TAG}"
       
       - name: Set outputs
         id: set_outputs
