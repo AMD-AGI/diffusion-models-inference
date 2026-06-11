@@ -38,7 +38,7 @@ ARG AITER_COMMIT="3a5261496c591b4fd7cf280d35d20dee713098fd"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
 ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
-ARG XDIT_COMMIT="0cf942150b19698f728951389e457f2a5d671075"
+ARG XDIT_COMMIT="3a1a475ae4d5c8da021a1e775b243540fa9e5059"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -533,7 +533,6 @@ WORKDIR /app
 RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/slow_fused_kernels_workaround.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute runtime dependencies
