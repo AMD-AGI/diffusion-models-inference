@@ -40,9 +40,7 @@
     enable_slicing: True
     guidance_scale: 6.0
     use_torch_compile: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend:  aiter_fp8
-    hybrid_attn_high_precision_backend: aiter
+    attention_backend: aiter_fp8
 
 - name: hunyuanvideo.sageattn.gfx942
   tags: [release, instinct, gfx942]

@@ -179,9 +179,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_fp8_gemms: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: aiter_fp8
-    hybrid_attn_high_precision_backend: aiter_sage
+    attention_backend: aiter_fp8
 
 - name: wan2_2.quantgemm_fp8attn.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -198,9 +196,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: aiter_fp8
-    hybrid_attn_high_precision_backend: aiter
+    attention_backend: aiter_fp8
     cross_attention_backend: aiter
     use_fp4_gemms: True
 
@@ -222,9 +218,7 @@
     fully_shard_degree: 8
     no_reshard_after_forward: True
     use_fp8_gemms: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: flash_3_fp8
-    hybrid_attn_high_precision_backend: flash_3
+    attention_backend: flash_3_fp8
 
 - name: wan2_2.quantgemm_fp8attn.hopper.h200  
   tags: [lucid, hopper, h200]
@@ -242,9 +236,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_fp8_gemms: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: flash_3_fp8
-    hybrid_attn_high_precision_backend: flash_3
+    attention_backend: flash_3_fp8
 
 - name: wan2_2.quantgemm_fp8attn.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -262,9 +254,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_fp4_gemms: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: nvte_fp8
-    hybrid_attn_high_precision_backend: cudnn
+    attention_backend: nvte_fp8
 
 - name: wan2_2.quantgemm_sageattn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -364,6 +354,7 @@
     use_fp8_gemms: True
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
+    use_spargeattn_head_balance: True
 
 - name: wan2_2.quantgemm_spargeattn.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -387,6 +378,7 @@
     use_fp4_gemms: True
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
+    use_spargeattn_head_balance: True
 
 - name: wan2_2.quantgemm_spargeattn.hopper.h100
   tags: [lucid, hopper, h100]
@@ -410,6 +402,7 @@
     use_fp8_gemms: True
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
+    use_spargeattn_head_balance: True
 
 - name: wan2_2.quantgemm_spargeattn.hopper.h200
   tags: [lucid, hopper, h200]
@@ -431,6 +424,7 @@
     use_fp8_gemms: True
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
+    use_spargeattn_head_balance: True
 
 - name: wan2_2.2gpu.rdna4
   tags: [rdna4, gfx1201]
