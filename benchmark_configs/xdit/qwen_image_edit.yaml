@@ -65,14 +65,16 @@
     seed: 42
     num_inference_steps: 4
     guidance_scale: 4.0
-    num_iterations: 1
+    warmup_calls: 2
+    num_iterations: 5
     attention_backend: aiter_flydsl
     ulysses_degree: 1
     ring_degree: 1
-    enable_sequential_cpu_offload: true
+    use_torch_compile: true
     enable_tiling: true
     enable_slicing: true
-    # re-evaluate use_fp8_gemms when benchmarking
+    use_fp8_gemms: true
+    enable_model_cpu_offload: true
 
 - name: qwen_image_edit.2gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -87,7 +89,8 @@
     seed: 42
     num_inference_steps: 4
     guidance_scale: 4.0
-    num_iterations: 1
+    warmup_calls: 2
+    num_iterations: 5
     attention_backend: aiter_flydsl
     ulysses_degree: 2
     ring_degree: 1
@@ -111,13 +114,14 @@
     seed: 42
     num_inference_steps: 4
     guidance_scale: 4.0
-    num_iterations: 1
+    warmup_calls: 2
+    num_iterations: 5
     attention_backend: aiter_flydsl
     ulysses_degree: 4
     ring_degree: 1
     fully_shard_degree: 4
     memory_efficient_sharding: true
-    use_torch_compile: true
+    use_torch_compile: false
     enable_tiling: true
     enable_slicing: true
     use_fp8_gemms: true

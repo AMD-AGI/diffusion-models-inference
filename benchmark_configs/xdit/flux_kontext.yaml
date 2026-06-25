@@ -66,8 +66,8 @@
     width: 1024
     num_inference_steps: 25
     max_sequence_length: 256
-    warmup_calls: 1
-    num_iterations: 1
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 2.5
     attention_backend: aiter_flydsl
     ulysses_degree: 1
@@ -75,7 +75,7 @@
     input_images: /app/data/flux_cat.png
     resize_input_images: true
     use_torch_compile: true
-    enable_model_cpu_offload: true
+    use_fp8_gemms: true
 
 - name: flux_kontext.2gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -88,18 +88,18 @@
     width: 1024
     num_inference_steps: 25
     max_sequence_length: 256
-    warmup_calls: 1
-    num_iterations: 1
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 2.5
     attention_backend: aiter_flydsl
     ulysses_degree: 2
     ring_degree: 1
-    fully_shard_degree: 2
     input_images: /app/data/flux_cat.png
     resize_input_images: true
     use_torch_compile: true
     enable_tiling: true
     use_parallel_vae: true
+    use_fp8_gemms: true
 
 - name: flux_kontext.4gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -112,15 +112,15 @@
     width: 1024
     num_inference_steps: 25
     max_sequence_length: 256
-    warmup_calls: 1
-    num_iterations: 1
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 2.5
     attention_backend: aiter_flydsl
     ulysses_degree: 4
     ring_degree: 1
-    fully_shard_degree: 4
     input_images: /app/data/flux_cat.png
     resize_input_images: true
     use_torch_compile: true
+    use_fp8_gemms: true
     enable_tiling: true
     use_parallel_vae: true

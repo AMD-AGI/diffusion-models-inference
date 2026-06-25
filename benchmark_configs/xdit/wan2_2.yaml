@@ -442,7 +442,7 @@
     memory_efficient_sharding: true
     use_parallel_vae: true
     seed: 42
-    warmup_calls: 0
+    warmup_calls: 1
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true

@@ -230,7 +230,7 @@
     guidance_scale: 0.0
     attention_backend: aiter_flydsl
     use_torch_compile: true
-    enable_model_cpu_offload: true
+    use_fp8_gemms: true
 
 - name: flux.usp_1k.2gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -244,13 +244,13 @@
     num_inference_steps: 25
     max_sequence_length: 256
     warmup_calls: 2
-    num_iterations: 3
+    num_iterations: 5
     guidance_scale: 0.0
     attention_backend: aiter_flydsl
     ulysses_degree: 2
     ring_degree: 1
-    fully_shard_degree: 2
     use_torch_compile: true
+    use_fp8_gemms: true
     enable_tiling: true
     use_parallel_vae: true
 
@@ -271,8 +271,7 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 4
     ring_degree: 1
-    fully_shard_degree: 2
-    use_torch_compile: true
+    use_fp8_gemms: true
     enable_tiling: true
     use_parallel_vae: true
 
@@ -288,12 +287,12 @@
     num_inference_steps: 25
     max_sequence_length: 256
     warmup_calls: 2
-    num_iterations: 3
+    num_iterations: 5
     guidance_scale: 0.0
     attention_backend: aiter_flydsl
     use_torch_compile: true
-    enable_model_cpu_offload: true
     enable_tiling: true
+    use_fp8_gemms: true
 
 - name: flux.usp_2k.2gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -312,10 +311,10 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 2
     ring_degree: 1
-    fully_shard_degree: 2
     use_torch_compile: true
     enable_tiling: true
     use_parallel_vae: true
+    use_fp8_gemms: true
 
 - name: flux.usp_2k.4gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -334,7 +333,7 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 4
     ring_degree: 1
-    fully_shard_degree: 2
     use_torch_compile: true
+    use_fp8_gemms: true
     enable_tiling: true
     use_parallel_vae: true

@@ -56,6 +56,7 @@
     height: 1088
     width: 1920
     num_inference_steps: 50
+    warmup_calls: 5
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter_flydsl
@@ -74,7 +75,7 @@
     height: 1088
     width: 1920
     num_inference_steps: 50
-    warmup_calls: 1
+    warmup_calls: 5
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter_flydsl
@@ -95,6 +96,7 @@
     height: 1088
     width: 1920
     num_inference_steps: 50
+    warmup_calls: 5
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter_flydsl

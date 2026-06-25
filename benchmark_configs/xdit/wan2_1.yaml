@@ -72,6 +72,7 @@
     use_parallel_vae: true
     guidance_scale: 3.0
     seed: 123456
+    warmup_calls: 1
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
@@ -97,6 +98,7 @@
     use_parallel_vae: true
     guidance_scale: 3.0
     seed: 123456
+    warmup_calls: 1
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true

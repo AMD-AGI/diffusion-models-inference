@@ -66,8 +66,8 @@
     ulysses_degree: 1
     ring_degree: 1
     use_torch_compile: true
-    enable_model_cpu_offload: true
     enable_tiling: true
+    use_fp8_gemms: true
 
 - name: flux2_klein.2gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -85,11 +85,10 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 2
     ring_degree: 1
-    fully_shard_degree: 2
-    memory_efficient_sharding: true
     use_torch_compile: true
     enable_tiling: true
     use_parallel_vae: true
+    use_fp8_gemms: true
 
 - name: flux2_klein.4gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -107,7 +106,7 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 4
     ring_degree: 1
-    fully_shard_degree: 4
     use_torch_compile: true
+    use_fp8_gemms: true
     enable_tiling: true
     use_parallel_vae: true
