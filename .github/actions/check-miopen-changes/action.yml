@@ -24,30 +24,4 @@ runs:
       env:
         BASE_REF: ${{ inputs.base_ref }}
         HEAD_REF: ${{ inputs.head_ref }}
-      run: |
-        DOCKERFILE_CHANGED="false"
-        MIOPEN_CHANGED="false"
-        CHANGED_FILES=$(git diff --name-only "$BASE_REF" "$HEAD_REF")
-
-        if echo "$CHANGED_FILES" | grep -q "^docker/Dockerfile.ci$"; then
-          DOCKERFILE_CHANGED="true"
-          echo "Dockerfile changed"
-        fi
-
-        if echo "$CHANGED_FILES" | grep -q "^src/.*/miopen/drivercmd/"; then
-          MIOPEN_CHANGED="true"
-          echo "MIOpen drivercmd files changed (legacy)"
-        fi
-        
-        if echo "$CHANGED_FILES" | grep -q "^data/miopen/workloads/"; then
-          MIOPEN_CHANGED="true"
-          echo "MIOpen drivercmd files changed (workloads)"  
-        fi
-
-        if [ "$DOCKERFILE_CHANGED" = "true" ] || [ "$MIOPEN_CHANGED" = "true" ]; then
-          echo "should_trigger=true" >> $GITHUB_OUTPUT
-          echo "MIOpen tuning changes detected, retuning will be triggered"
-        else
-          echo "should_trigger=false" >> $GITHUB_OUTPUT
-          echo "No MIOpen tuning changes detected"
-        fi
+      run: ${{ github.action_path }}/scripts/check-changes.sh

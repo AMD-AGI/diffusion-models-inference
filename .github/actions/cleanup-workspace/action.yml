@@ -16,31 +16,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Remove containers
-      if: ${{ inputs.containers != '' }}
+    - name: Cleanup Docker resources
+      if: ${{ inputs.containers != '' || inputs.images != '' }}
       shell: bash
       env:
         CONTAINERS: ${{ inputs.containers }}
-      run: |
-        for container in $CONTAINERS; do
-          echo "Removing container: $container"
-          docker rm -f "$container" || true
-        done
-    
-    - name: Remove images
-      if: ${{ inputs.images != '' }}
-      shell: bash
-      env:
         IMAGES: ${{ inputs.images }}
-      run: |
-        for image in $IMAGES; do
-          echo "Removing image: $image"
-          docker rmi -f "$image" || true
-        done
-    
-    - name: Prune Docker images
-      shell: bash
-      run: docker image prune -f || true
+      run: ${{ github.action_path }}/scripts/cleanup-docker.sh
     
     # Use containerized cleanup to avoid permission issues on self-hosted runners
     - name: Clean workspace

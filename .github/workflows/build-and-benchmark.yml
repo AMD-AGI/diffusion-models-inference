@@ -55,76 +55,19 @@ on:
         description: 'Image tag or full Docker Hub path for benchmark-only mode'
         required: false
         default: ''
-      :
-        description: 'Image tag or full Docker Hub path for baseline comparison benchmarks (runs alongside normal benchmarks)'
-        required: false
-        default: ''
-      skip_baseline_duplicate_check:
-        description: 'Skip checking if baseline benchmarks already exist (force re-run)'
-        type: boolean
-        required: false
-        default: false
       disable_docker_cache:
         description: 'Disable Docker cache on core build'
         type: boolean
         required: false
         default: false
-      add_to_metrics:
-        description: 'Add this run to the benchmark metrics database'
-        type: boolean
-        required: false
-        default: true
-      trigger_benchmark_metrics_refresh:
-        description: 'Trigger benchmarking metrics refresh after completion'
-        type: boolean
-        required: false
-        default: true
-      allocator_id:
-        description: 'Allocator reservation ID'
-        required: false
-        default: ''
-      allocator_reservation_hours:
-        description: 'Allocator reservation length in hours'
-        required: false
-        default: '4'
-      mi300_runner_type:
-        description: 'MI300 runner type'
-        type: choice
-        options:
-          - 'Standard runner'
-          - 'Standard runner'
-          - 'Standard runner'
-          - 'Standard runner'
-        required: false
-        default: 'Standard runner'
       mi300_runner:
         description: 'MI300 runner (label or node/pool name)'
         required: false
         default: ''
-      mi325_runner_type:
-        description: 'MI325 runner type'
-        type: choice
-        options:
-          - 'Standard runner'
-          - 'Standard runner'
-          - 'Standard runner'
-          - 'Standard runner'
-        required: false
-        default: 'Standard runner'
       mi325_runner:
         description: 'MI325 runner (label or node/pool name)'
         required: false
         default: ''
-      mi355_runner_type:
-        description: 'MI355 runner type'
-        type: choice
-        options:
-          - 'Standard runner'
-          - 'Standard runner'
-          - 'Standard runner'
-          - 'Standard runner'
-        required: false
-        default: 'Standard runner'
       mi355_runner:
         description: 'MI355 runner (label or node/pool name)'
         required: false
@@ -133,8 +76,6 @@ on:
 permissions:
   contents: read
   actions: write
-  pages: write
-  id-token: write
 
 env:
   CORE_IMAGE: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
@@ -149,8 +90,6 @@ jobs:
       image_tag: ${{ steps.generate_tag.outputs.tag }}
       core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
-      : ${{ steps.determine_baseline.outputs. }}
-      : ${{ steps.determine_baseline.outputs. }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -195,38 +134,6 @@ jobs:
             exit 1
           fi
       
-      - name: Validate Allocator parameters
-        env:
-          MI300_TYPE: ${{ inputs.mi300_runner_type }}
-          MI325_TYPE: ${{ inputs.mi325_runner_type }}
-          MI355_TYPE: ${{ inputs.mi355_runner_type }}
-          ALLOCATOR_ID: ${{ inputs.allocator_id }}
-          ALLOCATOR_HOURS: ${{ inputs.allocator_reservation_hours }}
-        run: |
-          # Check if any architecture needs Allocator reservation
-          NEEDS_RESERVATION=false
-          
-          if [ "$MI300_TYPE" = "Standard runner" ] || \
-             [ "$MI325_TYPE" = "Standard runner" ] || \
-             [ "$MI355_TYPE" = "Standard runner" ]; then
-            NEEDS_RESERVATION=true
-          fi
-          
-          if [ "$NEEDS_RESERVATION" = "true" ]; then
-            if [ -z "$ALLOCATOR_ID" ]; then
-              echo "Error: Allocator reservation requested but no ALLOCATOR_ID specified"
-              exit 1
-            fi
-            if [ -z "$ALLOCATOR_HOURS" ]; then
-              echo "Error: Allocator reservation requested but no ALLOCATOR_RESERVATION_HOURS specified"
-              exit 1
-            fi
-            if ! [[ "$ALLOCATOR_HOURS" =~ ^[1-9][0-9]*$ ]]; then
-              echo "Error: ALLOCATOR_RESERVATION_HOURS must be a positive integer"
-              exit 1
-            fi
-          fi
-      
       - name: Validate prebuilt untuned image exists
         if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image == '' }}
         uses: ./.github/actions/validate-image-exists
@@ -268,35 +175,6 @@ jobs:
         with:
           image: ${{ steps.determine_benchmark.outputs.benchmark_image }}
       
-      - name: Determine baseline image
-        id: determine_baseline
-        env:
-          : ${{ inputs. }}
-        run: |
-          BASELINE=$(echo "$" | xargs)
-          if [ -z "$BASELINE" ]; then
-            echo "=" >> $GITHUB_OUTPUT
-            echo "=" >> $GITHUB_OUTPUT
-          elif [[ "$BASELINE" == *"/"* ]] || [[ "$BASELINE" == *":"* ]]; then
-            echo "=${BASELINE}" >> $GITHUB_OUTPUT
-            # Extract tag portion after colon, or use whole string if no colon
-            if [[ "$BASELINE" == *":"* ]]; then
-              TAG="${BASELINE##*:}"
-            else
-              TAG="$BASELINE"
-            fi
-            echo "=${TAG}" >> $GITHUB_OUTPUT
-          else
-            echo "=${{ env.STAGING_IMAGE }}:${BASELINE}" >> $GITHUB_OUTPUT
-            echo "=${BASELINE}" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Validate baseline image exists
-        if: ${{ inputs. != '' }}
-        uses: ./.github/actions/validate-image-exists
-        with:
-          image: ${{ steps.determine_baseline.outputs. }}
-      
       - name: Store build metadata
         uses: ./.github/actions/save-build-metadata
         with:
@@ -307,12 +185,9 @@ jobs:
           staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
           benchmark_image: ${{ steps.determine_benchmark.outputs.benchmark_image }}
           benchmark_image_tag: ${{ steps.determine_benchmark.outputs.benchmark_image_tag }}
-          : ${{ steps.determine_baseline.outputs. }}
-          : ${{ steps.determine_baseline.outputs. }}
           prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
           prebuilt_untuned_image_tag: ${{ inputs.prebuilt_untuned_image_tag }}
           git_branch: ${{ inputs.git_branch }}
-          add_to_metrics: ${{ inputs.add_to_metrics }}
           run_number: ${{ github.run_number }}
           
       - name: Write summary
@@ -325,16 +200,12 @@ jobs:
                 "run_mode": "${{ inputs.run_mode }}",
                 "quality_check": "${{ inputs.quality_check }}",
                 "force_retuning": "${{ inputs.force_retuning }}",
-                "add_to_metrics": "${{ inputs.add_to_metrics }}",
-                "trigger_benchmark_metrics_refresh": "${{ inputs.trigger_benchmark_metrics_refresh }}",
                 "benchmark_image": "${{ inputs.benchmark_image }}",
-                "": "${{ inputs. }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag }}",
                 "prebuilt_untuned_image_tag": "${{ inputs.prebuilt_untuned_image_tag }}"
               },
               "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
-              "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }},
-              "Baseline Image": ${{ toJSON(steps.determine_baseline.outputs) }}
+              "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
             }
 
   build-core:
@@ -365,7 +236,6 @@ jobs:
       (needs.build-core.result == 'success' || needs.build-core.result == 'skipped')
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
-      allocator_matrix: ${{ steps.generate.outputs.allocator_matrix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -387,77 +257,14 @@ jobs:
               "Matrix Configuration": ${{ toJSON(fromJSON(steps.generate.outputs.matrix)) }}
             }
 
-  allocate-allocator-resources:
-    name: Allocate Allocator resources for ${{ matrix.arch }}
-    needs: [generate-matrix]
-    if: |
-      !cancelled() &&
-      needs.generate-matrix.result == 'success' &&
-      fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null
-    runs-on: ${{ vars.JUMP_HOST_RUNNER || 'jump-host' }}
-    concurrency:
-      group: allocator-jump-host
-      cancel-in-progress: false
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix) }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.git_branch || github.ref_name }}
-
-      - name: Generate JIT config for ${{ matrix.arch }}
-        id: jit
-        uses: ./.github/actions/generate-jit-config
-        with:
-          arch: ${{ matrix.arch }}
-          runner: ${{ matrix.runner }}
-          run_number: ${{ github.run_number }}
-          repository: ${{ github.repository }}
-          gh_token: ${{ secrets.GH_PAT }}
-      
-      - name: Generate allocator configuration
-        id: allocator_config
-        uses: ./.github/actions/generate-allocator-config
-        with:
-          arch: ${{ matrix.arch }}
-          jitconfig: ${{ steps.jit.outputs.jitconfig }}
-          repository: ${{ github.repository }}
-          gha_runner_version: ${{ vars.GHA_RUNNER_VERSION }}
-      
-      - name: Allocate resources via Allocator
-        id: allocate
-        uses: ./.github/actions/allocate-allocator-resources
-        with:
-          arch: ${{ matrix.arch }}
-          runner_or_pool: ${{ matrix.runner }}
-          is_allocator_node: ${{ matrix.is_allocator_node }}
-          is_allocator_pool: ${{ matrix.is_allocator_pool }}
-          allocator_reserve: ${{ matrix.allocator_reserve }}
-          allocator_id: ${{ inputs.allocator_id }}
-          allocator_reservation_hours: ${{ inputs.allocator_reservation_hours }}
-          amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
-          ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
-          run_number: ${{ github.run_number }}
-          allocation_team: ${{ vars.ALLOCATOR_ALLOCATION_TEAM }}
-      
-      - name: Upload reservation metadata
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ github.run_number }}-reservation-${{ matrix.arch }}
-          path: reservation-metadata/
-
   tune-and-benchmark:
     name: ${{ matrix.arch }} tuning and benchmarking
-    needs: [validate, generate-matrix, allocate-allocator-resources, build-core]
+    needs: [validate, generate-matrix, build-core]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout }}
     if: |
       needs.validate.outputs.any_arch_enabled == 'true' && 
       !cancelled() && 
-      (needs.allocate-allocator-resources.result == 'success' || needs.allocate-allocator-resources.result == 'skipped') &&
       (needs.build-core.result == 'success' || needs.build-core.result == 'skipped') &&
       (!failure() || inputs.benchmark_image != '')
     strategy:
@@ -500,25 +307,11 @@ jobs:
           path: versions/**
           overwrite: true
 
-      - name: Check if baseline benchmarks already exist
-        id: check_baseline
-        if: ${{ inputs.run_mode != 'MIOpen tuning only' && steps.metadata.outputs. != '' && !inputs.skip_baseline_duplicate_check }}
-        uses: ./.github/actions/check-if-baseline-exists
-        with:
-          image: ${{ steps.metadata.outputs. }}
-          gh_token: ${{ github.token }}
-      
       - name: Determine step conditions
         id: conditions
         env:
           BENCHMARK_IMAGE: ${{ steps.metadata.outputs.benchmark_image }}
           RUN_MODE: ${{ inputs.run_mode }}
-          : ${{ steps.metadata.outputs. }}
-          SKIP_BASELINE_DUP_CHECK: ${{ inputs.skip_baseline_duplicate_check }}
-          BASELINE_EXISTS: ${{ steps.check_baseline.outputs.exists }}
-          ALLOCATOR_RESERVE: ${{ matrix.allocator_reserve }}
-          IS_ALLOCATOR_NODE: ${{ matrix.is_allocator_node }}
-          IS_ALLOCATOR_POOL: ${{ matrix.is_allocator_pool }}
         run: |
           if [ -z "$BENCHMARK_IMAGE" ]; then
             echo "should_run_miopen_tuning=true" >> $GITHUB_OUTPUT
@@ -530,32 +323,6 @@ jobs:
             echo "should_run_benchmarks=true" >> $GITHUB_OUTPUT
           else
             echo "should_run_benchmarks=false" >> $GITHUB_OUTPUT
-          fi
-          
-          if [ "$RUN_MODE" != "MIOpen tuning only" ] && \
-             [ -n "$" ] && \
-             { [ "$SKIP_BASELINE_DUP_CHECK" = "true" ] || [ "$BASELINE_EXISTS" != "1" ]; }; then
-            echo "should_run_baseline=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_run_baseline=false" >> $GITHUB_OUTPUT
-          fi
-          
-          if [ "$ALLOCATOR_RESERVE" = "true" ]; then
-            echo "should_cleanup_allocator=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_cleanup_allocator=false" >> $GITHUB_OUTPUT
-          fi
-          
-          if [ "$IS_ALLOCATOR_NODE" = "true" ] || [ "$IS_ALLOCATOR_POOL" = "true" ]; then
-            echo "should_delete_jit_runner=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_delete_jit_runner=false" >> $GITHUB_OUTPUT
-          fi
-          
-          if [ "$ALLOCATOR_RESERVE" = "true" ]; then
-            echo "should_delete_reservation=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_delete_reservation=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Run MIOpen tuning
@@ -592,74 +359,11 @@ jobs:
           containers: 'xdit-bench miopen-tune'
           skip_workspace_cleanup: 'true'
       
-      - name: Pull baseline image and extract version information
-        if: ${{ steps.conditions.outputs.should_run_baseline == 'true' }}
-        run: |
-          mkdir -p versions-baseline
-          docker pull ${{ steps.metadata.outputs. }}
-          docker create --name baseline ${{ steps.metadata.outputs. }}
-          docker cp baseline:/opt/rocm/share/therock/ versions-baseline/ || true
-          docker rm baseline
-      
-      - name: Upload baseline version artifacts
-        if: ${{ steps.conditions.outputs.should_run_baseline == 'true' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ github.run_number }}-versions-baseline
-          path: versions-baseline/**
-          overwrite: true
-
-      - name: Run baseline benchmarks
-        if: ${{ steps.conditions.outputs.should_run_baseline == 'true' }}
-        uses: ./.github/actions/run-benchmarks
-        with:
-          image: ${{ steps.metadata.outputs. }}
-          arch: ${{ matrix.arch }}
-          gfx_arch: ${{ matrix.gfx_arch }}
-          benchmark_flags: ${{ inputs.benchmark_flags }}
-          benchmark_only: true
-          collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
-          output_dir: ''
-          hf_token: ${{ secrets.HF_TOKEN }}
-          hf_cache_map: ${{ vars.HF_CACHE_MAP }}
-          artifact_name: ${{ github.run_number }}--${{ matrix.arch }}-${{ steps.metadata.outputs. }}
-      
-      - name: Cleanup Allocator resources
-        if: ${{ always() && steps.conditions.outputs.should_cleanup_allocator == 'true' }}
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-allocator
-        with:
-          arch: ${{ matrix.arch }}
-          run_number: ${{ github.run_number }}
-          amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
-          ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
-      
-      - name: Delete JIT runner
-        if: ${{ always() && steps.conditions.outputs.should_delete_jit_runner == 'true' }}
-        continue-on-error: true
-        uses: ./.github/actions/delete-jit-runner
-        with:
-          runner: ${{ matrix.runner }}
-          run_number: ${{ github.run_number }}
-          repository: ${{ github.repository }}
-          gh_token: ${{ secrets.GH_PAT }}
-      
-      - name: Delete reservation artifact
-        if: ${{ always() && steps.conditions.outputs.should_delete_reservation == 'true' }}
-        continue-on-error: true
-        uses: ./.github/actions/delete-reservation-artifact
-        with:
-          arch: ${{ matrix.arch }}
-          run_number: ${{ github.run_number }}
-          repository: ${{ github.repository }}
-          gh_token: ${{ github.token }}
-
       - name: Workspace cleanup
         if: always()
         continue-on-error: true
         uses: ./.github/actions/cleanup-workspace
         with:
-          images: '${{ steps.metadata.outputs. }}'
           containers: 'xdit-bench'
           skip_workspace_cleanup: 'false'
 
@@ -746,60 +450,4 @@ jobs:
           branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
           run_number: ${{ github.run_number }}
           gh_token: ${{ secrets.GH_PAT }}
-
-  cleanup-allocator-resources:
-    name: Cleanup Allocator resources for ${{ matrix.arch }}
-    needs: [generate-matrix, allocate-allocator-resources, tune-and-benchmark]
-    runs-on: ${{ vars.JUMP_HOST_RUNNER || 'jump-host' }}
-    if: |
-      always() &&
-      (needs.tune-and-benchmark.result == 'cancelled' || needs.tune-and-benchmark.result == 'skipped' || needs.tune-and-benchmark.result == 'failure') &&
-      fromJSON(needs.generate-matrix.outputs.allocator_matrix).include[0] != null
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.allocator_matrix) }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.git_branch || github.ref_name }}
-      
-      - name: Cleanup Allocator resources
-        if: matrix.allocator_reserve == 'true'
-        uses: ./.github/actions/cleanup-allocator
-        with:
-          arch: ${{ matrix.arch }}
-          run_number: ${{ github.run_number }}
-          amd_email: ${{ secrets.ALLOCATOR_AMD_EMAIL }}
-          ats_secret: ${{ secrets.ALLOCATOR_ATS_SECRET }}
-      
-      - name: Delete JIT runner
-        uses: ./.github/actions/delete-jit-runner
-        with:
-          runner: ${{ matrix.runner }}
-          run_number: ${{ github.run_number }}
-          repository: ${{ github.repository }}
-          gh_token: ${{ secrets.GH_PAT }}
-
-  trigger-benchmark-metrics-refresh:
-    name: Trigger benchmark metrics refresh
-    needs: [validate, tune-and-benchmark]
-    if: ${{ always() && needs.validate.result == 'success' && inputs.trigger_benchmark_metrics_refresh }}
-    uses: ./.github/workflows/publish-pages.yml
-    with:
-      source_branch: ${{ inputs.git_branch || github.ref_name }}
-
-  update-quality-references:
-    name: Update quality references
-    needs: [tune-and-benchmark]
-    if: >-
-      !cancelled() &&
-      needs.tune-and-benchmark.result == 'success' &&
-      inputs.run_mode != 'MIOpen tuning only' &&
-      startsWith(github.ref_name, 'release/')
-    uses: ./.github/workflows/update-quality-references.yml
-    with:
-      run_id: ${{ github.run_id }}
-    secrets:
-      GH_PAT: ${{ secrets.GH_PAT }}
 

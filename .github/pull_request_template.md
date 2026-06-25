@@ -38,7 +38,7 @@ Depending on the scope, test for functionality and performance
 
 and prefer to report your numbers in the pull-request. Moreover, make sure that the output quality is acceptable.
 
-Use existing performance [results]( as a reference and run CI [pipeline]( to validate builds and the resulting image when applicable and CI resource consumption does not prevent this.
+Use existing performance results as a reference and run CI pipeline to validate builds and the resulting image when applicable and CI resource consumption does not prevent this.
 
 #### Other
 

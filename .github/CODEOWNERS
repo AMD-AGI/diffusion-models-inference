@@ -5,5 +5,19 @@
 # Default — every file requires project-team approval
 *                            @AMD-AGI/siloai-diffusion-inference
 
-# Stricter paths — leads must approve
-.github/CODEOWNERS           @AMD-AGI/siloai-diffusion-inference
+# Core — inference source and benchmark/data paths
+benchmark_common/            @AMD-AGI/siloai-diffusion-inference-core
+benchmark_configs/           @AMD-AGI/siloai-diffusion-inference-core
+data/                        @AMD-AGI/siloai-diffusion-inference-core
+integrations/                @AMD-AGI/siloai-diffusion-inference-core
+src/                         @AMD-AGI/siloai-diffusion-inference-core
+
+# Admin — ownership and governance files
+.github/CODEOWNERS           @AMD-AGI/siloai-diffusion-inference-admin
+.github/pull_request_template.md @AMD-AGI/siloai-diffusion-inference-admin
+
+# CI — workflows, actions, and container/build infrastructure
+.github/workflows/           @AMD-AGI/siloai-diffusion-inference-ci
+.github/actions/             @AMD-AGI/siloai-diffusion-inference-ci
+docker/                      @AMD-AGI/siloai-diffusion-inference-ci
+Makefile                     @AMD-AGI/siloai-diffusion-inference-ci
