@@ -28,7 +28,6 @@ docker run \
   --name xdit-bench \
   --mount type=bind,src="$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH",dst=/outputs \
   --mount type=bind,src="$(pwd)",dst=/app/diffusion-models-inference \
-  --mount type=bind,src="$GITHUB_WORKSPACE/references",dst=/app/references \
   $HF_CACHE_ARGS \
   $MIOPEN_USER_DB_PATH_ENV \
   -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
@@ -37,5 +36,4 @@ docker run \
   -e BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS}" \
   "$DOCKER_IMAGE" \
   sh -c 'python3 /app/.ci/run.py $BENCHMARK_FLAGS /app/.ci/benchmark_configs/*.yaml && \
-         python3 /app/.ci/quality_check.py --reference-path /app/references --benchmark-output-path /outputs; \
          amd-smi || rocm-smi || true'

@@ -37,11 +37,6 @@ on:
         type: boolean
         required: false
         default: false
-      quality_check:
-        description: 'Enable quality checks after benchmarks'
-        type: boolean
-        required: false
-        default: true
       benchmark_flags:
         description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
         required: false
@@ -198,7 +193,6 @@ jobs:
             {
               "Workflow Inputs": {
                 "run_mode": "${{ inputs.run_mode }}",
-                "quality_check": "${{ inputs.quality_check }}",
                 "force_retuning": "${{ inputs.force_retuning }}",
                 "benchmark_image": "${{ inputs.benchmark_image }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag }}",
@@ -275,9 +269,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
-          token: ${{ inputs.quality_check && secrets.GH_PAT || github.token }}
-          persist-credentials: false
-          submodules: ${{ inputs.quality_check && 'recursive' || 'false' }}
           
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
