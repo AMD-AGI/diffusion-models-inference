@@ -1,0 +1,67 @@
+name: 'Load Build Metadata'
+description: 'Downloads and parses build metadata artifact'
+inputs:
+  run_number:
+    description: 'GitHub run number for artifact naming'
+    required: true
+  gh_token:
+    description: 'GitHub token for artifact access'
+    required: false
+    default: ${{ github.token }}
+outputs:
+  image_tag:
+    description: 'The image tag (commit SHA with optional suffix)'
+    value: ${{ steps.parse.outputs.image_tag }}
+  core_image:
+    description: 'Core image name'
+    value: ${{ steps.parse.outputs.core_image }}
+  core_image_tag:
+    description: 'Core image tag'
+    value: ${{ steps.parse.outputs.core_image_tag }}
+  core_image_with_tag:
+    description: 'Full core image name with tag'
+    value: ${{ steps.parse.outputs.core_image_with_tag }}
+  staging_image:
+    description: 'Staging image name'
+    value: ${{ steps.parse.outputs.staging_image }}
+  staging_image_tag:
+    description: 'Staging image tag'
+    value: ${{ steps.parse.outputs.staging_image_tag }}
+  staging_image_with_tag:
+    description: 'Full staging image name with tag'
+    value: ${{ steps.parse.outputs.staging_image_with_tag }}
+  benchmark_image:
+    description: 'Benchmark image for benchmark-only mode (if specified)'
+    value: ${{ steps.parse.outputs.benchmark_image }}
+  benchmark_image_tag:
+    description: 'Benchmark image tag (if specified)'
+    value: ${{ steps.parse.outputs.benchmark_image_tag }}
+  prebuilt_core_image_tag:
+    description: 'Prebuilt core image tag (if specified)'
+    value: ${{ steps.parse.outputs.prebuilt_core_image_tag }}
+  prebuilt_untuned_image_tag:
+    description: 'Prebuilt untuned image tag (if specified)'
+    value: ${{ steps.parse.outputs.prebuilt_untuned_image_tag }}
+  git_branch:
+    description: 'Git branch name'
+    value: ${{ steps.parse.outputs.git_branch }}
+  tune_and_benchmark_image:
+    description: 'Image used for tuning and benchmarking (if specified)'
+    value: ${{ steps.parse.outputs.tune_and_benchmark_image }}
+  untuned_image:
+    description: 'Untuned image (if specified)'
+    value: ${{ steps.parse.outputs.untuned_image }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Download build metadata
+      uses: actions/download-artifact@v7
+      with:
+        name: ${{ inputs.run_number }}-build-metadata
+        path: build-metadata
+        github-token: ${{ inputs.gh_token }}
+    
+    - name: Parse metadata
+      id: parse
+      shell: bash
+      run: ${{ github.action_path }}/scripts/parse-metadata.sh

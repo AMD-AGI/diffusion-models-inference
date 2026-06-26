@@ -1,0 +1,64 @@
+name: 'Save Build Metadata'
+description: 'Creates and uploads build metadata artifact with image tags and configuration'
+inputs:
+  image_tag:
+    description: 'Image tag (commit SHA)'
+    required: true
+  core_image:
+    description: 'Core image name'
+    required: true
+  core_image_with_tag:
+    description: 'Core image with tag'
+    required: true
+  staging_image:
+    description: 'Staging image name'
+    required: true
+  staging_image_with_tag:
+    description: 'Staging image with tag'
+    required: true
+  benchmark_image:
+    description: 'Benchmark image (if specified)'
+    required: false
+    default: ''
+  benchmark_image_tag:
+    description: 'Benchmark image tag (if specified)'
+    required: false
+    default: ''
+  prebuilt_core_image_tag:
+    description: 'Prebuilt core image tag (if specified)'
+    required: false
+    default: ''
+  prebuilt_untuned_image_tag:
+    description: 'Prebuilt untuned image tag (if specified)'
+    required: false
+    default: ''
+  git_branch:
+    description: 'Git branch name'
+    required: false
+    default: ''
+  run_number:
+    description: 'GitHub Actions run number'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Create build metadata
+      shell: bash
+      env:
+        INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+        INPUT_CORE_IMAGE: ${{ inputs.core_image }}
+        INPUT_CORE_IMAGE_WITH_TAG: ${{ inputs.core_image_with_tag }}
+        INPUT_STAGING_IMAGE: ${{ inputs.staging_image }}
+        INPUT_STAGING_IMAGE_WITH_TAG: ${{ inputs.staging_image_with_tag }}
+        INPUT_BENCHMARK_IMAGE: ${{ inputs.benchmark_image }}
+        INPUT_BENCHMARK_IMAGE_TAG: ${{ inputs.benchmark_image_tag }}
+        INPUT_PREBUILT_CORE_IMAGE_TAG: ${{ inputs.prebuilt_core_image_tag }}
+        INPUT_PREBUILT_UNTUNED_IMAGE_TAG: ${{ inputs.prebuilt_untuned_image_tag }}
+        INPUT_GIT_BRANCH: ${{ inputs.git_branch }}
+      run: ${{ github.action_path }}/scripts/create-metadata.sh
+    
+    - name: Upload build metadata
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ inputs.run_number }}-build-metadata
+        path: build-metadata/
