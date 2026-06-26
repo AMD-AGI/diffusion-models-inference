@@ -485,7 +485,7 @@ ARG ARBITER_COMMIT
 
 # setup
 WORKDIR /app/external
-COPY ./src/patches /patches
+COPY ./patches /patches
 # install yunchang
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
@@ -563,10 +563,9 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 # copy assets
-COPY src/flux/cat.png /app/data/flux_cat.png
-COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+COPY assets/data /app/data
 # copy instructions and CI prerequisites
-COPY docs/pytorch-xdit/README.md /app/README.md
+COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY .ci/quality_check.py /app/.ci/quality_check.py
@@ -574,5 +573,3 @@ COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_c
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
 ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
-# add quality references of workloads
-ADD references/ /app/references/

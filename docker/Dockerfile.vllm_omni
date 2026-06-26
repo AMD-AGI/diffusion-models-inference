@@ -1,7 +1,7 @@
 ARG BASE_IMAGE="amdsiloai/pytorch-private:xdit-v26.6-torch2.11"
 
 FROM scratch AS patches
-COPY ./src/patches /patches
+COPY ./patches /patches
 
 FROM ${BASE_IMAGE}
 

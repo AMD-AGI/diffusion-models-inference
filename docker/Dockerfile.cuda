@@ -64,7 +64,7 @@ RUN pip install --no-cache-dir setuptools_git_versioning scikit-build patchelf &
 # aarch64 (where char is unsigned by ABI) into char2's signed char members
 # and is rejected by C++11 brace-initialization. So gating here avoids a
 # hard compile-time failure on Grace in addition to building dead kernels.
-RUN --mount=type=bind,source=src/patches/flex_block_attn_setup.patch,target=/patches/flex_block_attn_setup.patch \
+RUN --mount=type=bind,source=patches/flex_block_attn_setup.patch,target=/patches/flex_block_attn_setup.patch \
     if [ "$(uname -m)" = "aarch64" ]; then \
         echo "Skipping flex-block-attn install on aarch64 (Hopper-only kernels)"; \
     else \
@@ -112,11 +112,11 @@ RUN git clone https://github.com/xdit-project/DistVAE.git && \
     pip install -e .
 # install xfuser
 WORKDIR /app
-RUN --mount=type=bind,source=src/patches-private/xfuser.patch,target=/patches-private/xfuser.patch \
+RUN --mount=type=bind,source=patches/xfuser.patch,target=/patches/xfuser.patch \
     git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches-private/xfuser.patch && \
+    git apply /patches/xfuser.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 
@@ -131,10 +131,9 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 # copy assets
-COPY src/flux/cat.png /app/data/flux_cat.png
-COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+COPY assets/data /app/data
 # copy instructions and CI prerequisites
-COPY docs/pytorch-xdit/README.md /app/README.md
+COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py

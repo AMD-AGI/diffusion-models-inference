@@ -14,11 +14,6 @@ if echo "$CHANGED_FILES" | grep -q "^docker/Dockerfile.ci$"; then
   echo "Dockerfile changed"
 fi
 
-if echo "$CHANGED_FILES" | grep -q "^src/.*/miopen/drivercmd/"; then
-  MIOPEN_CHANGED="true"
-  echo "MIOpen drivercmd files changed (legacy)"
-fi
-
 if echo "$CHANGED_FILES" | grep -q "^data/miopen/workloads/"; then
   MIOPEN_CHANGED="true"
   echo "MIOpen drivercmd files changed (workloads)"

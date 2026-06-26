@@ -41,7 +41,7 @@ fi
 
 # glob, concatenate and retain unique MIOpen driver commands
 echo "Extracting workload MIOpenDriver calls"
-sed -s '$a\\' $ROOTDIR/data/miopen/workloads/*.txt $ROOTDIR/src/*/miopen/drivercmd/*.txt | uniq -u | sort -u > $ROOTDIR/drivercmd.txt
+sed -s '$a\\' $ROOTDIR/data/miopen/workloads/*.txt | uniq -u | sort -u > $ROOTDIR/drivercmd.txt
 
 # filter out already-tuned commands
 echo "Filtering already-tuned commands for architecture: $ARCH"

@@ -18,8 +18,7 @@ ENV SGLANG_TORCH_COMPILE_MODE="default"
 
 WORKDIR /app
 # copy assets
-COPY src/flux/cat.png /app/data/flux_cat.png
-COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+COPY assets/data /app/data
 # Include CI
 COPY .ci/run.py /app/.ci/run.py
 COPY .ci/integrations/sgld/runner.py /app/.ci/runner.py

@@ -33,5 +33,4 @@ COPY .ci/run.py /app/.ci/run.py
 COPY .ci/integrations/sgld/ /app/.ci/integrations/sgld/
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
 # copy assets
-COPY src/flux/cat.png /app/data/flux_cat.png
-COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+COPY assets/data /app/data

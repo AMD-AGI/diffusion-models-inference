@@ -1,0 +1,13 @@
+diff --git a/xfuser/core/utils/runner_utils.py b/xfuser/core/utils/runner_utils.py
+index 270577b..68797ac 100644
+--- a/xfuser/core/utils/runner_utils.py
++++ b/xfuser/core/utils/runner_utils.py
+@@ -82,7 +82,7 @@ def _get_fp8_kernel_preference():
+     under torch.compile, so we force TORCH (_scaled_mm) on Blackwell+.
+     """
+     from torchao.quantization.quantize_.common import KernelPreference
+-    if torch.cuda.is_available() and _is_cuda() and torch.cuda.get_device_capability()[0] >= 10:
++    if torch.cuda.is_available() and _is_cuda() and torch.cuda.get_device_capability()[0] >= 9:
+         return KernelPreference.TORCH
+     return KernelPreference.AUTO
+ 

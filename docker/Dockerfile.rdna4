@@ -370,7 +370,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 # copy assets
-COPY src/wan_xdit/assets/i2v_input.JPG /app/data/wan_input.jpg
+COPY assets/data /app/data
 # copy CI prerequisites
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
