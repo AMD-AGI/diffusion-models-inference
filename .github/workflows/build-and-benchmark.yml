@@ -414,8 +414,8 @@ jobs:
           images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}'
           containers: 'core'
 
-  create-miopen-pr:
-    name: Create MIOpen database PR
+  create-miopen-branch:
+    name: Create MIOpen branch
     needs: [validate, generate-matrix, tune-and-benchmark]
     runs-on: build-only
     if: |
@@ -436,10 +436,9 @@ jobs:
           merge-multiple: true
           path: data/miopen/userdb
       
-      - name: Create MIOpen database PR
+      - name: Create MIOpen branch
         uses: ./.github/actions/create-miopen-db-pr
         with:
           branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
           run_number: ${{ github.run_number }}
-          gh_token: ${{ github.token }}
 

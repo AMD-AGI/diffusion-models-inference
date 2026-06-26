@@ -1,5 +1,5 @@
 name: 'Create MIOpen Database PR'
-description: 'Creates a branch with MIOpen database changes and opens a pull request'
+description: 'Creates a branch with MIOpen database changes and pushes it'
 
 inputs:
   branch_name:
@@ -7,9 +7,6 @@ inputs:
     required: true
   run_number:
     description: 'GitHub Actions run number'
-    required: true
-  gh_token:
-    description: 'GitHub token for creating PR'
     required: true
 
 runs:
@@ -62,28 +59,3 @@ runs:
       run: |
         echo "Pushing branch: ${BRANCH_NAME}"
         git push origin "${BRANCH_NAME}"
-    
-    - name: Create PR
-      if: steps.check_changes.outputs.has_changes == 'true'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.gh_token }}
-        BRANCH_NAME: ${{ inputs.branch_name }}
-        RUN_NUMBER: ${{ inputs.run_number }}
-        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        REPOSITORY: ${{ github.repository }}
-        BASE_REF: ${{ github.ref_name }}
-        API_URL: ${{ github.api_url }}
-      run: |
-        PR_TITLE="MIOpen tuning, run ${RUN_NUMBER}"
-        PR_BODY="Run: ${RUN_URL}"
-        curl -fsS -X POST \
-          -H "Authorization: Bearer ${GH_TOKEN}" \
-          -H "Accept: application/vnd.github+json" \
-          "${API_URL}/repos/${REPOSITORY}/pulls" \
-          -d "$(jq -n \
-            --arg title "$PR_TITLE" \
-            --arg body "$PR_BODY" \
-            --arg head "$BRANCH_NAME" \
-            --arg base "$BASE_REF" \
-            '{title: $title, body: $body, head: $head, base: $base}')"
