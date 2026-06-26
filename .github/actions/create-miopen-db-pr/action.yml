@@ -73,13 +73,14 @@ runs:
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         REPOSITORY: ${{ github.repository }}
         BASE_REF: ${{ github.ref_name }}
+        API_URL: ${{ github.api_url }}
       run: |
         PR_TITLE="MIOpen tuning, run ${RUN_NUMBER}"
         PR_BODY="Run: ${RUN_URL}"
         curl -fsS -X POST \
-          -H "Authorization: token ${GH_TOKEN}" \
+          -H "Authorization: Bearer ${GH_TOKEN}" \
           -H "Accept: application/vnd.github+json" \
-          "https://api.github.com/repos/${REPOSITORY}/pulls" \
+          "${API_URL}/repos/${REPOSITORY}/pulls" \
           -d "$(jq -n \
             --arg title "$PR_TITLE" \
             --arg body "$PR_BODY" \
