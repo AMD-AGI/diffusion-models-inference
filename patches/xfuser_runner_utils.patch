@@ -1,8 +1,8 @@
 diff --git a/xfuser/core/utils/runner_utils.py b/xfuser/core/utils/runner_utils.py
-index 270577b..68797ac 100644
+index 3f48ea5..c1c5251 100644
 --- a/xfuser/core/utils/runner_utils.py
 +++ b/xfuser/core/utils/runner_utils.py
-@@ -82,7 +82,7 @@ def _get_fp8_kernel_preference():
+@@ -93,7 +93,7 @@ def _get_fp8_kernel_preference():
      under torch.compile, so we force TORCH (_scaled_mm) on Blackwell+.
      """
      from torchao.quantization.quantize_.common import KernelPreference
