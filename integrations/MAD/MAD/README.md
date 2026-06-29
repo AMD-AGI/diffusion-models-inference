@@ -16,7 +16,7 @@ cd MAD
 pip install -r requirements.txt
 ```
 
-to clone the ROCm Model Automation and Metricsing (MAD) repository to a local directory
+to clone the ROCm Model Automation and Dashboarding (MAD) repository to a local directory
 and install the required packages on the host machine.
 
 ## Run MAD benchmarks
