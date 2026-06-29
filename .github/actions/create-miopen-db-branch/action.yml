@@ -1,4 +1,4 @@
-name: 'Create MIOpen Database PR'
+name: 'Create MIOpen Database branch'
 description: 'Creates a branch with MIOpen database changes and pushes it'
 
 inputs:
