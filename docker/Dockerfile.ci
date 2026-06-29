@@ -568,6 +568,7 @@ COPY assets/data /app/data
 COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
+COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 COPY .ci/quality_check.py /app/.ci/quality_check.py
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
