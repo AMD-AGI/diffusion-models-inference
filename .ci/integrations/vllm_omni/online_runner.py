@@ -70,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup_calls", type=int, default=0)
     parser.add_argument("--health_timeout", type=int, default=600, help="Seconds to wait for server readiness")
     parser.add_argument("--request_timeout", type=int, default=600, help="Seconds to wait per inference request")
-
+    parser.add_argument("--profile", action="store_true", default=False)
     return parser.parse_args()
 
 
@@ -280,6 +280,11 @@ def send_request(endpoint: str, base_url: str, args: argparse.Namespace, output_
     return _send_image_request(base_url, args, output_path)
 
 
+# ── Profiling ─────────────────────────────────────────────────────────────────
+
+def _call_profile_endpoint(base_url: str, action: str, timeout: int) -> None:
+    resp = requests.post(f"{base_url}/{action}", timeout=timeout)
+    resp.raise_for_status()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -308,12 +313,18 @@ def main() -> None:
             logger.info("Warmup complete.")
 
         # Timed iterations — output is overwritten each time, last one is kept
+        if args.profile:
+            _call_profile_endpoint(base_url, "start_profile", args.request_timeout)
+
         elapsed_times = []
         logger.info("Running %d timed iteration(s)...", args.num_iterations)
         for i in range(1, args.num_iterations + 1):
             logger.info("=== Iteration %d/%d ===", i, args.num_iterations)
             wall_time = send_request(endpoint, base_url, args, output_path)
             elapsed_times.append(wall_time)
+
+        if args.profile:
+            _call_profile_endpoint(base_url, "stop_profile", args.request_timeout)
 
         with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
             json.dump(elapsed_times, f)
