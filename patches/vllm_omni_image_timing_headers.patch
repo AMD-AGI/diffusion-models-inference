@@ -1,0 +1,57 @@
+diff --git a/vllm_omni/entrypoints/openai/api_server.py b/vllm_omni/entrypoints/openai/api_server.py
+old mode 100755
+new mode 100644
+index 07e5d2bf..287c074b
+--- a/vllm_omni/entrypoints/openai/api_server.py
++++ b/vllm_omni/entrypoints/openai/api_server.py
+@@ -1914,7 +1914,14 @@ async def generate_images(
+             response_kwargs["size"] = size_str
+         response = ImageGenerationResponse(**response_kwargs)
+         if request.response_format != ResponseFormat.FILE:
+-            return response
++            return Response(
++                content=response.model_dump_json(),
++                media_type="application/json",
++                headers={
++                    "X-Stage-Durations": json.dumps(result.stage_durations, separators=(",", ":")),
++                    "X-Peak-Memory-MB": f"{result.peak_memory_mb:.3f}",
++                },
++            )
+         return response.stream_response()
+ 
+     except (EngineGenerateError, EngineDeadError) as exc:
+@@ -2157,6 +2164,9 @@ async def edit_images(
+         raw_request.state.request_metadata = RequestResponseMetadata(request_id=request_id)
+         logger.debug(f"Generating {n} image(s) {size_str}")
+ 
++        result = None
++        cot_output = None
++
+         if len(stage_configs) > 1:
+             # Multi-stage pipeline (e.g. GLM-Image AR+Diffusion): route through
+             # the chat handler so the AR stage gets correct max_tokens and
+@@ -2267,13 +2277,23 @@ async def edit_images(
+             for img in images
+         ]
+ 
+-        return ImageGenerationResponse(
++        response = ImageGenerationResponse(
+             created=int(time.time()),
+             data=image_data,
+             output_format=output_format,
+             size=size_str,
+             cot_output=cot_output,
+         )
++        if result is not None:
++            return Response(
++                content=response.model_dump_json(),
++                media_type="application/json",
++                headers={
++                    "X-Stage-Durations": json.dumps(result.stage_durations, separators=(",", ":")),
++                    "X-Peak-Memory-MB": f"{result.peak_memory_mb:.3f}",
++                },
++            )
++        return response
+ 
+     except (EngineGenerateError, EngineDeadError) as exc:
+         return _create_engine_error_json_response(raw_request, exc)
