@@ -63,6 +63,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--use_torch_compile", action="store_true", default=False)
+    parser.add_argument("--enable_slicing", action="store_true", default=False)
+    parser.add_argument("--enable_tiling", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=8098)
 
     # Benchmark control
@@ -116,6 +118,10 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
+    if args.enable_slicing:
+        cmd += ["--vae-use-slicing"]
+    if args.enable_tiling:
+        cmd += ["--vae-use-tiling"]
 
     return cmd
 
@@ -329,13 +335,7 @@ def main() -> None:
         with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
             json.dump(elapsed_times, f)
 
-        median = sorted(elapsed_times)[len(elapsed_times) // 2]
-        logger.info(
-            "Done. %d iteration(s) completed. Median gen time: %.3fs",
-            args.num_iterations,
-            median,
-        )
-
+        logger.info("Done. %d iteration(s) completed.", args.num_iterations)
         logger.info("Server command: %s", shlex.join(build_serve_cmd(args)))
 
     except RuntimeError as exc:
