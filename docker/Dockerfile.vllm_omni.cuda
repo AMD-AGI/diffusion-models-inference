@@ -1,7 +1,7 @@
 # Build example (run from the diffusion-models-inference-staging repo root):
 #
 #   docker build \
-#     -f docker/Dockerfile.vllm_omni_cuda \
+#     -f docker/Dockerfile.vllm_omni.cuda \
 #     -t vllm-omni-cuda:test \
 #     .
 #
