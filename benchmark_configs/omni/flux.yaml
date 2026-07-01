@@ -16,8 +16,44 @@
     guidance_scale: 0.0
     num_iterations: 50
 
+- name: flux.usp.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: black-forest-labs/FLUX.1-dev
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_iterations: 50
+
 - name: flux.usp_2k
-  tags: [instinct, gfx942, gfx950]
+  tags: [lucid, instinct, gfx942, gfx950]
+  model: black-forest-labs/FLUX.1-dev
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    guidance_scale: 0.0
+    num_iterations: 25
+
+- name: flux.usp_2k.hopper
+  tags: [lucid, hopper, h100, h200]
   model: black-forest-labs/FLUX.1-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
