@@ -1,0 +1,49 @@
+# Build example (run from the diffusion-models-inference-staging repo root):
+#
+#   docker build \
+#     -f docker/Dockerfile.vllm_omni_cuda \
+#     -t vllm-omni-cuda:test \
+#     .
+#
+# Based on https://github.com/vllm-project/vllm-omni/blob/main/docker/Dockerfile.cuda
+
+ARG BASE_IMAGE=vllm/vllm-openai:v0.23.0
+FROM ${BASE_IMAGE} AS base
+
+ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
+ARG VLLM_OMNI_COMMIT=724f5d1
+
+WORKDIR /app
+
+# Install system dependencies missing from the base image
+RUN apt-get update && \
+    apt-get install -y git jq && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Clone vllm-omni and pin to the requested commit
+RUN git clone ${VLLM_OMNI_REPO} vllm-omni && \
+    cd vllm-omni && \
+    git reset --hard ${VLLM_OMNI_COMMIT}
+
+# Install vllm-omni as an editable install
+RUN cd /app/vllm-omni && \
+    uv pip install \
+        --python "$(python3 -c 'import sys; print(sys.executable)')" \
+        --no-cache-dir \
+        --no-build-isolation \
+        -e ".[dev]"
+
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+WORKDIR /app
+# Copy assets
+COPY assets/data /app/data
+# Copy CI scripts and benchmark configs
+COPY .ci/run.py /app/.ci/run.py
+COPY .ci/integrations/vllm_omni/runner.py /app/.ci/runner.py
+COPY .ci/integrations/vllm_omni/online_runner.py /app/.ci/online_runner.py
+COPY benchmark_configs/omni/ /app/.ci/benchmark_configs/
+
+ENTRYPOINT []
+CMD ["/bin/bash"]
