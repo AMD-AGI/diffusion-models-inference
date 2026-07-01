@@ -16,8 +16,8 @@
     guidance_scale: 4.0
     num_iterations: 25
 
-- name: flux2.default.hopper.h200
-  tags: [lucid, hopper, h200]
+- name: flux2.default.hopper.h100
+  tags: [lucid, hopper, h100]
   model: black-forest-labs/FLUX.2-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -30,6 +30,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
+    use_hsdp: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25

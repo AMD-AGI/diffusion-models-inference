@@ -121,6 +121,13 @@ def parse_args() -> argparse.Namespace:
         help="Whether to use VAE patch parallelism",
     )
     parser.add_argument(
+        "--use_hsdp",
+        required=False,
+        action="store_true",
+        default=False,
+        help="Whether to use HSDP (Hybrid Sharded Data Parallel) for model weight sharding",
+    )
+    parser.add_argument(
         "--output-directory",
         type=str,
         required=True,
@@ -264,6 +271,7 @@ def main():
             args.ulysses_degree * args.ring_degree * (2 if args.use_cfg_parallel else 1)
             if args.use_parallel_vae else 1
         ),
+        use_hsdp=args.use_hsdp,
         ulysses_mode=args.ulysses_mode,
     )
 

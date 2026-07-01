@@ -63,6 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--use_torch_compile", action="store_true", default=False)
+    parser.add_argument("--use_hsdp", action="store_true", default=False)
     parser.add_argument("--enable_slicing", action="store_true", default=False)
     parser.add_argument("--enable_tiling", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=8098)
@@ -118,6 +119,8 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
+    if args.use_hsdp:
+        cmd += ["--use-hsdp"]
     if args.enable_slicing:
         cmd += ["--vae-use-slicing"]
     if args.enable_tiling:
