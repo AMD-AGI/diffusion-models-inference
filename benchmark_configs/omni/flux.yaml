@@ -2,7 +2,7 @@
   tags: [release, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-dev
   runner: python
-  entrypoint: /app/.ci/runner.py
+  entrypoint: /app/.ci/online_runner.py
   args:
     seed: 42
     prompt: A small cat
@@ -15,13 +15,12 @@
     use_torch_compile: True
     guidance_scale: 0.0
     num_iterations: 50
-    attention_backend: aiter
 
 - name: flux.usp_2k
   tags: [instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-dev
   runner: python
-  entrypoint: /app/.ci/runner.py
+  entrypoint: /app/.ci/online_runner.py
   args:
     seed: 0
     prompt: A small cat
@@ -34,4 +33,3 @@
     use_torch_compile: True
     guidance_scale: 0.0
     num_iterations: 25
-    attention_backend: aiter
