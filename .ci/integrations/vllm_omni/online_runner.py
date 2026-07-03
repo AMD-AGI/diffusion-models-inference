@@ -289,6 +289,7 @@ def _stage_gen_time(resp: requests.Response, wall_time: float) -> float:
                 return float(gen_ms) / 1000.0
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
+    logger.warning("X-Stage-Durations header absent — falling back to client wall time.")
     return wall_time
 
 
