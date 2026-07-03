@@ -49,6 +49,12 @@ def parse_args() -> argparse.Namespace:
         help="The guidance scale to run",
     )
     parser.add_argument(
+        "--true_cfg_scale",
+        type=float,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "--height",
         type=int,
         required=True,
@@ -68,6 +74,13 @@ def parse_args() -> argparse.Namespace:
         help="The number of frames to run",
     )
     parser.add_argument(
+        "--fps",
+        type=int,
+        required=False,
+        default=16,
+        help="Output video frame rate",
+    )
+    parser.add_argument(
         "--num_inference_steps",
         type=int,
         required=True,
@@ -78,6 +91,13 @@ def parse_args() -> argparse.Namespace:
         type=int,
         required=True,
         help="The Ulysses degree to run",
+    )
+    parser.add_argument(
+        "--ulysses_mode",
+        type=str,
+        required=False,
+        default="strict",
+        help="Ulysses sequence-parallel mode: 'strict' (default) or 'advanced_uaa' for uneven head/sequence shapes",
     )
     parser.add_argument(
         "--ring_degree",
@@ -99,6 +119,13 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Whether to use VAE patch parallelism",
+    )
+    parser.add_argument(
+        "--use_hsdp",
+        required=False,
+        action="store_true",
+        default=False,
+        help="Whether to use HSDP (Hybrid Sharded Data Parallel) for model weight sharding",
     )
     parser.add_argument(
         "--output-directory",
@@ -140,7 +167,9 @@ def parse_args() -> argparse.Namespace:
         "--attention_backend",
         type=str,
         required=False,
-        help="NOT IN USE",
+        default=None,
+        help="Override DIFFUSION_ATTENTION_BACKEND (e.g. FLASH_ATTN, TORCH_SDPA). "
+             "Defaults to platform auto-detection when unset.",
     )
     parser.add_argument(
         "--batch_size",
@@ -226,7 +255,7 @@ def save_output(output, elapsed_times, args):
 
         video_name = f"output.mp4"
         video_path = os.path.join(args.output_directory, video_name)
-        export_to_video(video_array, video_path, fps=16)
+        export_to_video(video_array, video_path, fps=args.fps)
         print(f"Saved video to {video_path}")
 
 
@@ -236,6 +265,10 @@ def save_output(output, elapsed_times, args):
 def main():
     args = parse_args()
 
+    if args.attention_backend is not None:
+        os.environ["DIFFUSION_ATTENTION_BACKEND"] = args.attention_backend.upper()
+        print(f"DIFFUSION_ATTENTION_BACKEND={os.environ['DIFFUSION_ATTENTION_BACKEND']}")
+
     parallel_config = DiffusionParallelConfig(
         ulysses_degree=args.ulysses_degree,
         ring_degree=args.ring_degree,
@@ -244,6 +277,8 @@ def main():
             args.ulysses_degree * args.ring_degree * (2 if args.use_cfg_parallel else 1)
             if args.use_parallel_vae else 1
         ),
+        use_hsdp=args.use_hsdp,
+        ulysses_mode=args.ulysses_mode,
     )
 
     profiler_config = None
@@ -283,6 +318,8 @@ def main():
     }
     if args.guidance_scale is not None:
         sampling_args["guidance_scale"] = args.guidance_scale
+    if args.true_cfg_scale is not None:
+        sampling_args["true_cfg_scale"] = args.true_cfg_scale
     if args.num_frames is not None:
         sampling_args["num_frames"] = args.num_frames
     if args.max_sequence_length is not None:
@@ -319,7 +356,6 @@ def main():
         print(f"Iteration {i} time taken: {elapsed_time:.2f}s")
 
     print(" ======================== Inference complete ========================")
-    print(f"Average time taken: {np.mean(elapsed_times):.2f}s")
 
     if args.profile:
         print(" ======================== Stopping profile... ========================")
