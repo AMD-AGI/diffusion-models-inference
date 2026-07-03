@@ -167,7 +167,9 @@ def parse_args() -> argparse.Namespace:
         "--attention_backend",
         type=str,
         required=False,
-        help="NOT IN USE",
+        default=None,
+        help="Override DIFFUSION_ATTENTION_BACKEND (e.g. FLASH_ATTN, TORCH_SDPA). "
+             "Defaults to platform auto-detection when unset.",
     )
     parser.add_argument(
         "--batch_size",
@@ -262,6 +264,10 @@ def save_output(output, elapsed_times, args):
 
 def main():
     args = parse_args()
+
+    if args.attention_backend is not None:
+        os.environ["DIFFUSION_ATTENTION_BACKEND"] = args.attention_backend.upper()
+        print(f"DIFFUSION_ATTENTION_BACKEND={os.environ['DIFFUSION_ATTENTION_BACKEND']}")
 
     parallel_config = DiffusionParallelConfig(
         ulysses_degree=args.ulysses_degree,

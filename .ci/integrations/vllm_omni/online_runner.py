@@ -57,6 +57,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input_images", default=None, help="Input image path (I2V or I2I)")
 
     # Serve flags — passed to the vllm-omni serve command
+    parser.add_argument("--attention_backend", default=None,
+                        help="Override DIFFUSION_ATTENTION_BACKEND (e.g. FLASH_ATTN, TORCH_SDPA). "
+                             "Defaults to platform auto-detection when unset.")
     parser.add_argument("--ulysses_degree", type=int, default=1)
     parser.add_argument("--ring_degree", type=int, default=1)
     parser.add_argument("--ulysses_mode", type=str, default=None, help="advanced_uaa enables uneven head/sequence shapes")
@@ -131,8 +134,14 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
 def start_server(args: argparse.Namespace) -> subprocess.Popen:
     cmd = build_serve_cmd(args)
-    logger.info("Starting server: %s", shlex.join(cmd))
-    return subprocess.Popen(cmd, preexec_fn=os.setsid)
+    env = os.environ.copy()
+    if args.attention_backend is not None:
+        env["DIFFUSION_ATTENTION_BACKEND"] = args.attention_backend.upper()
+        logger.info("Starting server: %s  [DIFFUSION_ATTENTION_BACKEND=%s]",
+                    shlex.join(cmd), env["DIFFUSION_ATTENTION_BACKEND"])
+    else:
+        logger.info("Starting server: %s", shlex.join(cmd))
+    return subprocess.Popen(cmd, env=env, preexec_fn=os.setsid)
 
 
 def wait_for_health(base_url: str, timeout: int, proc: subprocess.Popen) -> None:
