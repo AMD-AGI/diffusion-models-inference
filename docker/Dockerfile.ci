@@ -38,7 +38,7 @@ ARG AITER_COMMIT="3a5261496c591b4fd7cf280d35d20dee713098fd"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
 ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
-ARG XDIT_COMMIT="c30266378c815c2f31f95b9d21d2818276050547"
+ARG XDIT_COMMIT="e6746899aafb99c63449f7f93c8da1d2e63eb00e"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -448,6 +448,7 @@ ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
     KINETO_CONFIG="/config/libkineto.conf"
 # install aiter
 WORKDIR /app/external
+COPY ./patches /patches
 # Keep the Triton wheel we built from TRITON_COMMIT against our PyTorch; otherwise
 # AITER's setup.py would uninstall it and pull a wheel from pypi.amd.com (see
 # https://github.com/ROCm/aiter/pull/3161). No-op on AITER_COMMIT pins predating
@@ -457,10 +458,14 @@ ENV AITER_USE_SYSTEM_TRITON=1
 RUN git clone https://github.com/ROCm/aiter.git && \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
+    git apply /patches/aiter_fp8_sparse_asm_kernel.patch && \
     cp /code_objects/fwd_hd128_fp8.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8.co && \
+    cp /code_objects/fwd_hd128_fp8_sparse.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8_sparse.co && \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
+
+RUN rm -rf /patches && rm -rf /code_objects
 
 FROM core_runtime AS core
 # Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
@@ -535,6 +540,7 @@ WORKDIR /app
 RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
+    git apply /patches/xfuser_aiter_sparge_fp8_asm_backend.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute runtime dependencies
