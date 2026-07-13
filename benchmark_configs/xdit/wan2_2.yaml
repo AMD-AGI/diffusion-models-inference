@@ -372,7 +372,7 @@
     num_inference_steps: 40
     use_torch_compile: True
     use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: aiter_sparge_v2
+    hybrid_attn_low_precision_backend: aiter_sparge_asm_fp8
     hybrid_attn_high_precision_backend: aiter_sage
     cross_attention_backend: aiter
     use_fp4_gemms: True
