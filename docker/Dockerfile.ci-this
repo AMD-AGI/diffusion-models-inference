@@ -1,0 +1,629 @@
+# Build example image with
+#
+# docker build -f docker/Dockerfile.ci \
+#              -t amdsiloai/pytorch-xdit:latest .
+#
+# when running from repository root.
+#
+
+# core image arguments
+ARG BASE_IMAGE="ubuntu:24.04"
+ARG PYTHON_VERSION="default"
+ARG THEROCK_COMMIT="9100ec681955d4af7e1c720fb5c9b208fc838172"
+ARG CCACHE_VERSION="4.11.2"
+# AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
+# at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
+ARG AMDGPU_FAMILIES="gfx94X-dcgpu"
+# AMDGPU_BUNDLE_NAME disambiguates the cmake-level dist bundle name when more
+# than one AMDGPU family is selected. TheRock's therock_validate_amdgpu_targets()
+# FATAL_ERRORs if the bundle name cannot be inferred from a single family.
+# With KPACK_SPLIT_ARTIFACTS=ON it only appears in the intermediate
+# build/artifacts-unsplit/ tree and is not observable in the final image.
+ARG AMDGPU_BUNDLE_NAME="gfx94X_gfx950_bundle"
+# PYTORCH_ROCM_ARCH is a ";" separated list of values, choices for LLVM targets can
+# be found at https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
+ARG PYTORCH_ROCM_ARCH="gfx942"
+# Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
+# This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
+# Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
+ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
+
+## new commits are from nvcr.io/nvidia/pytorch:26.06-py3
+#ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
+#ARG TRITON_COMMIT="88b227e23f0445f3f695bad05bbf1a363b4f50e0"
+ARG TRITON_COMMIT="5d6048aa0a324e090ada215b609ea76620133845"
+# ^^ for pyt=474b708affd7beacd45145a5b3d011a9d59c6b5c and 2.13rel
+
+# we have to build llvm to, since binary cache fails
+# https://github.com/triton-lang/triton/blob/88b227e23f0445f3f695bad05bbf1a363b4f50e0/cmake/llvm-hash.txt
+ARG TRITONS_LLVM_COMMIT="ac5dc54d509169d387fcfd495d71853d81c46484"
+
+# ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
+#ARG PYTORCH_COMMIT="8145d630e811c9ec098a632d9ea7f4d52a2ea16e"  #fails on ROCm with the earliest working commit below (a month+ after)
+#ARG PYTORCH_COMMIT="474b708affd7beacd45145a5b3d011a9d59c6b5c"  #first fixed after 8145d630e811c9ec098a632d9ea7f4d52a2ea16e
+#2.13 rel:
+ARG PYTORCH_COMMIT="cf30153c4c131c8164ee7798e5022d810682e2cb"
+
+#ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
+#ARG PYTORCH_VISION_COMMIT="499ca5103b5c6abdf1973651d6eb3db9dfecdfbd" # for 474b708affd7beacd45145a5b3d011a9d59c6b5c
+# vv is listed for pyt2.13
+ARG PYTORCH_VISION_COMMIT="8fb87713a24951e639c494b0f2a8a81b5f8e33a6"
+
+# the next two don't have compatible with pyt2.13 versions
+#ARG PYTORCH_AUDIO_COMMIT="e3c6ee2b6588b7cd27a84182de74bf12fe043831"
+# vvv the latest release was 2.11
+ARG PYTORCH_AUDIO_COMMIT="34c52a67e8941bbd8e6adaca0eb0b9eabec11d78"
+#ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
+# vv the latest commit on July14
+ARG PYTORCH_CODEC_COMMIT="6acd41978ba7e38058d78356abf2ada01af32da0"
+
+# deps image arguments
+ARG AITER_COMMIT="3a5261496c591b4fd7cf280d35d20dee713098fd"
+ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
+ARG DIFFUSERS_COMMIT="447e571ada565992ea150ad01ac9e335b26b33d1"
+ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
+#ARG XDIT_COMMIT="c30266378c815c2f31f95b9d21d2818276050547"
+ARG XDIT_COMMIT="dc2e7dc98a4b143081b6fb97f23eb28591b3e474"
+ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
+ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
+
+FROM ${BASE_IMAGE} AS build_python
+ARG PYTHON_VERSION
+ARG DEBIAN_FRONTEND=noninteractive
+RUN if [ "${PYTHON_VERSION}" = "default" ]; then \
+        mkdir -p /opt/python/usr; \
+    else \
+        # install python3 (optional) dependencies on Ubuntu 24.04
+        echo "deb-src http://archive.ubuntu.com/ubuntu noble main universe" \
+          >> /etc/apt/sources.list; \
+        apt-get update -qq && apt-get build-dep python3 -y && apt-get install --no-install-recommends -y \
+            build-essential \
+            ca-certificates \
+            gdb \
+            lcov \
+            pkg-config \
+            libbz2-dev \
+            # unclear if needed
+            libexpat1-dev \
+            libffi-dev \
+            libgdbm-dev \
+            libgdbm-compat-dev \
+            liblzma-dev \
+            libncurses5-dev \
+            libreadline6-dev \
+            libsqlite3-dev \
+            libssl-dev \
+            lzma \
+            lzma-dev \
+            tk-dev \
+            uuid-dev \
+            zlib1g-dev \
+            # do not install on Ubuntu 24.04
+#            libmpdec-dev \
+            libzstd-dev \
+            inetutils-inetd \
+            # unclear if needed
+            systemtap-sdt-dev \
+            wget && \
+            update-ca-certificates; \
+            #&& \
+            #rm -rf /var/lib/apt/lists/*; \
+        # build prespecified Python version
+        wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz; \
+        tar -xf Python-${PYTHON_VERSION}.tgz; \
+        cd Python-${PYTHON_VERSION}; \
+        ./configure \
+            --prefix=/usr \
+            --enable-shared \
+            --enable-optimizations \
+            --enable-ipv6 \
+            --with-system-ffi \
+            # unclear if needed
+            --with-system-expat \
+            --with-dbmliborder=bdb:gdbm \
+            --enable-loadable-sqlite-extensions \
+            --with-dtrace; \
+        make -j$(nproc); \
+        make install DESTDIR=/opt/python; \
+    fi
+
+FROM ${BASE_IMAGE} AS base
+ARG PYTHON_VERSION
+ARG DEBIAN_FRONTEND=noninteractive
+
+# install depedencies
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    automake \
+    bison \
+    build-essential \
+    ca-certificates \
+    cmake \
+    curl \
+    flex \
+    freeglut3-dev \
+    gfortran \
+    git \
+    libgfortran5 \
+    libgl1 \
+    libgl1-mesa-dev \
+    libglib2.0-dev \
+    libglu1-mesa-dev \
+    libopenblas-dev \
+    libtool \
+    ninja-build \
+    texinfo \
+    wget \
+    xxd && \
+    update-ca-certificates 
+    #&& \
+    #rm -rf /var/lib/apt/lists/*
+
+# install python3
+COPY --from=build_python /opt/python/usr /usr
+RUN if [ "${PYTHON_VERSION}" = "default" ]; then \
+        # install system Python
+        apt-get update -qq && apt-get install --no-install-recommends -y \
+            python3 \
+            python3-dev \
+            python3-packaging \
+            python3-pip \
+            python3-venv; \
+            #&& \
+            #rm -rf /var/lib/apt/lists/*; \
+    else \
+        # install Python optional runtime dependencies
+        apt-get update -qq && apt-get install -y --no-install-recommends \
+            ca-certificates \
+            # from libbz2-dev
+            libbz2-1.0 \
+            # from libc6-dev
+            libc6 \
+            # from libffi-dev
+            libffi8 \
+            # from libgdbm-dev
+            libgdbm6t64 \
+            # from libgdbm-dev
+            libgdbm-compat4t64 \
+            # from liblzma-dev
+            liblzma5 \
+            # from libreadline6-dev
+            libreadline8 \
+            # from libsqlite3-dev
+            libsqlite3-0 \
+            # from libssl-dev
+            libssl3t64 \
+            # from tk-dev
+            tk \
+            # from uuid-dev
+            libuuid1 \
+            # from zlib1g-dev
+            zlib1g \
+            # from libzstd-dev
+            libzstd1 \
+            # rest are more unclear dependencies
+            libdb5.3 \
+            libexpat1 \
+            libgdbm6 \
+            libncurses6 \
+            libtirpc3 \
+            uuid-runtime; \
+            #&& \
+            #rm -rf /var/lib/apt/lists/*; \
+        # setup prespecified Python version
+        PYTHON_MINOR="$(echo "$PYTHON_VERSION" | awk -F. '{print $1"."$2}')"; \
+        ln -sf /usr/bin/python${PYTHON_MINOR} /usr/bin/python3; \
+        ln -sf /usr/bin/pip${PYTHON_MINOR} /usr/bin/pip3; \
+        python3 -m ensurepip --upgrade; \
+    fi
+
+# setup environment
+RUN python3 -m venv venv
+ENV PATH="/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
+
+FROM base AS setup_therock
+ARG THEROCK_COMMIT
+ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
+ARG ROCM_SYSTEMS_COMMIT_OVERRIDE
+
+WORKDIR /app
+RUN git clone https://github.com/ROCm/TheRock.git && \
+    cd TheRock && \
+    git reset --hard ${THEROCK_COMMIT} && \
+    if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
+        echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
+        git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
+    fi && \
+    if [ -n "$ROCM_SYSTEMS_COMMIT_OVERRIDE" ]; then \
+        echo "Force updating rocm-systems commit to ${ROCM_SYSTEMS_COMMIT_OVERRIDE}" && \
+        git update-index --cacheinfo 160000,${ROCM_SYSTEMS_COMMIT_OVERRIDE},rocm-systems ; \
+    fi
+
+FROM base AS build_rocm
+ARG CCACHE_VERSION
+ARG AMDGPU_FAMILIES
+ARG AMDGPU_BUNDLE_NAME
+COPY --from=setup_therock /app/TheRock /app/TheRock
+WORKDIR /app/TheRock
+# if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
+# Mirroring TheRock's manylinux Dockerfile pin of aiobotocore so dvc[s3]'s
+# botocore window stays aligned with the boto3 range pinned in
+# requirements.txt (>=1.42.79,<1.42.85). aiobotocore==3.4.0 requires
+# botocore>=1.42.79,<1.42.85; resolving everything in one pip call lets
+# pip pick a botocore (1.42.84) that satisfies both pins.
+RUN pip install --no-cache-dir -r requirements.txt "pathspec<0.13.0" "dvc[s3]==3.67.1" "aiobotocore==3.4.0"
+RUN bash dockerfiles/install_ccache.sh ${CCACHE_VERSION}
+RUN bash dockerfiles/install_pinned_patchelf.sh
+RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=locked \
+    --mount=type=cache,target=/app/TheRock/git-mirror,id=therock-git-mirrors,sharing=locked \
+    python build_tools/setup_git_mirrors.py --mirror-dir /app/TheRock/git-mirror --update --jobs 8 && \
+    python build_tools/fetch_sources.py --jobs 8 --depth 1 --reference-dir /app/TheRock/git-mirror && \
+    eval "$(python build_tools/setup_ccache.py --init --local)" && \
+    ccache -o max_size=50G && \
+    ccache -o sloppiness=include_file_ctime,include_file_mtime && \
+    ccache -o compiler_check=content && \
+    cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
+    -DTHEROCK_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
+    -DTHEROCK_TEST_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
+    -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="${AMDGPU_BUNDLE_NAME}" \
+    -DTHEROCK_ENABLE_ALL=OFF \
+    -DTHEROCK_ENABLE_CORE=ON \
+    -DTHEROCK_ENABLE_COMM_LIBS=ON \
+    -DTHEROCK_ENABLE_DEBUG_TOOLS=ON \
+    -DTHEROCK_ENABLE_MATH_LIBS=ON \
+    -DTHEROCK_ENABLE_ML_LIBS=ON \
+    -DTHEROCK_ENABLE_PROFILER=ON \
+    -DTHEROCK_ENABLE_DC_TOOLS=ON \
+    -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
+    cmake --build /app/TheRock/build --target therock-artifacts && \
+    echo "CCache stats:" && ccache -s -v && \
+    cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
+
+FROM base AS rocm_runtime
+COPY docker/rocm_runtime_artifacts.txt /tmp/
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
+# Install amdsmi Python module
+RUN cd /opt/rocm/share/amd_smi && \
+    pip install --no-cache-dir .
+RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
+    echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
+    ldconfig
+ENV PATH="/opt/rocm/bin:$PATH" \
+    ROCM_HOME=/opt/rocm \
+    ROCM_PATH=/opt/rocm \
+    HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
+
+FROM rocm_runtime AS rocm_devel
+COPY docker/rocm_devel_artifacts.txt /tmp/
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
+RUN ldconfig
+ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
+
+FROM rocm_devel AS build_torch_stack
+ARG TRITON_COMMIT
+ARG TRITONS_LLVM_COMMIT
+ARG PYTORCH_COMMIT
+ARG PYTORCH_VISION_COMMIT
+ARG PYTORCH_AUDIO_COMMIT
+ARG PYTORCH_CODEC_COMMIT
+ARG PYTORCH_ROCM_ARCH
+COPY --from=setup_therock /app/TheRock /app/TheRock
+
+# needed for HIPIFY commits created by the build process
+RUN git config --global user.name "TheRock Builder" && \
+    git config --global user.email "builder@rocm.ai"
+
+# fetch sources
+WORKDIR /app/TheRock/external-builds/pytorch
+RUN pip install -r /app/TheRock/requirements.txt && \
+    python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/pytorch/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
+# fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
+RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
+    cd pytorch_codec && \
+    git reset --hard ${PYTORCH_CODEC_COMMIT}
+
+# fetching and building LLVM prior to Triton
+RUN pip install ninja cmake wheel pybind11 && \
+    git clone https://github.com/llvm/llvm-project.git llvm-project && \
+    cd llvm-project && \
+    git reset --hard ${TRITONS_LLVM_COMMIT} && \
+    mkdir build && \
+    cd build && \
+    cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON ../llvm -DLLVM_ENABLE_PROJECTS="mlir;llvm;lld" -DLLVM_TARGETS_TO_BUILD="host;NVPTX;AMDGPU" && \
+    ninja
+
+RUN mkdir /install
+# install triton
+RUN export LLVM_BUILD_DIR=$(pwd)/llvm-project/build && \
+    cd triton && \
+    pip install -r python/requirements.txt && \
+    LLVM_INCLUDE_DIRS=$LLVM_BUILD_DIR/include LLVM_LIBRARY_DIR=$LLVM_BUILD_DIR/lib LLVM_SYSPATH=$LLVM_BUILD_DIR \
+    pip wheel . --wheel-dir dist/ && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install pytorch
+RUN cd pytorch && \
+    UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
+    PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
+    pip install -r requirements.txt && \
+    BUILD_TEST=0 \
+    USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
+    USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" \
+    PYTORCH_BUILD_VERSION="${PYTORCH_VERSION}+git${UPSTREAM_HASH}" \
+    PYTORCH_BUILD_NUMBER=1 \
+    CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
+    LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
+    PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install vision
+RUN cd pytorch_vision && \
+    FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install audio
+RUN apt-get update -qq && apt-get -y install --no-install-recommends \
+    ffmpeg libdrm-dev
+    # \
+    #&& rm -rf /var/lib/apt/lists/*
+RUN cd pytorch_audio && \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install torchcodec
+RUN pip install --no-cache-dir pybind11 pybind11[global] && \
+    cd pytorch_codec && \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
+    python -m build --wheel -vvv --no-isolation -o dist && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+
+# FROM ubuntu:24.04 AS ffmpeg_builder
+# # Reference: https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
+# # Install build depedencies, server use only
+# RUN apt-get update -qq && apt-get -y install --no-install-recommends \
+#     autoconf \
+#     automake \
+#     build-essential \
+#     ca-certificates \
+#     cmake \
+#     git-core \
+#     libaom-dev \
+#     libass-dev \
+#     libdav1d-dev \
+#     libfreetype6-dev \
+#     libgnutls28-dev \
+#     libmp3lame-dev \
+#     libopenh264-dev \
+#     libtool \
+#     libunistring-dev \
+#     libvorbis-dev \
+#     meson \
+#     ninja-build \
+#     pkg-config \
+#     texinfo \
+#     wget \
+#     yasm \
+#     zlib1g-dev \
+#     && rm -rf /var/lib/apt/lists/*
+
+# # See https://ffmpeg.org/releases/ for valid choices of FFMPEG_VERSION
+# ARG FFMPEG_VERSION="7.1.3"
+# ENV FFMPEG_BUILD_DIR=/ffmpeg/build
+# ENV FFMPEG_SRC_DIR=/ffmpeg/src
+# ENV FFMPEG_BIN_DIR=/ffmpeg/bin
+# RUN mkdir -p ${FFMPEG_BUILD_DIR} ${FFMPEG_SRC_DIR}
+# WORKDIR ${FFMPEG_SRC_DIR}
+# # Never set --enable-gpl or --enable-nonfree to maintain non-GPL license compliance!
+# RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
+#     tar xjvf ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
+#     cd ffmpeg-${FFMPEG_VERSION} && \
+#     PATH="$FFMPEG_BIN_DIR:$PATH" PKG_CONFIG_PATH="$FFMPEG_BUILD_DIR/lib/pkgconfig" ./configure \
+#     --prefix="$FFMPEG_BUILD_DIR" \
+#     --pkg-config-flags="--static" \
+#     --extra-cflags="-I$FFMPEG_BUILD_DIR/include" \
+#     --extra-ldflags="-L$FFMPEG_BUILD_DIR/lib" \
+#     --extra-libs="-lpthread -lm" \
+#     --ld="g++" \
+#     --bindir="$FFMPEG_BIN_DIR" \
+#     --enable-gnutls \
+#     --enable-libaom \
+#     --enable-libass \
+#     --enable-libdav1d \
+#     --enable-libfreetype \
+#     --enable-libmp3lame \
+#     --enable-libopenh264 \
+#     --enable-libvorbis \
+#     --enable-shared && \
+#     PATH="$FFMPEG_BIN_DIR:$PATH" make -j$(($(nproc)-1)) && \
+#     make install && \
+#     hash -r
+
+FROM rocm_runtime AS core_runtime
+ARG AITER_COMMIT
+RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
+    pip install --no-cache-dir /install/*.whl
+# AITER JIT: install dev artifacts required for runtime kernel compilation
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" \
+        base_dev core-hip_dev core-runtime_dev blas_dev prim_dev rand_dev
+# torchcodec: install FFmpeg and runtime dependencies
+RUN apt-get update -qq && apt-get -y install --no-install-recommends \
+  libaom3 \
+  libass9 \
+  libdav1d7 \
+  libfreetype6 \
+  libgnutls30 \
+  libmp3lame0 \
+  libopenh264-7 \
+  libvorbis0a \
+  libvorbisenc2 
+  #\
+  #&& rm -rf /var/lib/apt/lists/*
+# Copy built FFmpeg artifacts from the builder stage
+# COPY --from=ffmpeg_builder /ffmpeg/bin /usr/local/bin
+# COPY --from=ffmpeg_builder /ffmpeg/build/lib /usr/local/lib
+# COPY --from=ffmpeg_builder /ffmpeg/build/include /usr/local/include
+# COPY --from=ffmpeg_builder /ffmpeg/build/share /usr/local/share
+# Update library cache
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
+    ldconfig
+COPY docker/libkineto.conf /config/libkineto.conf
+ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
+    KINETO_CONFIG="/config/libkineto.conf"
+# install aiter
+WORKDIR /app/external
+# Keep the Triton wheel we built from TRITON_COMMIT against our PyTorch; otherwise
+# AITER's setup.py would uninstall it and pull a wheel from pypi.amd.com (see
+# https://github.com/ROCm/aiter/pull/3161). No-op on AITER_COMMIT pins predating
+# that PR, but safe and forward-compatible.
+COPY ./src/code_objects /code_objects
+ENV AITER_USE_SYSTEM_TRITON=1
+RUN git clone https://github.com/ROCm/aiter.git && \
+    cd aiter && \
+    git reset --hard ${AITER_COMMIT} && \
+    cp /code_objects/fwd_hd128_fp8.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8.co && \
+    git submodule update --init --recursive && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install -e .
+
+FROM core_runtime AS core
+# Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
+# archives are re-extracted idempotently). Uses the same manifest as rocm_devel.
+COPY docker/rocm_devel_artifacts.txt /tmp/
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
+RUN ldconfig
+ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
+
+FROM core AS deps
+ARG LONGCONTEXTATTENTION_COMMIT
+ARG DIFFUSERS_COMMIT
+ARG DISTVAE_COMMIT
+ARG XDIT_COMMIT
+ARG AO_COMMIT
+ARG ARBITER_COMMIT
+
+# setup
+WORKDIR /app/external
+COPY ./patches /patches
+# install yunchang
+RUN git clone https://github.com/feifeibear/long-context-attention.git && \
+    cd long-context-attention && \
+    git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
+    git apply /patches/yunchang_aiter_round_mode.patch && \
+    pip install -e .
+# install transformers with [sentencepiece] extras that brings in protobuf, required for T5 tokenizers
+RUN pip install --no-cache-dir "transformers[sentencepiece]==5.5.4"
+# install diffusers
+# ftfy is an optional dependency, we install it as needed for StableDiffusion 3.5 (CLIP-based encoder pipelines)
+# final rm step is needed presently to pass a release process image scan
+RUN git clone https://github.com/huggingface/diffusers.git && \
+    cd diffusers && \
+    git reset --hard ${DIFFUSERS_COMMIT} && \
+    pip install -e ".[torch]" && \
+    rm scripts/convert_vq_diffusion_to_diffusers.py && \
+    pip install --no-cache-dir "ftfy"
+# install torchao
+RUN git clone https://github.com/pytorch/ao.git && \
+    cd ao && \
+    git reset --hard ${AO_COMMIT} && \
+    pip install -e . --no-build-isolation
+# install arbiter
+RUN git clone https://github.com/fal-ai/arbiter.git && \
+    cd arbiter && \
+    git reset --hard ${ARBITER_COMMIT} && \
+    # too strict torch version, drop dependency
+    sed -i '/numpy/d' pyproject.toml && \
+    # the requested pyiqa version depends on transformers==4.37.2 which we cannot use
+    sed -i '/pyiqa/d' pyproject.toml && \
+    # numba dependency is not used
+    sed -i '/numba/d' pyproject.toml && \
+    # facexlib is not used
+    sed -i '/facexlib/d' pyproject.toml && \
+    # drop llvmlite
+    sed -i '/llvmlite/d' pyproject.toml && \
+    # to be sure, pin numpy and transformers to their current versions
+    pip freeze | grep -E 'numpy|transformers' > constraints.txt && \
+    pip install --no-cache-dir -c constraints.txt -e .
+# install distvae
+RUN git clone https://github.com/xdit-project/DistVAE.git && \
+    cd DistVAE && \
+    git reset --hard ${DISTVAE_COMMIT} && \
+    pip install -e .
+# install xfuser
+WORKDIR /app
+RUN git clone https://github.com/xdit-project/xDiT.git && \
+    cd xDiT && \
+    git reset --hard ${XDIT_COMMIT} && \
+    pip freeze | grep numpy > constraints.txt && \
+    pip install --no-cache-dir --no-deps numba==0.66.0 && \
+    sed -i '/"numba",/d' setup.py && \
+    sed -i '/"numpy",/d' setup.py && \
+    pip install -c constraints.txt -e .
+# rocprofiler-compute runtime dependencies
+# Due to https://github.com/ROCm/rocm-systems/pull/2821 drop numpy to avoid installing numpy<2
+RUN sed -i '/numpy/d' ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt && \
+    pip install --no-cache-dir -r ${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt
+# imageio + imageio-ffmpeg for diffusers export_to_video H.264 encoding
+# --no-binary avoids shipping imageio-ffmpeg's bundled GPL ffmpeg binary
+RUN pip install --no-cache-dir --no-binary :all: imageio-ffmpeg
+RUN pip install --no-cache-dir imageio
+# cleanup
+RUN rm -fr /patches
+RUN rm -fr /code_objects
+
+FROM core AS final
+# by copying from the deps stage we leave behind all cache and temporary files created during installation
+COPY --from=deps /venv /venv
+COPY --from=deps /app /app
+
+# install basic terminal utilities
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    less \
+    nano \
+    vim \
+    mc 
+    #\
+    #&& rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+# copy assets
+COPY assets/data /app/data
+# copy instructions and CI prerequisites
+COPY assets/docs/README.md /app/README.md
+COPY .ci/run.py /app/.ci/run.py
+COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
+COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
+COPY .ci/quality_check.py /app/.ci/quality_check.py
+# use shared MIOpen databases
+COPY ./data/miopen/userdb /miopen_userdb
+ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
