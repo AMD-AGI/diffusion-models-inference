@@ -384,6 +384,7 @@ RUN cd pytorch_vision && \
 # install audio
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
     ffmpeg libdrm-dev
+    # due to ffmpeg we MUST NOT use this dockerfile for releases
     # \
     #&& rm -rf /var/lib/apt/lists/*
 RUN cd pytorch_audio && \
@@ -586,6 +587,8 @@ RUN git clone https://github.com/xdit-project/xDiT.git && \
     git reset --hard ${XDIT_COMMIT} && \
     pip freeze | grep numpy > constraints.txt && \
     pip install --no-cache-dir --no-deps numba==0.66.0 && \
+    # have to drop numba, since it fails to match with older numpy.
+    # dropping numpy just because that's why.
     sed -i '/"numba",/d' setup.py && \
     sed -i '/"numpy",/d' setup.py && \
     pip install -c constraints.txt -e .
@@ -611,7 +614,12 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     less \
     nano \
     vim \
-    mc 
+    # easier file management
+    mc \
+    # poisoned GPL version again, not for redist!
+    ffmpeg \
+    # for building torch later
+    libdrm-dev liblzma-dev
     #\
     #&& rm -rf /var/lib/apt/lists/*
 
