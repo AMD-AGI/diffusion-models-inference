@@ -6,17 +6,18 @@
 # when running from repository root.
 #
 
-ARG AITER_COMMIT="7d604afe5fa7efba63c0dce323b95d9daf2db112"
+ARG AITER_REPO="https://github.com/pds-amd/aiter.git"
+ARG AITER_COMMIT="e76910980066cc696c12f10745cde1bae94c933e"
 ARG DIFFUSERS_COMMIT="3759fab56d3170a04d747e918a13e55fda6681e2"
 ARG ARBITER_COMMIT="656b6689bdaea4f17afe7387f2d9f36e10867e32"
 ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
-ARG XDIT_REPO="https://github.com/xdit-project/xDiT.git"
-ARG XDIT_COMMIT="4433b81061d027e568d49c4812b4ed795782868f"
+ARG XDIT_REPO="https://github.com/pds-amd/xDiT.git"
+ARG XDIT_COMMIT="e42e9d822244bc4ffe7efd5b814a94c7b6946c51"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG FLYDSL_VERSION="0.2.0"
+ARG FLYDSL_VERSION="0.2.2"
 # transformers is the one transitive dep we pin by hand (its majors break
 # diffusers/xfuser); everything else resolves from each package's own metadata.
-ARG TRANSFORMERS_PIN="5.10.2"
+ARG TRANSFORMERS_PIN="5.13.0"
 
 # ---- ROCm + PyTorch wheels (TheRock gfx120X) -------------------------------
 # torch/vision/audio are pinned to EXACT ROCm version strings that exist only on
@@ -254,6 +255,7 @@ ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG XDIT_REPO
 ARG LONGCONTEXTATTENTION_COMMIT
+ARG AITER_REPO
 ARG FLYDSL_VERSION
 ARG TRANSFORMERS_PIN
 
@@ -305,7 +307,7 @@ RUN git clone https://github.com/feifeibear/long-context-attention.git && \
 # aiter - built from source ON PURPOSE: published aiter wheels are CDNA-only
 # (gfx942+gfx950), and the part we use on RDNA4 is the JIT FlyDSL aiter_flydsl
 # attention backend, which compiles at runtime.
-RUN git clone https://github.com/ROCm/aiter.git && \
+RUN git clone "${AITER_REPO}" && \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
     echo "aiter at $(git rev-parse HEAD)" && \
