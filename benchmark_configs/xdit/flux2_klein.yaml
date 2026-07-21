@@ -59,16 +59,13 @@
     height: 2048
     width: 2048
     num_inference_steps: 4
-    warmup_calls: 5
-    num_iterations: 25
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 1.0
-    attention_backend: aiter_flydsl
-    ulysses_degree: 1
-    ring_degree: 1
+    attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
     enable_tiling: true
     use_fp8_gemms: true
-
 - name: flux2_klein.2gpu.rdna4
   tags: [rdna4, gfx1201]
   model: black-forest-labs/FLUX.2-klein-9B
@@ -79,17 +76,15 @@
     height: 2048
     width: 2048
     num_inference_steps: 4
-    warmup_calls: 5
-    num_iterations: 25
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 1.0
-    attention_backend: aiter_flydsl
+    attention_backend: aiter_flydsl_fp8
     ulysses_degree: 2
-    ring_degree: 1
     use_torch_compile: true
+    use_fp8_gemms: true
     enable_tiling: true
     use_parallel_vae: true
-    use_fp8_gemms: true
-
 - name: flux2_klein.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: black-forest-labs/FLUX.2-klein-9B
@@ -100,13 +95,70 @@
     height: 2048
     width: 2048
     num_inference_steps: 4
-    warmup_calls: 5
-    num_iterations: 25
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 1.0
-    attention_backend: aiter_flydsl
+    attention_backend: aiter_flydsl_fp8
     ulysses_degree: 4
-    ring_degree: 1
     use_torch_compile: true
     use_fp8_gemms: true
     enable_tiling: true
     use_parallel_vae: true
+
+- name: flux2_klein_4b.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-klein-4B
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of the moon
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    warmup_calls: 2
+    num_iterations: 5
+    guidance_scale: 1.0
+    attention_backend: aiter_flydsl_fp8
+    use_torch_compile: true
+    use_fp8_gemms: true
+    enable_tiling: true
+
+- name: flux2_klein_4b.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-klein-4B
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of the moon
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    warmup_calls: 2
+    num_iterations: 5
+    guidance_scale: 1.0
+    attention_backend: aiter_flydsl_fp8
+    ulysses_degree: 2
+    use_torch_compile: true
+    use_fp8_gemms: true
+    use_parallel_vae: true
+    enable_tiling: true
+
+- name: flux2_klein_4b.4gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: black-forest-labs/FLUX.2-klein-4B
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Cat astronaut raising a cat flag on the surface of the moon
+    height: 2048
+    width: 2048
+    num_inference_steps: 4
+    warmup_calls: 2
+    num_iterations: 5
+    guidance_scale: 1.0
+    attention_backend: aiter_flydsl_fp8
+    ulysses_degree: 4
+    use_torch_compile: true
+    use_fp8_gemms: true
+    use_parallel_vae: true
+    enable_tiling: true

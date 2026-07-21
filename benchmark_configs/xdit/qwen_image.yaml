@@ -51,65 +51,66 @@
   model: Qwen/Qwen-Image-2512
   runner: xdit
   args:
+    seed: 42
     prompt: A cat holding a sign that says hello world
     height: 2048
     width: 2048
-    seed: 42
-    num_inference_steps: 4
-    guidance_scale: 0.0
+    num_inference_steps: 50
     warmup_calls: 2
     num_iterations: 5
-    attention_backend: aiter_flydsl
-    ulysses_degree: 1
-    ring_degree: 1
+    guidance_scale: 0.0
+    attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true
     use_fp8_gemms: true
     enable_model_cpu_offload: true
-
+    enable_tiling: true
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.1
 - name: qwen_image.2gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Qwen/Qwen-Image-2512
   runner: xdit
   args:
+    seed: 42
     prompt: A cat holding a sign that says hello world
     height: 2048
     width: 2048
-    seed: 42
-    num_inference_steps: 4
-    guidance_scale: 0.0
+    num_inference_steps: 50
     warmup_calls: 2
     num_iterations: 5
-    attention_backend: aiter_flydsl
+    guidance_scale: 0.0
+    attention_backend: aiter_flydsl_fp8
     ulysses_degree: 2
-    ring_degree: 1
     fully_shard_degree: 2
     memory_efficient_sharding: true
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true
     use_fp8_gemms: true
-
+    use_parallel_vae: true
+    enable_tiling: true
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.1
 - name: qwen_image.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Qwen/Qwen-Image-2512
   runner: xdit
   args:
+    seed: 42
     prompt: A cat holding a sign that says hello world
     height: 2048
     width: 2048
-    seed: 42
-    num_inference_steps: 4
-    guidance_scale: 0.0
+    num_inference_steps: 50
     warmup_calls: 2
     num_iterations: 5
-    attention_backend: aiter_flydsl
+    guidance_scale: 0.0
+    attention_backend: aiter_flydsl_fp8
     ulysses_degree: 4
-    ring_degree: 1
-    fully_shard_degree: 4
+    fully_shard_degree: 2
     memory_efficient_sharding: true
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true
     use_fp8_gemms: true
+    enable_tiling: true
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.1

@@ -64,19 +64,17 @@
     prompt: A small cat sitting in a garden
     height: 1024
     width: 1024
-    num_inference_steps: 25
+    num_inference_steps: 30
     max_sequence_length: 256
     warmup_calls: 2
     num_iterations: 5
     guidance_scale: 2.5
-    attention_backend: aiter_flydsl
-    ulysses_degree: 1
-    ring_degree: 1
     input_images: /app/data/flux_cat.png
     resize_input_images: true
+    attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
     use_fp8_gemms: true
-
+    cache_method: dbcache
 - name: flux_kontext.2gpu.rdna4
   tags: [rdna4, gfx1201]
   model: black-forest-labs/FLUX.1-Kontext-dev
@@ -86,21 +84,19 @@
     prompt: A small cat sitting in a garden
     height: 1024
     width: 1024
-    num_inference_steps: 25
+    num_inference_steps: 30
     max_sequence_length: 256
     warmup_calls: 2
     num_iterations: 5
     guidance_scale: 2.5
-    attention_backend: aiter_flydsl
-    ulysses_degree: 2
-    ring_degree: 1
     input_images: /app/data/flux_cat.png
     resize_input_images: true
+    attention_backend: aiter_flydsl_fp8
+    ulysses_degree: 2
     use_torch_compile: true
-    enable_tiling: true
-    use_parallel_vae: true
     use_fp8_gemms: true
-
+    use_parallel_vae: true
+    cache_method: dbcache
 - name: flux_kontext.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: black-forest-labs/FLUX.1-Kontext-dev
@@ -110,17 +106,16 @@
     prompt: A small cat sitting in a garden
     height: 1024
     width: 1024
-    num_inference_steps: 25
+    num_inference_steps: 30
     max_sequence_length: 256
     warmup_calls: 2
     num_iterations: 5
     guidance_scale: 2.5
-    attention_backend: aiter_flydsl
-    ulysses_degree: 4
-    ring_degree: 1
     input_images: /app/data/flux_cat.png
     resize_input_images: true
+    attention_backend: aiter_flydsl_fp8
+    ulysses_degree: 4
     use_torch_compile: true
     use_fp8_gemms: true
-    enable_tiling: true
     use_parallel_vae: true
+    cache_method: dbcache

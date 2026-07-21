@@ -8,14 +8,11 @@
     height: 512
     width: 320
     num_inference_steps: 4
-    warmup_calls: 3
-    ulysses_degree: 1
-    ring_degree: 1
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 0.0
-    num_iterations: 10
     attention_backend: aiter_flydsl
     use_torch_compile: true
-
 - name: z_image_turbo.2gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Tongyi-MAI/Z-Image-Turbo
@@ -26,16 +23,12 @@
     height: 512
     width: 320
     num_inference_steps: 4
-    warmup_calls: 3
-    ulysses_degree: 2
-    ring_degree: 1
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 0.0
-    num_iterations: 10
     attention_backend: aiter_flydsl
+    ulysses_degree: 2
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true
-
 - name: z_image_turbo.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Tongyi-MAI/Z-Image-Turbo
@@ -46,12 +39,9 @@
     height: 512
     width: 320
     num_inference_steps: 4
-    warmup_calls: 3
-    ulysses_degree: 4
-    ring_degree: 1
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 0.0
-    num_iterations: 10
     attention_backend: aiter_flydsl
+    ulysses_degree: 4
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true

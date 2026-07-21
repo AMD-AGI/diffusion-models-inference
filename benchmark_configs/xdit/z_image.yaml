@@ -56,15 +56,15 @@
     height: 1088
     width: 1920
     num_inference_steps: 50
-    warmup_calls: 5
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_flydsl
+    attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true
     use_fp8_gemms: true
-
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.1
 - name: z_image.2gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Tongyi-MAI/Z-Image
@@ -75,17 +75,16 @@
     height: 1088
     width: 1920
     num_inference_steps: 50
-    warmup_calls: 5
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_flydsl
+    attention_backend: aiter_flydsl_fp8
     ulysses_degree: 2
-    ring_degree: 1
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true
     use_fp8_gemms: true
-
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.1
 - name: z_image.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Tongyi-MAI/Z-Image
@@ -96,13 +95,16 @@
     height: 1088
     width: 1920
     num_inference_steps: 50
-    warmup_calls: 5
+    warmup_calls: 2
+    num_iterations: 5
     guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_flydsl
+    attention_backend: aiter_flydsl_fp8
     ulysses_degree: 4
-    ring_degree: 1
     use_torch_compile: true
-    enable_tiling: true
-    enable_slicing: true
     use_fp8_gemms: true
+    use_parallel_vae: true
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.08
+      scm_policy: ultra
+      Fn_compute_blocks: 6
