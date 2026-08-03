@@ -28,11 +28,11 @@ ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
 # Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
 ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
-ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
-ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
-ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
-ARG PYTORCH_AUDIO_COMMIT="e3c6ee2b6588b7cd27a84182de74bf12fe043831"
-ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
+ARG TRITON_COMMIT="4cff872ced001ea92d9fcf05b3f6517e2b486d19"
+ARG PYTORCH_COMMIT="d0fcdf917596ad6d2da9a2799bfba4b71456dcc4"
+ARG PYTORCH_VISION_COMMIT="8fb87713a24951e639c494b0f2a8a81b5f8e33a6"
+ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
+ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
 # deps image arguments
 ARG AITER_COMMIT="3a5261496c591b4fd7cf280d35d20dee713098fd"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
@@ -320,7 +320,7 @@ RUN pip install -r /app/TheRock/requirements.txt && \
     python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1 && \
     python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1 && \
     python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
-    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/pytorch/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
+    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/ROCm/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
 # fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
 RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
     cd pytorch_codec && \
