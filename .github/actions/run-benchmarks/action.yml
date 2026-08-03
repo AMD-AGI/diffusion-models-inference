@@ -6,7 +6,7 @@ inputs:
     description: 'Docker image to use for benchmarking'
     required: true
   arch:
-    description: 'Architecture name (mi300, mi308, mi325, mi350, mi355)'
+    description: 'Architecture name (gfx942, gfx950)'
     required: true
   benchmark_flags:
     description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config (mutually exclusive with tag).'

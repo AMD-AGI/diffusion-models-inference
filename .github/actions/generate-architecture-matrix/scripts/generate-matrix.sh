@@ -4,33 +4,25 @@ set -euo pipefail
 # Generate a GitHub Actions matrix JSON from workflow inputs.
 # Expects env var: WORKFLOW_INPUTS (JSON string)
 
-MI300_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi300_runner // ""' | xargs)
-MI325_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi325_runner // ""' | xargs)
-MI355_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.mi355_runner // ""' | xargs)
+GFX942_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.gfx942_runner // ""' | xargs)
+GFX950_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.gfx950_runner // ""' | xargs)
 
 TIMEOUT=1440  # 24h default timeout
 
 MATRIX_JSON='{"include":['
 FIRST=true
 
-# MI300
-if [ -n "$MI300_RUNNER" ]; then
+# gfx942
+if [ -n "$GFX942_RUNNER" ]; then
   if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi300\",\"gfx_arch\":\"gfx942\",\"runner\":\"$MI300_RUNNER\",\"timeout\":${TIMEOUT}}"
+  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"gfx942\",\"gfx_arch\":\"gfx942\",\"runner\":\"$GFX942_RUNNER\",\"timeout\":${TIMEOUT}}"
   FIRST=false
 fi
 
-# MI325
-if [ -n "$MI325_RUNNER" ]; then
+# gfx950
+if [ -n "$GFX950_RUNNER" ]; then
   if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi325\",\"gfx_arch\":\"gfx942\",\"runner\":\"$MI325_RUNNER\",\"timeout\":${TIMEOUT}}"
-  FIRST=false
-fi
-
-# MI355
-if [ -n "$MI355_RUNNER" ]; then
-  if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"mi355\",\"gfx_arch\":\"gfx950\",\"runner\":\"$MI355_RUNNER\",\"timeout\":${TIMEOUT}}"
+  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"gfx950\",\"gfx_arch\":\"gfx950\",\"runner\":\"$GFX950_RUNNER\",\"timeout\":${TIMEOUT}}"
   FIRST=false
 fi
 

@@ -55,16 +55,12 @@ on:
         type: boolean
         required: false
         default: false
-      mi300_runner:
-        description: 'MI300 runner (label or node/pool name)'
+      gfx942_runner:
+        description: 'gfx942 runner (label or node/pool name)'
         required: false
         default: ''
-      mi325_runner:
-        description: 'MI325 runner (label or node/pool name)'
-        required: false
-        default: ''
-      mi355_runner:
-        description: 'MI355 runner (label or node/pool name)'
+      gfx950_runner:
+        description: 'gfx950 runner (label or node/pool name)'
         required: false
         default: ''
 
@@ -108,18 +104,15 @@ jobs:
       - name: Check architectures
         id: check-archs
         env:
-          MI300_RUNNER: ${{ inputs.mi300_runner }}
-          MI325_RUNNER: ${{ inputs.mi325_runner }}
-          MI355_RUNNER: ${{ inputs.mi355_runner }}
+          GFX942_RUNNER: ${{ inputs.gfx942_runner }}
+          GFX950_RUNNER: ${{ inputs.gfx950_runner }}
         run: |
-          MI300_RUNNER=$(echo "$MI300_RUNNER" | xargs)
-          MI325_RUNNER=$(echo "$MI325_RUNNER" | xargs)
-          MI355_RUNNER=$(echo "$MI355_RUNNER" | xargs)
+          GFX942_RUNNER=$(echo "$GFX942_RUNNER" | xargs)
+          GFX950_RUNNER=$(echo "$GFX950_RUNNER" | xargs)
           
           ANY_ENABLED=false
-          if [ -n "$MI300_RUNNER" ] || \
-             [ -n "$MI325_RUNNER" ] || \
-             [ -n "$MI355_RUNNER" ]; then
+          if [ -n "$GFX942_RUNNER" ] || \
+             [ -n "$GFX950_RUNNER" ]; then
             ANY_ENABLED=true
           fi
           echo "any_enabled=${ANY_ENABLED}" >> $GITHUB_OUTPUT
