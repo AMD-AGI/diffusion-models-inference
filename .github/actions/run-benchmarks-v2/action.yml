@@ -1,0 +1,105 @@
+name: Run Benchmarks (inference-testing)
+description: Run xDiT benchmarks using the inference-testing tool
+
+inputs:
+  image:
+    description: 'Docker image to use for benchmarking (passed to the inference-testing DockerServer)'
+    required: true
+  arch:
+    description: 'Architecture name (mi300, mi308, mi325, mi350, mi355)'
+    required: true
+  benchmark_flags:
+    description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config (mutually exclusive with tag).'
+    required: false
+    default: ''
+  gfx_arch:
+    description: 'GPU architecture tag for benchmark selection (gfx942, gfx950)'
+    required: false
+    default: ''
+  benchmark_only:
+    description: 'Whether running in benchmark-only mode'
+    required: false
+    default: 'false'
+  collect_hipblaslt_logs:
+    description: 'Collect hipBLASLt GEMM logs per benchmark'
+    required: false
+    default: 'false'
+  output_dir:
+    description: 'Output directory name for benchmark results (e.g., benchmarks, benchmarks-baseline)'
+    required: false
+    default: 'benchmarks'
+  hf_token:
+    description: 'HuggingFace token for model downloads'
+    required: true
+  hf_cache_map:
+    description: 'Hostname to HF cache mapping'
+    required: false
+    default: ''
+  artifact_name:
+    description: 'Full artifact name for upload'
+    required: true
+  inference_testing_image:
+    description: 'inference-testing driver image'
+    required: false
+    default: 'amdsiloai/inference-testing:latest'
+
+runs:
+  using: composite
+  steps:
+    - name: Create benchmark output directory
+      shell: bash
+      run: |
+        rm -rf "$GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}"
+        mkdir -p "$GITHUB_WORKSPACE/${{ inputs.output_dir }}/${{ inputs.arch }}"
+
+    - name: Get HF cache path for node
+      id: hf_cache
+      shell: bash
+      env:
+        CACHE_PATHS: ${{ inputs.hf_cache_map }}
+      run: bash ${{ github.action_path }}/resolve-hf-cache.sh
+
+    - name: Convert benchmark configs
+      id: convert
+      shell: bash
+      env:
+        INPUT_BENCHMARK_FLAGS: ${{ inputs.benchmark_flags }}
+        GFX_ARCH: ${{ inputs.gfx_arch }}
+        DOCKER_IMAGE: ${{ inputs.image }}
+      run: bash ${{ github.action_path }}/convert-configs.sh
+
+    - name: Post-process converted configs
+      shell: bash
+      run: |
+        POST_PROCESS_ARGS=""
+        if [ -n "${{ steps.hf_cache.outputs.hf_cache_volume }}" ]; then
+          POST_PROCESS_ARGS="$POST_PROCESS_ARGS --hf-cache-volume ${{ steps.hf_cache.outputs.hf_cache_volume }}"
+        fi
+        if [ "${{ inputs.benchmark_only }}" != "true" ]; then
+          POST_PROCESS_ARGS="$POST_PROCESS_ARGS --miopen-user-db"
+        fi
+        if [ "${{ inputs.collect_hipblaslt_logs }}" = "true" ]; then
+          POST_PROCESS_ARGS="$POST_PROCESS_ARGS --collect-hipblaslt-logs"
+        fi
+        python3 ${{ github.action_path }}/post-process-configs.py \
+          ${{ steps.convert.outputs.converted_dir }} \
+          $POST_PROCESS_ARGS
+
+    - name: Run inference-testing
+      if: ${{ steps.convert.outputs.config_count != '0' }}
+      shell: bash
+      env:
+        OUTPUT_DIR: ${{ inputs.output_dir }}
+        ARCH: ${{ inputs.arch }}
+        HF_CACHE_ARGS: ${{ steps.hf_cache.outputs.hf_cache_args }}
+        HF_TOKEN: ${{ inputs.hf_token }}
+        CONVERTED_DIR: ${{ steps.convert.outputs.converted_dir }}
+        INFERENCE_TESTING_IMAGE: ${{ inputs.inference_testing_image }}
+      run: bash ${{ github.action_path }}/run-inference-testing.sh
+
+    - name: Upload benchmark results
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ inputs.output_dir }}/${{ inputs.arch }}/**

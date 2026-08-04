@@ -308,7 +308,7 @@ jobs:
           force_retuning: ${{ inputs.force_retuning }}
       
       - name: Run benchmarks
-        if: ${{ steps.conditions.outputs.should_run_benchmarks == 'true' }}
+        if: ${{ steps.conditions.outputs.should_run_benchmarks == 'true' && !inputs.use_inference_testing }}
         uses: ./.github/actions/run-benchmarks
         with:
           image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
@@ -320,6 +320,21 @@ jobs:
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
           artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
       
+      - name: Run benchmarks (inference-testing)
+        if: ${{ steps.conditions.outputs.should_run_benchmarks == 'true' && inputs.use_inference_testing }}
+        uses: ./.github/actions/run-benchmarks-v2
+        with:
+          image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
+          arch: ${{ matrix.arch }}
+          gfx_arch: ${{ matrix.gfx_arch }}
+          benchmark_flags: ${{ inputs.benchmark_flags }}
+          benchmark_only: ${{ steps.metadata.outputs.benchmark_image != '' }}
+          collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
+          hf_token: ${{ secrets.HF_TOKEN }}
+          hf_cache_map: ${{ vars.HF_CACHE_MAP }}
+          artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
+          inference_testing_image: ${{ inputs.inference_testing_image }}
+
       - name: Image cleanup
         if: always()
         continue-on-error: true
