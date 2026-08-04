@@ -10,11 +10,11 @@
 #
 # Based on https://github.com/vllm-project/vllm-omni/blob/main/docker/Dockerfile.cuda
 
-ARG BASE_IMAGE=vllm/vllm-openai:v0.23.0
+ARG BASE_IMAGE=vllm/vllm-openai:v0.26.0
 FROM ${BASE_IMAGE} AS base
 
 ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
-ARG VLLM_OMNI_COMMIT=724f5d1
+ARG VLLM_OMNI_COMMIT="a4ea67a" # v0.26.0 release
 
 WORKDIR /app
 
@@ -35,7 +35,7 @@ RUN cd /app/vllm-omni && \
         --python "$(python3 -c 'import sys; print(sys.executable)')" \
         --no-cache-dir \
         --no-build-isolation \
-        -e ".[dev]"
+        -e .
 
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
