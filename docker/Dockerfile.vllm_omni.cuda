@@ -10,9 +10,6 @@
 #
 # Based on https://github.com/vllm-project/vllm-omni/blob/main/docker/Dockerfile.cuda
 
-FROM scratch AS patches
-COPY ./patches /patches
-
 ARG BASE_IMAGE=vllm/vllm-openai:v0.23.0
 FROM ${BASE_IMAGE} AS base
 
@@ -31,11 +28,6 @@ RUN apt-get update && \
 RUN git clone ${VLLM_OMNI_REPO} vllm-omni && \
     cd vllm-omni && \
     git reset --hard ${VLLM_OMNI_COMMIT}
-
-# Patch vllm-omni: add X-Stage-Durations/X-Peak-Memory-MB headers to image endpoints
-# TODO: remove once upstreamed to vllm-omni
-RUN --mount=type=bind,from=patches,source=/patches,target=/patches \
-    cd /app/vllm-omni && git apply /patches/vllm_omni_image_timing_headers.patch
 
 # Install vllm-omni as an editable install
 RUN cd /app/vllm-omni && \

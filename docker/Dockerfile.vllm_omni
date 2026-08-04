@@ -63,12 +63,6 @@ RUN git clone ${VLLM_OMNI_REPO} /app/vllm-omni && \
     cd /app/vllm-omni && \
     git reset --hard ${VLLM_OMNI_COMMIT}
 
-# Patch vllm-omni: add X-Stage-Durations/X-Peak-Memory-MB headers to image endpoints
-# TODO: remove once upstreamed to vllm-omni
-RUN --mount=type=bind,from=patches,source=/patches,target=/patches \
-    cd /app/vllm-omni && \
-    git apply /patches/vllm_omni_image_timing_headers.patch
-
 RUN cd /app/vllm-omni && \
     VLLM_OMNI_TARGET_DEVICE=rocm pip install -e .
 
