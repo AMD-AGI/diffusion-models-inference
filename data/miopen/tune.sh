@@ -17,25 +17,17 @@ MIOPEN_DEBUG_CONV_DIRECT=${MIOPEN_DEBUG_CONV_DIRECT:-0}
 ARCH=${ARCH:-unknown}
 FORCE_RETUNING=${FORCE_RETUNING:-false}
 if [ "$FORCE_RETUNING" = "true" ]; then
-    echo "Force retuning enabled, removing existing tuning databases for $ARCH"
-    case "$ARCH" in
-        mi300)
-            GFX_PREFIX="gfx942130"
-            ;;
-        mi355)
-            GFX_PREFIX="gfx950100"
-            ;;
-        *)
-            echo "Cannot determine GFX prefix"
-            GFX_PREFIX=""
-            ;;
-    esac
+    echo "Force retuning enabled, removing existing tuning databases"
+    GFX_PREFIX=$(rocminfo | grep -oP 'gfx\d+' | head -1)
     
     if [ -n "$GFX_PREFIX" ]; then
+        echo "Detected GPU: $GFX_PREFIX"
         echo "Removing database files matching: ${GFX_PREFIX}*.{udb,ufdb}.txt"
-        rm -f $MIOPEN_USER_DB_PATH/${GFX_PREFIX}.*.udb.txt
-        rm -f $MIOPEN_USER_DB_PATH/${GFX_PREFIX}.*.ufdb.txt
-        echo "Removed existing tuning databases for $ARCH"
+        rm -f $MIOPEN_USER_DB_PATH/${GFX_PREFIX}*.udb.txt
+        rm -f $MIOPEN_USER_DB_PATH/${GFX_PREFIX}*.ufdb.txt
+        echo "Removed existing tuning databases"
+    else
+        echo "Warning: could not detect GPU via rocminfo, skipping DB deletion"
     fi
 fi
 

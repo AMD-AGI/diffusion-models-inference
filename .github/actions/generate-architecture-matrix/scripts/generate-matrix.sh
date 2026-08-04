@@ -2,29 +2,29 @@
 set -euo pipefail
 
 # Generate a GitHub Actions matrix JSON from workflow inputs.
-# Expects env var: WORKFLOW_INPUTS (JSON string)
+# Expects env var: WORKFLOW_INPUTS (JSON string with .gpu_runners comma-separated list)
 
-GFX942_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.gfx942_runner // ""' | xargs)
-GFX950_RUNNER=$(echo "$WORKFLOW_INPUTS" | jq -r '.gfx950_runner // ""' | xargs)
+GPU_RUNNERS=$(echo "$WORKFLOW_INPUTS" | jq -r '.gpu_runners // ""' | xargs)
+
+if [ -z "$GPU_RUNNERS" ]; then
+  echo "Error: gpu_runners is empty"
+  exit 1
+fi
 
 TIMEOUT=1440  # 24h default timeout
 
 MATRIX_JSON='{"include":['
 FIRST=true
 
-# gfx942
-if [ -n "$GFX942_RUNNER" ]; then
-  if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"gfx942\",\"gfx_arch\":\"gfx942\",\"runner\":\"$GFX942_RUNNER\",\"timeout\":${TIMEOUT}}"
-  FIRST=false
-fi
+IFS=',' read -ra TAGS <<< "$GPU_RUNNERS"
+for TAG in "${TAGS[@]}"; do
+  TAG=$(echo "$TAG" | xargs)
+  [ -z "$TAG" ] && continue
 
-# gfx950
-if [ -n "$GFX950_RUNNER" ]; then
   if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"gfx950\",\"gfx_arch\":\"gfx950\",\"runner\":\"$GFX950_RUNNER\",\"timeout\":${TIMEOUT}}"
+  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"${TAG}\",\"runner\":\"${TAG}\",\"timeout\":${TIMEOUT}}"
   FIRST=false
-fi
+done
 
 MATRIX_JSON="${MATRIX_JSON}]}"
 echo "matrix=${MATRIX_JSON}" >> "$GITHUB_OUTPUT"

@@ -55,14 +55,10 @@ on:
         type: boolean
         required: false
         default: false
-      gfx942_runner:
-        description: 'gfx942 runner (label or node/pool name)'
+      gpu_runners:
+        description: 'Comma-separated list of GPU runner tags (e.g., gfx942,gfx950 or gfx950,mi300,mi308,mi325)'
         required: false
-        default: ''
-      gfx950_runner:
-        description: 'gfx950 runner (label or node/pool name)'
-        required: false
-        default: ''
+        default: 'gfx942,gfx950'
 
 permissions:
   contents: write
@@ -104,23 +100,14 @@ jobs:
       - name: Check architectures
         id: check-archs
         env:
-          GFX942_RUNNER: ${{ inputs.gfx942_runner }}
-          GFX950_RUNNER: ${{ inputs.gfx950_runner }}
+          GPU_RUNNERS: ${{ inputs.gpu_runners }}
         run: |
-          GFX942_RUNNER=$(echo "$GFX942_RUNNER" | xargs)
-          GFX950_RUNNER=$(echo "$GFX950_RUNNER" | xargs)
-          
-          ANY_ENABLED=false
-          if [ -n "$GFX942_RUNNER" ] || \
-             [ -n "$GFX950_RUNNER" ]; then
-            ANY_ENABLED=true
-          fi
-          echo "any_enabled=${ANY_ENABLED}" >> $GITHUB_OUTPUT
-          
-          if [ "$ANY_ENABLED" = "false" ]; then
-            echo "Error: No architectures enabled"
+          GPU_RUNNERS=$(echo "$GPU_RUNNERS" | xargs)
+          if [ -z "$GPU_RUNNERS" ]; then
+            echo "Error: No GPU runners specified"
             exit 1
           fi
+          echo "any_enabled=true" >> $GITHUB_OUTPUT
       
       - name: Validate prebuilt untuned image exists
         if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image == '' }}
@@ -326,7 +313,6 @@ jobs:
         with:
           image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
           arch: ${{ matrix.arch }}
-          gfx_arch: ${{ matrix.gfx_arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: ${{ steps.metadata.outputs.benchmark_image != '' }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}

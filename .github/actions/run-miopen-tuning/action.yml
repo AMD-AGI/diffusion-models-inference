@@ -6,7 +6,7 @@ inputs:
     description: 'Docker image to use for tuning'
     required: true
   arch:
-    description: 'Architecture name (gfx942, gfx950)'
+    description: 'GPU tag from matrix (e.g., gfx942, mi300, gfx950)'
     required: true
   artifact_name:
     description: 'Full artifact name for upload'

@@ -79,7 +79,7 @@ def get_database_filename(arch: str, db_dir: Path) -> Path:
     """Get the database filename for the given architecture.
     
     Args:
-        arch: Architecture name (e.g., 'mi300', 'mi308')
+        arch: Architecture or GPU tag (e.g., 'gfx942', 'mi300', 'gfx950')
         db_dir: Directory containing database files
         
     Returns:
@@ -89,25 +89,25 @@ def get_database_filename(arch: str, db_dir: Path) -> Path:
         FileNotFoundError: If no database file is found for the architecture
     """
     
-    # TODO: add entries here as needed
+    # Map known tags to DB filename prefixes; gfx* tags are used directly as glob prefixes
     arch_to_gfx = {
-        'mi300': 'gfx942130',
-        'mi355': 'gfx950100',
+        'mi300': 'gfx942',
+        'mi308': 'gfx942',
+        'mi325': 'gfx942',
+        'mi350': 'gfx950',
+        'mi355': 'gfx950',
     }
     
-    if arch in arch_to_gfx:
-        gfx_prefix = arch_to_gfx[arch]
-        matching_files = sorted(db_dir.glob(f'{gfx_prefix}*.ufdb.txt'))
-        
-        if matching_files:
-            logger.info(f"Found database file for {arch}: {matching_files[0]}")
-            if len(matching_files) > 1:
-                logger.info(f"Multiple matches found, using: {matching_files[0].name}")
-            return matching_files[0]
-        else:
-            raise FileNotFoundError(f"No database file found for {arch} (prefix: {gfx_prefix}) in {db_dir}")
+    gfx_prefix = arch_to_gfx.get(arch, arch)
+    matching_files = sorted(db_dir.glob(f'{gfx_prefix}*.ufdb.txt'))
+    
+    if matching_files:
+        logger.info(f"Found database file for {arch}: {matching_files[0]}")
+        if len(matching_files) > 1:
+            logger.info(f"Multiple matches found, using: {matching_files[0].name}")
+        return matching_files[0]
     else:
-        raise FileNotFoundError(f"Unknown architecture '{arch}', cannot determine database file")
+        raise FileNotFoundError(f"No database file found for {arch} (prefix: {gfx_prefix}) in {db_dir}")
 
 
 def main():
@@ -134,7 +134,7 @@ def main():
         '--arch',
         type=str,
         default='unknown',
-        help='Architecture name (e.g., mi300, mi308) for database selection'
+        help='GPU tag (e.g., gfx942, mi300, gfx950) for database selection'
     )
     
     args = parser.parse_args()

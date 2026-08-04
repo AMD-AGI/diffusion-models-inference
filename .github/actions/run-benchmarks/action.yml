@@ -6,14 +6,10 @@ inputs:
     description: 'Docker image to use for benchmarking'
     required: true
   arch:
-    description: 'Architecture name (gfx942, gfx950)'
+    description: 'GPU tag from matrix (e.g., gfx942, mi300, gfx950)'
     required: true
   benchmark_flags:
     description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config (mutually exclusive with tag).'
-    required: false
-    default: ''
-  gfx_arch:
-    description: 'GPU architecture tag for benchmark selection (gfx942, gfx950)'
     required: false
     default: ''
   benchmark_only:
@@ -64,7 +60,6 @@ runs:
         BENCHMARK_ONLY: ${{ inputs.benchmark_only }}
         RUN_PY_FLAGS: ${{ steps.hf_cache.outputs.run_py_flags }}
         INPUT_BENCHMARK_FLAGS: ${{ inputs.benchmark_flags }}
-        GFX_ARCH: ${{ inputs.gfx_arch }}
         OUTPUT_DIR: ${{ inputs.output_dir }}
         ARCH: ${{ inputs.arch }}
         HF_CACHE_ARGS: ${{ steps.hf_cache.outputs.hf_cache_args }}
