@@ -1,0 +1,1077 @@
+From af32afd23d341d93b9850810bcfac5c72fab0adb Mon Sep 17 00:00:00 2001
+From: IvanKobzarev <ivan.kobzarev@gmail.com>
+Date: Mon, 29 Jun 2026 04:47:46 -0700
+Subject: [PATCH 1/3] Update
+
+[ghstack-poisoned]
+---
+ test/inductor/test_control_deps.py            | 146 ++++++++++++++++++
+ torch/_inductor/config.py                     |   8 +
+ .../fx_passes/control_dependencies.py         |  49 ++++++
+ .../fx_passes/overlap_manual_scheduling.py    |   4 +-
+ .../fx_passes/overlap_preserving_bucketer.py  |   4 +-
+ torch/_inductor/graph.py                      |  51 ++++++
+ torch/_inductor/scheduler.py                  |  80 ++++++++++
+ 7 files changed, 338 insertions(+), 4 deletions(-)
+
+diff --git a/test/inductor/test_control_deps.py b/test/inductor/test_control_deps.py
+index 0827c71c23532..43c353edc78e8 100644
+--- a/test/inductor/test_control_deps.py
++++ b/test/inductor/test_control_deps.py
+@@ -14,6 +14,152 @@
+ 
+ 
+ class TestControlDeps(InductorTestCase):
++    def test_insert_overlap_deps_impl_meta_records_metadata(self):
++        from torch._inductor.fx_passes.control_dependencies import (
++            control_deps,
++            META_OVERLAP_DEPS,
++            preserve_node_ordering_from_config,
++        )
++        from torch.utils._ordered_set import OrderedSet
++
++        def fn(a, b):
++            x = a + 1
++            y = b * 2
++            return x + y
++
++        gm = torch.fx.symbolic_trace(fn)
++        call_nodes = [node for node in gm.graph.nodes if node.op == "call_function"]
++        self.assertEqual(len(call_nodes), 3)
++
++        deps_map = {call_nodes[1]: OrderedSet([call_nodes[0]])}
++        with config.patch(
++            {"aten_distributed_optimizations.insert_overlap_deps_impl": "meta"}
++        ):
++            preserve_node_ordering_from_config(gm.graph, deps_map)
++
++        self.assertEqual(
++            gm.graph.find_nodes(op="call_function", target=control_deps), []
++        )
++        self.assertIn(call_nodes[0], call_nodes[1].meta[META_OVERLAP_DEPS])
++
++    @requires_gpu()
++    def test_meta_overlap_deps_lower_to_post_fusion_deps(self):
++        from torch._inductor.fx_passes.control_dependencies import (
++            control_deps,
++            META_OVERLAP_DEPS,
++            preserve_node_ordering_from_config,
++        )
++        from torch._inductor.virtualized import V
++        from torch.utils._ordered_set import OrderedSet
++
++        def fn(a, b):
++            mm = b @ b
++            x = a + 1
++            y = x * 2
++            return mm, y
++
++        captured_deps: list[set[str]] = []
++
++        def add_meta_deps(graph):
++            mm_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.mm.default
++            )
++            mul_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.mul.Tensor
++            )
++            self.assertEqual(len(mm_nodes), 1)
++            self.assertEqual(len(mul_nodes), 1)
++
++            deps_map = {mul_nodes[0]: OrderedSet([mm_nodes[0]])}
++            preserve_node_ordering_from_config(graph, deps_map)
++
++            self.assertEqual(
++                graph.find_nodes(op="call_function", target=control_deps), []
++            )
++            self.assertIn(mm_nodes[0], mul_nodes[0].meta[META_OVERLAP_DEPS])
++            return graph
++
++        def capture_post_fusion(nodes):
++            dep_names: set[str] = set()
++            for deps in V.graph.post_fusion_overlap_deps.values():
++                dep_names.update(deps)
++            captured_deps.append(dep_names)
++            return nodes
++
++        patches = {
++            "post_grad_custom_post_pass": add_meta_deps,
++            "_post_fusion_custom_pass": capture_post_fusion,
++            "aten_distributed_optimizations.insert_overlap_deps_impl": "meta",
++        }
++        torch._dynamo.reset()
++        with config.patch(patches):
++            a = torch.rand([256, 256], device=GPU_TYPE)
++            b = torch.rand([256, 256], device=GPU_TYPE)
++            result = torch.compile(fn)(a, b)
++
++        expected = fn(a, b)
++        torch.testing.assert_close(result, expected)
++        self.assertTrue(any(captured_deps))
++
++    @requires_gpu()
++    def test_meta_overlap_deps_do_not_force_realization(self):
++        from torch._inductor.fx_passes.control_dependencies import (
++            preserve_node_ordering_from_config,
++        )
++        from torch._inductor.virtualized import V
++        from torch.utils._ordered_set import OrderedSet
++
++        def fn(a, b):
++            x = a + 1
++            y = x * 2
++            mm = b @ b
++            return y, mm
++
++        captured_deps: list[set[str]] = []
++        captured_outputs: list[list[list[str]]] = []
++
++        def add_meta_deps(graph):
++            add_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.add.Tensor
++            )
++            mm_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.mm.default
++            )
++            self.assertEqual(len(add_nodes), 1)
++            self.assertEqual(len(mm_nodes), 1)
++
++            deps_map = {mm_nodes[0]: OrderedSet([add_nodes[0]])}
++            preserve_node_ordering_from_config(graph, deps_map)
++            return graph
++
++        def capture_post_fusion(nodes):
++            dep_names: set[str] = set()
++            for deps in V.graph.post_fusion_overlap_deps.values():
++                dep_names.update(deps)
++            captured_deps.append(dep_names)
++            captured_outputs.append(
++                [[out.get_name() for out in node.get_outputs()] for node in nodes]
++            )
++            return nodes
++
++        patches = {
++            "post_grad_custom_post_pass": add_meta_deps,
++            "_post_fusion_custom_pass": capture_post_fusion,
++            "aten_distributed_optimizations.insert_overlap_deps_impl": "meta",
++        }
++        torch._dynamo.reset()
++        with config.patch(patches):
++            a = torch.rand([32, 32], device=GPU_TYPE)
++            b = torch.rand([32, 32], device=GPU_TYPE)
++            result = torch.compile(fn)(a, b)
++
++        expected = fn(a, b)
++        torch.testing.assert_close(result, expected)
++        self.assertTrue(any(captured_deps))
++        all_deps = [dep for deps in captured_deps for dep in deps]
++        self.assertTrue(all(dep.startswith("op") for dep in all_deps))
++        self.assertEqual(sum(len(outputs) for outputs in captured_outputs[-1]), 2)
++
+     @config.patch(reorder_for_locality=False)
+     @requires_gpu()
+     def test_control_deps_prevents_fusion(self):
+diff --git a/torch/_inductor/config.py b/torch/_inductor/config.py
+index c94061c3ae088..3094dd10743cb 100644
+--- a/torch/_inductor/config.py
++++ b/torch/_inductor/config.py
+@@ -1218,6 +1218,14 @@ class aten_distributed_optimizations:
+     # compiling with inductor, or for subsequent passes before removing the ops prior to execution
+     insert_overlap_deps: bool | None = None
+ 
++    # Implementation used when insert_overlap_deps is enabled.
++    #
++    # "control_deps" preserves the existing behavior by wrapping dependent
++    # FX nodes in the control_deps HOP.
++    # "meta" records the ordering constraints as FX metadata and applies them
++    # to scheduler nodes after fusion.
++    insert_overlap_deps_impl: Literal["control_deps", "meta"] = "control_deps"
++
+     # Maximum compute node prefetch distance for overlap scheduling
+     max_compute_pre_fetch: int | None = None
+ 
+diff --git a/torch/_inductor/fx_passes/control_dependencies.py b/torch/_inductor/fx_passes/control_dependencies.py
+index 52ac3bc8f8bae..40ed69100196b 100644
+--- a/torch/_inductor/fx_passes/control_dependencies.py
++++ b/torch/_inductor/fx_passes/control_dependencies.py
+@@ -59,6 +59,8 @@ def __call__(self, additional_deps, subgraph, *args, **kwargs):
+ 
+ control_deps = ControlDeps()
+ 
++META_OVERLAP_DEPS = "inductor_overlap_deps"
++
+ # control_deps wraps side-effecting ops (e.g. record_event, wait_event)
+ # and must not be eliminated by DCE even when its outputs are unused.
+ from torch.fx.node import has_side_effect
+@@ -211,6 +213,53 @@ def preserve_node_ordering(
+         replacements[dependent_node] = ordered_node
+ 
+ 
++def preserve_node_ordering_with_meta(
++    graph: fx.Graph,
++    additional_deps_map: dict[fx.Node, OrderedSet[fx.Node]],
++    verbose: bool = False,
++) -> None:
++    """
++    Preserve node ordering by storing dependency metadata on FX nodes.
++
++    The scheduler consumes this metadata after lowering and fusion. Unlike
++    control_deps, this does not wrap nodes in subgraphs, so normal Inductor
++    fusion is still available.
++    """
++    if not additional_deps_map:
++        return
++
++    for dependent_node, dep_nodes in additional_deps_map.items():
++        if dependent_node.op != "call_function":
++            raise AssertionError(dependent_node.op)
++
++        deps = dependent_node.meta.get(META_OVERLAP_DEPS)
++        if deps is None:
++            deps = OrderedSet()
++            dependent_node.meta[META_OVERLAP_DEPS] = deps
++        elif not isinstance(deps, OrderedSet):
++            deps = OrderedSet(deps)
++            dependent_node.meta[META_OVERLAP_DEPS] = deps
++
++        for dep_node in dep_nodes:
++            deps.add(dep_node)
++
++
++def preserve_node_ordering_from_config(
++    graph: fx.Graph,
++    additional_deps_map: dict[fx.Node, OrderedSet[fx.Node]],
++    verbose: bool = False,
++) -> None:
++    from torch._inductor import config
++
++    impl = config.aten_distributed_optimizations.insert_overlap_deps_impl
++    if impl == "control_deps":
++        preserve_node_ordering(graph, additional_deps_map, verbose=verbose)
++    elif impl == "meta":
++        preserve_node_ordering_with_meta(graph, additional_deps_map, verbose=verbose)
++    else:
++        raise RuntimeError(f"Unknown insert_overlap_deps_impl: {impl}")
++
++
+ def _create_subgraph_for_node(
+     graph: fx.Graph, node: fx.Node, additional_deps=None
+ ) -> fx.GraphModule:
+diff --git a/torch/_inductor/fx_passes/overlap_manual_scheduling.py b/torch/_inductor/fx_passes/overlap_manual_scheduling.py
+index 9beb5f193b31a..e911b8503f5fa 100644
+--- a/torch/_inductor/fx_passes/overlap_manual_scheduling.py
++++ b/torch/_inductor/fx_passes/overlap_manual_scheduling.py
+@@ -483,10 +483,10 @@ def _manual_reorder_graph(self) -> None:
+ 
+         if self.insert_overlap_deps:
+             from torch._inductor.fx_passes.control_dependencies import (
+-                preserve_node_ordering,
++                preserve_node_ordering_from_config,
+             )
+ 
+-            preserve_node_ordering(self.graph, overlap_deps)
++            preserve_node_ordering_from_config(self.graph, overlap_deps)
+ 
+     def _manual_bucket_collectives(self) -> None:
+         """Bucket nodes in each module_bucket from module_bucket_plans."""
+diff --git a/torch/_inductor/fx_passes/overlap_preserving_bucketer.py b/torch/_inductor/fx_passes/overlap_preserving_bucketer.py
+index 384653248b030..7102f797caab3 100644
+--- a/torch/_inductor/fx_passes/overlap_preserving_bucketer.py
++++ b/torch/_inductor/fx_passes/overlap_preserving_bucketer.py
+@@ -354,10 +354,10 @@ def _apply_deps_and_effect_tokens(self) -> None:
+ 
+             if filtered_deps:
+                 from torch._inductor.fx_passes.control_dependencies import (
+-                    preserve_node_ordering,
++                    preserve_node_ordering_from_config,
+                 )
+ 
+-                preserve_node_ordering(self.graph, filtered_deps)
++                preserve_node_ordering_from_config(self.graph, filtered_deps)
+ 
+     def bucket_collectives(self) -> None:
+         """Run the full bucketing and dep application flow."""
+diff --git a/torch/_inductor/graph.py b/torch/_inductor/graph.py
+index bf802b3c2b0f2..6926a15e32dd0 100644
+--- a/torch/_inductor/graph.py
++++ b/torch/_inductor/graph.py
+@@ -453,6 +453,12 @@ def __init__(
+         # for void ops (e.g. record_event) that return None and therefore cannot
+         # be referenced by name in subsequent control_deps ordering constraints.
+         self._void_ctrl_dep_op_names: dict[torch.fx.Node, list[str]] = {}
++        self._fx_node_to_operation_names: dict[torch.fx.Node, OrderedSet[str]] = (
++            defaultdict(OrderedSet)
++        )
++        self.post_fusion_overlap_deps: dict[str, OrderedSet[str]] = defaultdict(
++            OrderedSet
++        )
+ 
+         # Inplace padding may require Inductor to allocate slightly larger
+         # tensor for padding.
+@@ -1867,6 +1873,50 @@ def _realize_inputs_at_stream_boundaries(self, n: torch.fx.Node) -> None:
+             if isinstance(ir_value, ir.TensorBox):
+                 ir_value.realize()
+ 
++    def _record_post_fusion_overlap_deps(
++        self, n: torch.fx.Node, new_ops: Sequence[ir.Operation]
++    ) -> None:
++        if not new_ops:
++            return
++
++        from torch._inductor.fx_passes.control_dependencies import META_OVERLAP_DEPS
++
++        for op in new_ops:
++            if op.operation_name is None:
++                continue
++
++            origins = OrderedSet(
++                origin
++                for origin in op.get_origins()
++                if isinstance(origin, torch.fx.Node)
++            )
++            if not origins:
++                origins.add(n)
++            for origin in origins:
++                self._fx_node_to_operation_names[origin].add(op.operation_name)
++
++        for op in new_ops:
++            if op.operation_name is None:
++                continue
++
++            dep_nodes: OrderedSet[torch.fx.Node] = OrderedSet()
++            origins = OrderedSet(
++                origin
++                for origin in op.get_origins()
++                if isinstance(origin, torch.fx.Node)
++            )
++            if not origins:
++                origins.add(n)
++            for origin in origins:
++                origin_deps = origin.meta.get(META_OVERLAP_DEPS)
++                if origin_deps:
++                    dep_nodes.update(origin_deps)
++
++            for dep_node in dep_nodes:
++                self.post_fusion_overlap_deps[op.operation_name].update(
++                    self._fx_node_to_operation_names.get(dep_node, ())
++                )
++
+     def run_node(self, n: torch.fx.Node) -> object:
+         """Lower and execute a single FX node into Inductor IR."""
+ 
+@@ -2186,6 +2236,7 @@ def maybe_apply_channels_last_stride_order(
+ 
+         assign_origin_node(result, n)
+         self.register_users_of(result)
++        self._record_post_fusion_overlap_deps(n, self.operations[operation_watermark:])
+ 
+         new_unbacked_defs = OrderedSet[sympy.Symbol]()
+         for buf in self.buffers[buffer_watermark:]:
+diff --git a/torch/_inductor/scheduler.py b/torch/_inductor/scheduler.py
+index d44e16833dcb2..88e8cd57960c5 100644
+--- a/torch/_inductor/scheduler.py
++++ b/torch/_inductor/scheduler.py
+@@ -4244,6 +4244,7 @@ def _init(self, nodes: list[ir.Operation]) -> None:
+         self.nodes = self.fuse_nodes(self.nodes)
+         if config._post_fusion_custom_pass is not None:
+             self.nodes = config._post_fusion_custom_pass(self.nodes)
++        self._apply_post_fusion_overlap_deps()
+ 
+         if any(
+             isinstance(node, FusedExternTritonKernelSchedulerNode)
+@@ -4547,6 +4548,80 @@ def create_foreach_nodes(self) -> None:
+             node for node in self.nodes if node.get_name() not in removed_node_names
+         ] + list(fe_nodes)
+ 
++    def _refresh_name_to_fused_node(self) -> None:
++        self.name_to_fused_node = {
++            name: node for node in self.nodes for name in node.get_operation_names()
++        }
++
++    def _add_fake_order_dep(self, node: BaseSchedulerNode, dep_name: str) -> bool:
++        dep = WeakDep(dep_name, node.get_name(), is_fake=True)
++        if dep in node.read_writes.reads:
++            return False
++        node.set_read_writes(node.read_writes.with_read(dep))
++        return True
++
++    def _has_post_fusion_dep_path(
++        self,
++        start: BaseSchedulerNode,
++        target: BaseSchedulerNode,
++        live_buffer_to_node: dict[str, BaseSchedulerNode],
++    ) -> bool:
++        seen: OrderedSet[BaseSchedulerNode] = OrderedSet()
++        stack = [start]
++        while stack:
++            node = stack.pop()
++            if node in seen:
++                continue
++            seen.add(node)
++            for dep in node.unmet_dependencies:
++                dep_node = live_buffer_to_node.get(dep.name)
++                if dep_node is None or dep_node is node:
++                    continue
++                if dep_node is target:
++                    return True
++                stack.append(dep_node)
++        return False
++
++    def _apply_post_fusion_overlap_deps(self) -> None:
++        overlap_deps = V.graph.post_fusion_overlap_deps
++        if not overlap_deps:
++            return
++
++        self._refresh_name_to_fused_node()
++        live_buffer_to_node = {
++            name: node for node in self.nodes for name in node.get_buffer_names()
++        }
++        changed = False
++        for op_name, dep_op_names in overlap_deps.items():
++            node = self.name_to_fused_node.get(op_name)
++            if node is None:
++                continue
++
++            for dep_op_name in dep_op_names:
++                dep_node = self.name_to_fused_node.get(dep_op_name)
++                if dep_node is None or dep_node is node:
++                    continue
++
++                dep_name = next(iter(dep_node.get_buffer_names()), None)
++                if dep_name is None:
++                    continue
++
++                if self._has_post_fusion_dep_path(node, dep_node, live_buffer_to_node):
++                    continue
++                if self._has_post_fusion_dep_path(dep_node, node, live_buffer_to_node):
++                    log.debug(
++                        "Skipping post-fusion overlap dep %s -> %s due to cycle",
++                        dep_name,
++                        node.get_name(),
++                    )
++                    continue
++
++                if self._add_fake_order_dep(node, dep_name):
++                    changed = True
++
++        if changed:
++            self.nodes = self.topological_sort_schedule(self.nodes)
++
+     def compute_dependencies(self) -> None:
+         """
+         Create dependency edges between nodes, handling aliasing and
+@@ -5054,6 +5129,8 @@ def compute_ancestors(self) -> None:
+                 ancestors.add(dep_node_name)
+                 ancestors |= name_to_ancestors[dep_node_name]
+             name_to_ancestors[node.get_name()] = ancestors
++            for op_name in node.get_operation_names():
++                name_to_ancestors[op_name] = ancestors
+             node.ancestors = ancestors
+ 
+         for order, node in enumerate(self.nodes):
+@@ -5087,6 +5164,9 @@ def compute_input_distances(self) -> None:
+                 max_dist = max(dep_max_dists)
+             name_to_min_distance[node.get_name()] = min_dist
+             name_to_max_distance[node.get_name()] = max_dist
++            for op_name in node.get_operation_names():
++                name_to_min_distance[op_name] = min_dist
++                name_to_max_distance[op_name] = max_dist
+             node.min_input_distance = min_dist
+             node.max_input_distance = max_dist
+ 
+
+From 73db75af8ab7755c893d7ed912301beebfaf2a27 Mon Sep 17 00:00:00 2001
+From: IvanKobzarev <ivan.kobzarev@gmail.com>
+Date: Thu, 16 Jul 2026 05:26:47 -0700
+Subject: [PATCH 2/3] Update
+
+[ghstack-poisoned]
+---
+ .../test_aten_comm_compute_reordering.py      | 143 +++++++++++++++++-
+ .../test_overlap_bucketing_unit.py            |  79 ++++++++++
+ .../fx_passes/control_dependencies.py         |  70 ++++++++-
+ .../fx_passes/overlap_preserving_bucketer.py  |   6 +
+ 4 files changed, 290 insertions(+), 8 deletions(-)
+
+diff --git a/test/distributed/test_aten_comm_compute_reordering.py b/test/distributed/test_aten_comm_compute_reordering.py
+index c0ece7d1e8381..183ba9ef4aa0b 100644
+--- a/test/distributed/test_aten_comm_compute_reordering.py
++++ b/test/distributed/test_aten_comm_compute_reordering.py
+@@ -1,4 +1,6 @@
+ # Owner(s): ["module: inductor"]
++import functools
++import re
+ import unittest
+ from unittest.mock import patch
+ 
+@@ -8,6 +10,7 @@
+ import torch._dynamo.test_case
+ 
+ # for some reason importing functional collectives after dynamo breaks collectives handling!
++import torch.distributed as dist
+ import torch.distributed._functional_collectives as _functional_collectives
+ import torch.fx as fx
+ from torch._C import FileCheck
+@@ -29,7 +32,6 @@
+ 
+ 
+ aten = torch.ops.aten
+-import functools
+ 
+ from torch.testing._internal.common_fsdp import get_devtype
+ from torch.testing._internal.common_utils import skipIfRocm
+@@ -101,6 +103,31 @@ def get_patches():
+     }
+ 
+ 
++def get_overlap_deps_codegen_patches(insert_overlap_deps=True, impl="meta"):
++    return {
++        **get_patches(),
++        "aten_distributed_optimizations.enable_overlap_scheduling": True,
++        "aten_distributed_optimizations.collective_bucketing": True,
++        "aten_distributed_optimizations.insert_overlap_deps": insert_overlap_deps,
++        "aten_distributed_optimizations.insert_overlap_deps_impl": impl,
++        "aten_distributed_optimizations.collective_estimator": "analytical",
++        "aten_distributed_optimizations.compute_estimator": "analytical",
++        "aten_distributed_optimizations.pre_bucketing_fsdp_collectives": False,
++        "reorder_for_compute_comm_overlap": False,
++        "reorder_for_compute_comm_overlap_passes": [],
++        "fx_graph_cache": False,
++        "fx_graph_remote_cache": False,
++    }
++
++
++def get_compiled_call_body(code):
++    return code.split("def call(args):", 1)[-1]
++
++
++def get_triton_kernel_names(code):
++    return set(re.findall(r"async_compile\.triton\('([^']+)'", code))
++
++
+ @requires_accelerator_dist_backend()
+ # TODO: somehow inductor bg compile threads are causing hangs at exit with distributed work dtor
+ @unittest.skipIf(not HAS_GPU, "Inductor+gpu needs triton and recent GPU arch")
+@@ -587,6 +614,120 @@ def func(a, b):
+                 self.assertEqual(counters["inductor"]["overlap_scheduling_exposed"], 0)
+ 
+ 
++@requires_accelerator_dist_backend()
++@unittest.skipIf(not HAS_GPU, "Inductor+gpu needs triton and recent GPU arch")
++@skipIfRocm
++class TestMetaOverlapDepsMultiProc(DynamoDistributedMultiProcTestCase):
++    def setUp(self):
++        super().setUp()
++        torch._dynamo.reset()
++        torch._dynamo.utils.counters.clear()
++
++    @property
++    def world_size(self) -> int:
++        return 2
++
++    def test_meta_overlap_deps_preserve_matmul_overlap_after_fusion(self):
++        class WaitThenMatmul(torch.nn.Module):
++            def __init__(self, n):
++                super().__init__()
++                self.w = torch.nn.Parameter(torch.randn(n, n))
++
++            def forward(self, x, y):
++                a = _functional_collectives.all_to_all_single(
++                    x.contiguous(), None, None, group=dist.group.WORLD
++                )
++                z = a + 1
++                h = y @ self.w
++                return z, h
++
++        with _dynamo_dist_per_rank_init(
++            self.rank,
++            self.world_size,
++            self.backend(device_type),
++            fake_pg=not at_least_x_gpu(2),
++        ):
++            torch.manual_seed(0)
++            n = 128
++            model = WaitThenMatmul(n).to(device_type).eval()
++            x = torch.randn(self.world_size * 32, n, device=device_type)
++            y = torch.randn(n, n, device=device_type)
++
++            with (
++                torch.no_grad(),
++                torch._inductor.config.patch(get_overlap_deps_codegen_patches()),
++            ):
++                out, (code,) = run_and_get_code(
++                    torch.compile(model, dynamic=False), x, y
++                )
++                correct = model(x, y)
++
++            self.assertTrue(same(out, correct))
++            (
++                FileCheck()
++                .check("all_to_all_single.default")
++                .check("extern_kernels.mm")
++                .check("wait_tensor.default")
++                .run(get_compiled_call_body(code))
++            )
++
++    def test_meta_overlap_deps_preserve_issue_186084_layer_norm_fusion(self):
++        class Issue186084(torch.nn.Module):
++            def __init__(self, c_in=16, c_out=32):
++                super().__init__()
++                self.conv = torch.nn.Conv2d(c_in, c_out, 3, padding=1)
++                self.ln1 = torch.nn.LayerNorm(c_out)
++                self.ln2 = torch.nn.LayerNorm(c_out)
++
++            def forward(self, x_a2a, y):
++                a = _functional_collectives.all_to_all_single(
++                    x_a2a.contiguous(), None, None, group=dist.group.WORLD
++                )
++                h = self.conv(y).permute(0, 2, 3, 1).contiguous()
++                h = self.ln1(h)
++                h = h + h.mean(dim=-1, keepdim=True)
++                return self.ln2(a.reshape(h.shape) + h)
++
++        def run_mode(model, x_a2a, y, insert_overlap_deps, impl):
++            patches = get_overlap_deps_codegen_patches(insert_overlap_deps, impl)
++            with torch.no_grad(), torch._inductor.config.patch(patches):
++                out, (code,) = run_and_get_code(
++                    torch.compile(model, dynamic=False), x_a2a, y
++                )
++            return out, get_triton_kernel_names(code)
++
++        with _dynamo_dist_per_rank_init(
++            self.rank,
++            self.world_size,
++            self.backend(device_type),
++            fake_pg=not at_least_x_gpu(2),
++        ):
++            torch.manual_seed(0)
++            model = Issue186084().to(device_type).eval()
++            y = torch.randn(1, 16, 16, 16, device=device_type)
++            x_a2a = torch.randn(self.world_size * 16, 256, device=device_type)
++
++            meta_out, meta_kernels = run_mode(model, x_a2a, y, True, "meta")
++            false_out, false_kernels = run_mode(model, x_a2a, y, False, "control_deps")
++            _, control_deps_kernels = run_mode(model, x_a2a, y, True, "control_deps")
++
++        meta_layer_norms = {
++            name for name in meta_kernels if "native_layer_norm" in name
++        }
++        false_layer_norms = {
++            name for name in false_kernels if "native_layer_norm" in name
++        }
++        control_deps_layer_norms = {
++            name for name in control_deps_kernels if "native_layer_norm" in name
++        }
++
++        self.assertTrue(same(meta_out, false_out))
++        self.assertEqual(meta_kernels, false_kernels)
++        self.assertEqual(len(meta_layer_norms), 1)
++        self.assertEqual(meta_layer_norms, false_layer_norms)
++        self.assertGreater(len(control_deps_layer_norms), len(meta_layer_norms))
++
++
+ def get_bucket_patches(compute_multiplier=1.0):
+     estimate_aten_runtime_part = functools.partial(
+         estimate_aten_runtime, compute_multiplier=compute_multiplier
+diff --git a/test/distributed/test_overlap_bucketing_unit.py b/test/distributed/test_overlap_bucketing_unit.py
+index 6f38ea8d10a7a..739530eda18ea 100644
+--- a/test/distributed/test_overlap_bucketing_unit.py
++++ b/test/distributed/test_overlap_bucketing_unit.py
+@@ -198,6 +198,85 @@ def func(a, b):
+             graph_str
+         )
+ 
++    def test_meta_overlap_deps_follow_bucketed_collective_replacements(self):
++        def func(a, b, c):
++            group_name = "0"
++            group_size = 1
++
++            ag1 = torch.ops._c10d_functional.all_gather_into_tensor(
++                a, group_size, group_name
++            )
++            ag2 = torch.ops._c10d_functional.all_gather_into_tensor(
++                b, group_size, group_name
++            )
++            add = c + 1
++            ag1_out = torch.ops._c10d_functional.wait_tensor(ag1)
++            ag2_out = torch.ops._c10d_functional.wait_tensor(ag2)
++            return ag1_out.sum() + ag2_out.sum() + add.sum()
++
++        with FakeTensorMode():
++            a = torch.ones(4, 4, device=self.device)
++            b = torch.ones(4, 4, device=self.device) * 2
++            c = torch.ones(4, 4, device=self.device) * 3
++            traced = make_fx(func)(a, b, c)
++
++        ag1, ag2 = traced.graph.find_nodes(
++            op="call_function",
++            target=torch.ops._c10d_functional.all_gather_into_tensor.default,
++        )
++        wait1, wait2 = traced.graph.find_nodes(
++            op="call_function",
++            target=torch.ops._c10d_functional.wait_tensor.default,
++        )
++        add = traced.graph.find_nodes(
++            op="call_function", target=torch.ops.aten.add.Tensor
++        )[0]
++
++        from torch._inductor.fx_passes.control_dependencies import (
++            META_OVERLAP_DEPS,
++            preserve_node_ordering_with_meta,
++        )
++        from torch._inductor.fx_passes.overlap_preserving_bucketer import (
++            OverlapPreservingBucketer,
++        )
++
++        preserve_node_ordering_with_meta(
++            traced.graph,
++            {
++                add: OrderedSet([ag1]),
++                wait2: OrderedSet([add]),
++            },
++        )
++
++        collective_info = build_collective_info(traced.graph, {})
++        bucketer = OverlapPreservingBucketer(
++            traced.graph,
++            collective_info,
++            OrderedSet(traced.graph.nodes),
++        )
++        bucketer.bucket_collectives()
++
++        (bucketed_ag,) = traced.graph.find_nodes(
++            op="call_function",
++            target=torch.ops._c10d_functional.all_gather_into_tensor_out.default,
++        )
++        (bucketed_wait,) = traced.graph.find_nodes(
++            op="call_function",
++            target=torch.ops._c10d_functional.wait_tensor.default,
++        )
++
++        self.assertTrue(ag1._erased)
++        self.assertTrue(ag2._erased)
++        self.assertTrue(wait1._erased)
++        self.assertTrue(wait2._erased)
++        self.assertIn(bucketed_ag, add.meta[META_OVERLAP_DEPS])
++        self.assertIn(add, bucketed_wait.meta[META_OVERLAP_DEPS])
++        self.assertNotIn(ag1, add.meta[META_OVERLAP_DEPS])
++        live_nodes = OrderedSet(traced.graph.nodes)
++        for node in live_nodes:
++            for dep in node.meta.get(META_OVERLAP_DEPS, ()):
++                self.assertIn(dep, live_nodes)
++
+     def test_cant_bucket_nested_hiding_intervals(self):
+         """
+         Test that nested hiding intervals prevent bucketing.
+diff --git a/torch/_inductor/fx_passes/control_dependencies.py b/torch/_inductor/fx_passes/control_dependencies.py
+index 40ed69100196b..59cc2f9c2afe9 100644
+--- a/torch/_inductor/fx_passes/control_dependencies.py
++++ b/torch/_inductor/fx_passes/control_dependencies.py
+@@ -232,18 +232,74 @@ def preserve_node_ordering_with_meta(
+         if dependent_node.op != "call_function":
+             raise AssertionError(dependent_node.op)
+ 
+-        deps = dependent_node.meta.get(META_OVERLAP_DEPS)
+-        if deps is None:
+-            deps = OrderedSet()
+-            dependent_node.meta[META_OVERLAP_DEPS] = deps
+-        elif not isinstance(deps, OrderedSet):
+-            deps = OrderedSet(deps)
+-            dependent_node.meta[META_OVERLAP_DEPS] = deps
++        deps = _get_meta_overlap_deps(dependent_node)
+ 
+         for dep_node in dep_nodes:
+             deps.add(dep_node)
+ 
+ 
++def _get_meta_overlap_deps(node: fx.Node) -> OrderedSet[fx.Node]:
++    deps = node.meta.get(META_OVERLAP_DEPS)
++    if deps is None:
++        deps = OrderedSet()
++        node.meta[META_OVERLAP_DEPS] = deps
++    elif not isinstance(deps, OrderedSet):
++        deps = OrderedSet(deps)
++        node.meta[META_OVERLAP_DEPS] = deps
++    return deps
++
++
++def _rewrite_meta_overlap_deps(
++    deps: OrderedSet[fx.Node],
++    replacements: dict[fx.Node, fx.Node | None],
++    target: fx.Node,
++) -> OrderedSet[fx.Node]:
++    rewritten: OrderedSet[fx.Node] = OrderedSet()
++    for dep in deps:
++        dep = replacements.get(dep, dep)
++        if dep is None or dep is target or dep._erased:
++            continue
++        rewritten.add(dep)
++    return rewritten
++
++
++def transfer_meta_overlap_deps(
++    graph: fx.Graph,
++    replacements: dict[fx.Node, fx.Node | None],
++) -> None:
++    """
++    Transfer metadata ordering constraints across graph rewrites.
++
++    Collective bucketing erases the original start/wait nodes and replaces them
++    with bucketed nodes. Metadata deps must follow those replacements; otherwise
++    lowering cannot map the erased FX nodes to scheduler operation names.
++    """
++    if not replacements:
++        return
++
++    for old_node, new_node in replacements.items():
++        if new_node is None:
++            continue
++        deps = old_node.meta.get(META_OVERLAP_DEPS)
++        if not deps:
++            continue
++        rewritten = _rewrite_meta_overlap_deps(OrderedSet(deps), replacements, new_node)
++        if not rewritten:
++            continue
++        new_deps = _get_meta_overlap_deps(new_node)
++        new_deps.update(rewritten)
++
++    for node in graph.nodes:
++        deps = node.meta.get(META_OVERLAP_DEPS)
++        if not deps:
++            continue
++        rewritten = _rewrite_meta_overlap_deps(OrderedSet(deps), replacements, node)
++        if rewritten:
++            node.meta[META_OVERLAP_DEPS] = rewritten
++        else:
++            node.meta.pop(META_OVERLAP_DEPS, None)
++
++
+ def preserve_node_ordering_from_config(
+     graph: fx.Graph,
+     additional_deps_map: dict[fx.Node, OrderedSet[fx.Node]],
+diff --git a/torch/_inductor/fx_passes/overlap_preserving_bucketer.py b/torch/_inductor/fx_passes/overlap_preserving_bucketer.py
+index 7102f797caab3..f3006a79df953 100644
+--- a/torch/_inductor/fx_passes/overlap_preserving_bucketer.py
++++ b/torch/_inductor/fx_passes/overlap_preserving_bucketer.py
+@@ -1031,6 +1031,12 @@ def _apply_bucket(self, bucket_info: CollBucket) -> None:
+             for n in fused_convert_dtypes:
+                 erased_to_new[n] = replacement
+ 
++        from torch._inductor.fx_passes.control_dependencies import (
++            transfer_meta_overlap_deps,
++        )
++
++        transfer_meta_overlap_deps(self.graph, erased_to_new)
++
+         # Transfer all dependencies from old nodes to new nodes
+         self.aug_graph.transfer_erased_node_deps(erased_to_new)
+ 
+
+From 9e8f459a1db0c753c2ac1597707fd06b5871b6b6 Mon Sep 17 00:00:00 2001
+From: IvanKobzarev <ivan.kobzarev@gmail.com>
+Date: Fri, 17 Jul 2026 07:49:05 -0700
+Subject: [PATCH 3/3] Update
+
+[ghstack-poisoned]
+---
+ test/inductor/test_control_deps.py | 123 +++++++++++++++++++++++++++++
+ torch/_inductor/graph.py           |  17 +++-
+ torch/_inductor/scheduler.py       |   2 +
+ 3 files changed, 139 insertions(+), 3 deletions(-)
+
+diff --git a/test/inductor/test_control_deps.py b/test/inductor/test_control_deps.py
+index 43c353edc78e8..3bd213211f006 100644
+--- a/test/inductor/test_control_deps.py
++++ b/test/inductor/test_control_deps.py
+@@ -1,5 +1,7 @@
+ # Owner(s): ["module: inductor"]
+ 
++from unittest import mock
++
+ import torch
+ from torch._inductor import config
+ from torch._inductor.test_case import run_tests, TestCase as InductorTestCase
+@@ -101,6 +103,127 @@ def capture_post_fusion(nodes):
+         torch.testing.assert_close(result, expected)
+         self.assertTrue(any(captured_deps))
+ 
++    @requires_gpu()
++    def test_meta_overlap_deps_resolve_late_materialized_deps(self):
++        from torch._inductor.fx_passes.control_dependencies import (
++            preserve_node_ordering_from_config,
++        )
++        from torch._inductor.virtualized import V
++        from torch.utils._ordered_set import OrderedSet
++
++        def fn(a, b):
++            x = a + 1
++            mm = b @ b
++            y = x * 2
++            return mm, y
++
++        captured_deps: list[set[str]] = []
++
++        def add_meta_deps(graph):
++            add_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.add.Tensor
++            )
++            mm_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.mm.default
++            )
++            self.assertEqual(len(add_nodes), 1)
++            self.assertEqual(len(mm_nodes), 1)
++
++            deps_map = {mm_nodes[0]: OrderedSet([add_nodes[0]])}
++            preserve_node_ordering_from_config(graph, deps_map)
++            return graph
++
++        def capture_post_fusion(nodes):
++            dep_names: set[str] = set()
++            for deps in V.graph.post_fusion_overlap_deps.values():
++                dep_names.update(deps)
++            captured_deps.append(dep_names)
++            return nodes
++
++        patches = {
++            "post_grad_custom_post_pass": add_meta_deps,
++            "_post_fusion_custom_pass": capture_post_fusion,
++            "aten_distributed_optimizations.insert_overlap_deps_impl": "meta",
++        }
++        torch._dynamo.reset()
++        with config.patch(patches):
++            a = torch.rand([32, 32], device=GPU_TYPE)
++            b = torch.rand([32, 32], device=GPU_TYPE)
++            result = torch.compile(fn)(a, b)
++
++        expected = fn(a, b)
++        torch.testing.assert_close(result, expected)
++        self.assertTrue(any(captured_deps))
++
++    @requires_gpu()
++    def test_meta_overlap_deps_refresh_scheduler_ancestors(self):
++        from torch._inductor.dependencies import WeakDep
++        from torch._inductor.fx_passes.control_dependencies import (
++            preserve_node_ordering_from_config,
++        )
++        from torch._inductor.scheduler import Scheduler
++        from torch.utils._ordered_set import OrderedSet
++
++        def fn(a, b):
++            mm = b @ b
++            x = a + 1
++            y = x * 2
++            return mm, y
++
++        saw_refreshed_ancestor: list[bool] = []
++
++        def add_meta_deps(graph):
++            mm_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.mm.default
++            )
++            mul_nodes = graph.find_nodes(
++                op="call_function", target=torch.ops.aten.mul.Tensor
++            )
++            self.assertEqual(len(mm_nodes), 1)
++            self.assertEqual(len(mul_nodes), 1)
++
++            deps_map = {mul_nodes[0]: OrderedSet([mm_nodes[0]])}
++            preserve_node_ordering_from_config(graph, deps_map)
++            return graph
++
++        orig_apply = Scheduler._apply_post_fusion_overlap_deps
++
++        def capture_apply(scheduler):
++            before = {
++                node: OrderedSet(node.unmet_dependencies) for node in scheduler.nodes
++            }
++            orig_apply(scheduler)
++            for node in scheduler.nodes:
++                added = node.unmet_dependencies - before.get(node, OrderedSet())
++                for dep in added:
++                    if (
++                        isinstance(dep, WeakDep)
++                        and dep.is_fake
++                        and dep.name in scheduler.name_to_buf
++                    ):
++                        op_name = scheduler.name_to_buf[dep.name].defining_op_name()
++                        saw_refreshed_ancestor.append(op_name in node.ancestors)
++
++        patches = {
++            "post_grad_custom_post_pass": add_meta_deps,
++            "aten_distributed_optimizations.insert_overlap_deps_impl": "meta",
++        }
++        torch._dynamo.reset()
++        with (
++            mock.patch.object(
++                Scheduler, "_apply_post_fusion_overlap_deps", capture_apply
++            ),
++            config.patch(patches),
++        ):
++            a = torch.rand([32, 32], device=GPU_TYPE)
++            b = torch.rand([32, 32], device=GPU_TYPE)
++            result = torch.compile(fn)(a, b)
++
++        expected = fn(a, b)
++        torch.testing.assert_close(result, expected)
++        self.assertTrue(saw_refreshed_ancestor)
++        self.assertTrue(all(saw_refreshed_ancestor))
++
+     @requires_gpu()
+     def test_meta_overlap_deps_do_not_force_realization(self):
+         from torch._inductor.fx_passes.control_dependencies import (
+diff --git a/torch/_inductor/graph.py b/torch/_inductor/graph.py
+index 6926a15e32dd0..f1b164896f249 100644
+--- a/torch/_inductor/graph.py
++++ b/torch/_inductor/graph.py
+@@ -456,6 +456,9 @@ def __init__(
+         self._fx_node_to_operation_names: dict[torch.fx.Node, OrderedSet[str]] = (
+             defaultdict(OrderedSet)
+         )
++        self._post_fusion_overlap_dep_nodes: dict[str, OrderedSet[torch.fx.Node]] = (
++            defaultdict(OrderedSet)
++        )
+         self.post_fusion_overlap_deps: dict[str, OrderedSet[str]] = defaultdict(
+             OrderedSet
+         )
+@@ -1912,10 +1915,17 @@ def _record_post_fusion_overlap_deps(
+                 if origin_deps:
+                     dep_nodes.update(origin_deps)
+ 
++            if dep_nodes:
++                self._post_fusion_overlap_dep_nodes[op.operation_name].update(dep_nodes)
++
++    def _finalize_post_fusion_overlap_deps(self) -> None:
++        self.post_fusion_overlap_deps.clear()
++        for op_name, dep_nodes in self._post_fusion_overlap_dep_nodes.items():
++            dep_op_names: OrderedSet[str] = OrderedSet()
+             for dep_node in dep_nodes:
+-                self.post_fusion_overlap_deps[op.operation_name].update(
+-                    self._fx_node_to_operation_names.get(dep_node, ())
+-                )
++                dep_op_names.update(self._fx_node_to_operation_names.get(dep_node, ()))
++            if dep_op_names:
++                self.post_fusion_overlap_deps[op_name].update(dep_op_names)
+ 
+     def run_node(self, n: torch.fx.Node) -> object:
+         """Lower and execute a single FX node into Inductor IR."""
+@@ -2950,6 +2960,7 @@ def _update_scheduler(self) -> None:
+         """
+         from .scheduler import Scheduler
+ 
++        self._finalize_post_fusion_overlap_deps()
+         with config.patch("triton.store_cubin", False):
+             self.scheduler = Scheduler(self.operations)
+ 
+diff --git a/torch/_inductor/scheduler.py b/torch/_inductor/scheduler.py
+index 88e8cd57960c5..e325ba5e1651f 100644
+--- a/torch/_inductor/scheduler.py
++++ b/torch/_inductor/scheduler.py
+@@ -4621,6 +4621,8 @@ def _apply_post_fusion_overlap_deps(self) -> None:
+ 
+         if changed:
+             self.nodes = self.topological_sort_schedule(self.nodes)
++            self.compute_ancestors()
++            self.compute_input_distances()
+ 
+     def compute_dependencies(self) -> None:
+         """

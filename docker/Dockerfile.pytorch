@@ -42,7 +42,10 @@ RUN cd triton && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
 # install pytorch
-RUN cd pytorch && \
+# https://github.com/pytorch/pytorch/pull/188404 — metadata overlap deps (open PR, not merged upstream)
+RUN --mount=type=bind,source=patches,target=/patches \
+    cd pytorch && \
+    git apply /patches/pytorch_pr188404_overlap_deps_meta.patch && \
     UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
     PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
     pip install -r requirements.txt && \
