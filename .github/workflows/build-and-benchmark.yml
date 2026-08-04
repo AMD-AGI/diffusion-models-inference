@@ -128,32 +128,18 @@ jobs:
       
       - name: Determine benchmark image
         id: determine_benchmark
-        env:
-          INPUT_BENCHMARK_IMAGE: ${{ inputs.benchmark_image }}
-        run: |
-          BENCHMARK=$(echo "$INPUT_BENCHMARK_IMAGE" | xargs)
-          if [ -z "$BENCHMARK" ]; then
-            echo "benchmark_image=" >> $GITHUB_OUTPUT
-            echo "benchmark_image_tag=" >> $GITHUB_OUTPUT
-          elif [[ "$BENCHMARK" == *"/"* ]] || [[ "$BENCHMARK" == *":"* ]]; then
-            echo "benchmark_image=${BENCHMARK}" >> $GITHUB_OUTPUT
-            # Extract tag portion after colon, or use whole string if no colon
-            if [[ "$BENCHMARK" == *":"* ]]; then
-              TAG="${BENCHMARK##*:}"
-            else
-              TAG=""
-            fi
-            echo "benchmark_image_tag=${TAG}" >> $GITHUB_OUTPUT
-          else
-            echo "benchmark_image=${{ env.STAGING_IMAGE }}:${BENCHMARK}" >> $GITHUB_OUTPUT
-            echo "benchmark_image_tag=${BENCHMARK}" >> $GITHUB_OUTPUT
-          fi
+        uses: ./.github/actions/resolve-benchmark-image
+        with:
+          benchmark_image: ${{ inputs.benchmark_image }}
+          staging_image: ${{ env.STAGING_IMAGE }}
+          # Empty means "build from source" here, unlike the benchmark-only workflow.
+          require_image: 'false'
       
       - name: Validate benchmark image exists
         if: ${{ inputs.benchmark_image != '' }}
         uses: ./.github/actions/validate-image-exists
         with:
-          image: ${{ steps.determine_benchmark.outputs.benchmark_image }}
+          image: ${{ steps.determine_benchmark.outputs.image }}
       
       - name: Store build metadata
         uses: ./.github/actions/save-build-metadata
@@ -163,8 +149,8 @@ jobs:
           core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
           staging_image: ${{ env.STAGING_IMAGE }}
           staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
-          benchmark_image: ${{ steps.determine_benchmark.outputs.benchmark_image }}
-          benchmark_image_tag: ${{ steps.determine_benchmark.outputs.benchmark_image_tag }}
+          benchmark_image: ${{ steps.determine_benchmark.outputs.image }}
+          benchmark_image_tag: ${{ steps.determine_benchmark.outputs.image_tag }}
           prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
           prebuilt_untuned_image_tag: ${{ inputs.prebuilt_untuned_image_tag }}
           git_branch: ${{ inputs.git_branch }}

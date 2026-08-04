@@ -1,0 +1,66 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Resolve Benchmark Image'
+description: >
+  Expands a bare tag into a full staging image reference. Resolution happens
+  per-job on purpose: the result usually contains the Docker Hub organization,
+  which is a secret, and GitHub drops job outputs that contain secrets.
+
+inputs:
+  benchmark_image:
+    description: 'Image tag, or a full path containing an organization and/or tag'
+    required: false
+    default: ''
+  staging_image:
+    description: 'Staging image name used when only a tag is given'
+    required: true
+  require_image:
+    description: 'Fail on an empty benchmark_image instead of returning empty outputs'
+    required: false
+    default: 'true'
+
+outputs:
+  image:
+    description: 'Fully qualified image reference, empty when none was given'
+    value: ${{ steps.resolve.outputs.image }}
+  image_tag:
+    description: 'Tag portion of the reference, empty when the reference carries none'
+    value: ${{ steps.resolve.outputs.image_tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve image reference
+      id: resolve
+      shell: bash
+      env:
+        INPUT_BENCHMARK_IMAGE: ${{ inputs.benchmark_image }}
+        STAGING_IMAGE: ${{ inputs.staging_image }}
+        REQUIRE_IMAGE: ${{ inputs.require_image }}
+      run: |
+        BENCHMARK=$(echo "$INPUT_BENCHMARK_IMAGE" | xargs)
+        if [ -z "$BENCHMARK" ]; then
+          if [ "$REQUIRE_IMAGE" = "true" ]; then
+            echo "::error::benchmark_image is required"
+            exit 1
+          fi
+          IMAGE=""
+          TAG=""
+        elif [[ "$BENCHMARK" == *"/"* ]] || [[ "$BENCHMARK" == *":"* ]]; then
+          IMAGE="$BENCHMARK"
+          # A bare organization/repository path carries no tag.
+          if [[ "$BENCHMARK" == *":"* ]]; then
+            TAG="${BENCHMARK##*:}"
+          else
+            TAG=""
+          fi
+        else
+          IMAGE="${STAGING_IMAGE}:${BENCHMARK}"
+          TAG="$BENCHMARK"
+        fi
+        echo "Resolved benchmark image: ${IMAGE:-<none>}"
+        {
+          echo "image=${IMAGE}"
+          echo "image_tag=${TAG}"
+        } >> "$GITHUB_OUTPUT"
