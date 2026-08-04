@@ -1,0 +1,96 @@
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.7"
+ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
+ARG TRITON_COMMIT="4cff872ced001ea92d9fcf05b3f6517e2b486d19"
+ARG PYTORCH_COMMIT="d0fcdf917596ad6d2da9a2799bfba4b71456dcc4"
+ARG PYTORCH_VISION_COMMIT="8fb87713a24951e639c494b0f2a8a81b5f8e33a6"
+ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
+ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
+
+ARG XDIT_COMMIT="175e0bfec974d0b44a0be9fa511df2f9f5ead080"
+
+FROM ${BASE_IMAGE} AS build_torch
+ARG PYTORCH_ROCM_ARCH
+ARG TRITON_COMMIT
+ARG PYTORCH_COMMIT
+ARG PYTORCH_VISION_COMMIT
+ARG PYTORCH_AUDIO_COMMIT
+ARG PYTORCH_CODEC_COMMIT
+
+WORKDIR /app
+RUN git clone https://github.com/ROCm/TheRock.git
+
+# needed for HIPIFY commits created by the build process
+RUN git config --global user.name "TheRock Builder" && \
+    git config --global user.email "builder@rocm.ai"
+
+# fetch sources
+WORKDIR /app/TheRock/external-builds/pytorch
+RUN pip install -r /app/TheRock/requirements.txt && \
+    python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/ROCm/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
+# fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
+RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
+    cd pytorch_codec && \
+    git reset --hard ${PYTORCH_CODEC_COMMIT}
+RUN mkdir /install
+# install triton
+RUN cd triton && \
+    pip install -r python/requirements.txt && \
+    pip wheel . --wheel-dir dist/ && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install pytorch
+RUN cd pytorch && \
+    UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
+    PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
+    pip install -r requirements.txt && \
+    BUILD_TEST=0 \
+    USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
+    USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" \
+    PYTORCH_BUILD_VERSION="${PYTORCH_VERSION}+git${UPSTREAM_HASH}" \
+    PYTORCH_BUILD_NUMBER=1 \
+    CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
+    LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
+    PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install vision
+RUN cd pytorch_vision && \
+    FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install audio
+RUN cd pytorch_audio && \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
+    python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+# install torchcodec
+RUN pip install --no-cache-dir pybind11 pybind11[global] && \
+    cd pytorch_codec && \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
+    python -m build --wheel -vvv --no-isolation -o dist && \
+    pip install dist/*.whl && \
+    cp dist/*.whl /install
+
+FROM ${BASE_IMAGE} AS final
+RUN --mount=type=bind,from=build_torch,source=/install,target=/install \
+    pip install /install/*.whl
+
+# update xDiT
+ARG XDIT_COMMIT
+WORKDIR /app
+RUN --mount=type=bind,source=patches,target=/patches \
+    pip uninstall -y xfuser && \
+    rm -rf /app/xDiT && \
+    git clone https://github.com/xdit-project/xDiT.git && \
+    cd xDiT && \
+    git reset --hard ${XDIT_COMMIT} && \
+    git apply /patches/xfuser_aiter_sparge_fp8_asm_backend.patch && \
+    pip freeze | grep numpy > constraints.txt && \
+    pip install -c constraints.txt -e .
