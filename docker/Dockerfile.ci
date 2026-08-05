@@ -540,6 +540,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xfuser_aiter_sparge_fp8_asm_backend.patch && \
+    git apply /patches/xdit_drop_unused_numba_dependency.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute runtime dependencies

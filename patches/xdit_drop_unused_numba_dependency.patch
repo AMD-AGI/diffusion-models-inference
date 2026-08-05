@@ -1,0 +1,12 @@
+diff --git a/setup.py b/setup.py
+index 67eb639..97a9234 100644
+--- a/setup.py
++++ b/setup.py
+@@ -37,7 +37,6 @@ if __name__ == "__main__":
+             "diffusers>=0.33.0",
+             "av", # For LTX-2 model
+             "peft", # For LTX-2 LoRA
+-            "numba",
+             "numpy",
+         ],
+         extras_require={
