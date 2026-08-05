@@ -75,39 +75,31 @@ def filter_commands(commands: list[str], tuned_commands: Set[MIOpenConvolution])
     return filtered, skipped
 
 
-def get_database_filename(arch: str, db_dir: Path) -> Path:
-    """Get the database filename for the given architecture.
+def get_database_filename(db_prefix: str, db_dir: Path) -> Path:
+    """Get the database filename for the given prefix.
     
     Args:
-        arch: Architecture or GPU tag (e.g., 'gfx942', 'mi300', 'gfx950')
+        db_prefix: MIOpen DB filename prefix (e.g., 'gfx942130', 'gfx950100')
         db_dir: Directory containing database files
         
     Returns:
         Path to the .ufdb.txt database file
         
     Raises:
-        FileNotFoundError: If no database file is found for the architecture
+        FileNotFoundError: If no database file is found for the prefix
     """
+    if not db_prefix:
+        raise FileNotFoundError("No DB prefix provided, cannot determine database file")
     
-    # Map known tags to DB filename prefixes; gfx* tags are used directly as glob prefixes
-    arch_to_gfx = {
-        'mi300': 'gfx942',
-        'mi308': 'gfx942',
-        'mi325': 'gfx942',
-        'mi350': 'gfx950',
-        'mi355': 'gfx950',
-    }
-    
-    gfx_prefix = arch_to_gfx.get(arch, arch)
-    matching_files = sorted(db_dir.glob(f'{gfx_prefix}*.ufdb.txt'))
+    matching_files = sorted(db_dir.glob(f'{db_prefix}*.ufdb.txt'))
     
     if matching_files:
-        logger.info(f"Found database file for {arch}: {matching_files[0]}")
+        logger.info(f"Found database file: {matching_files[0]}")
         if len(matching_files) > 1:
             logger.info(f"Multiple matches found, using: {matching_files[0].name}")
         return matching_files[0]
     else:
-        raise FileNotFoundError(f"No database file found for {arch} (prefix: {gfx_prefix}) in {db_dir}")
+        raise FileNotFoundError(f"No database file found (prefix: {db_prefix}) in {db_dir}")
 
 
 def main():
@@ -131,10 +123,10 @@ def main():
         help='Path to MIOpen database directory (MIOPEN_USER_DB_PATH)'
     )
     parser.add_argument(
-        '--arch',
+        '--db-prefix',
         type=str,
-        default='unknown',
-        help='GPU tag (e.g., gfx942, mi300, gfx950) for database selection'
+        default='',
+        help='MIOpen DB filename prefix (e.g., gfx942130). If empty, filtering is skipped.'
     )
     
     args = parser.parse_args()
@@ -152,7 +144,7 @@ def main():
     
     db_dir = Path(args.db_path)
     try:
-        db_file = get_database_filename(args.arch, db_dir)
+        db_file = get_database_filename(args.db_prefix, db_dir)
         tuned_commands = load_database(db_file)
     except FileNotFoundError as e:
         logger.warning(f"{e} — skipping filtering")
