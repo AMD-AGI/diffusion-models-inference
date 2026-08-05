@@ -38,7 +38,7 @@ ARG AITER_COMMIT="3a5261496c591b4fd7cf280d35d20dee713098fd"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="570b6a79281f8f01aa75d22131b4cbf0357585f8"
 ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
-ARG XDIT_COMMIT="2b8b5b709e3c63bcbf0f0640e11e916a15a85b46"
+ARG XDIT_COMMIT="9705ed0d7509537b4d2697f27c089bab5c6e96a3"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -540,7 +540,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xfuser_aiter_sparge_fp8_asm_backend.patch && \
-    git apply /patches/xdit_drop_unused_numba_dependency.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute runtime dependencies

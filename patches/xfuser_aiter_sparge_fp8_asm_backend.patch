@@ -1,5 +1,5 @@
 diff --git a/xfuser/core/distributed/attention_backend.py b/xfuser/core/distributed/attention_backend.py
-index ea397dd..5713d0b 100644
+index 9a08501..982b9a6 100644
 --- a/xfuser/core/distributed/attention_backend.py
 +++ b/xfuser/core/distributed/attention_backend.py
 @@ -372,6 +372,10 @@ if env_info["has_aiter"]:
@@ -18,13 +18,14 @@ index ea397dd..5713d0b 100644
      AITER_SPARGE = "AITER Sparge"
      AITER_SPARGE_V2 = "AITER Sparge V2"
 +    AITER_SPARGE_FP8 = "AITER Sparge FP8"
+     AITER_VSA = "AITER VSA CK"
      FLEX_BLOCK_SPARGE = "Flex Block Sparge"
      AITER_FLYDSL = "AITER FlyDSL"
-     AITER_FLYDSL_FP8 = "AITER FlyDSL FP8"
-@@ -1246,6 +1251,84 @@ def _aiter_sparge_v2_attn_call(query, key, value, dropout_p, is_causal, attentio
+@@ -1339,6 +1344,84 @@ def _aiter_sparge_v2_attn_call(query, key, value, dropout_p, is_causal, attentio
      )
      return restore_sparge_output(output, state), None
  
++
 +
 +# Hand-written gfx950 sparse ASM kernels are hard-wired to (kTileQ, kTileKV) =
 +# (256, 128); force the LUT block sizes to match.
@@ -102,23 +103,22 @@ index ea397dd..5713d0b 100644
 +    output = out_bshd.permute(0, 2, 1, 3)
 +    return restore_sparge_output(output, state), None
 +
-+
  @register_attention_function(AttentionBackendType.FLEX_BLOCK_SPARGE)
  def _flex_block_sparge_attn_call(query, key, value, dropout_p, is_causal, attention_kwargs=None):
      config = {"BLOCK_M": 256, "BLOCK_N": 256}
 diff --git a/xfuser/core/distributed/runtime_state.py b/xfuser/core/distributed/runtime_state.py
-index fa1b75f..b102844 100644
+index e36df3c..598c4b8 100644
 --- a/xfuser/core/distributed/runtime_state.py
 +++ b/xfuser/core/distributed/runtime_state.py
-@@ -216,6 +216,7 @@ class RuntimeState(metaclass=ABCMeta):
+@@ -225,6 +225,7 @@ class RuntimeState(metaclass=ABCMeta):
                                   AttentionBackendType.AITER_SAGE_V2,
                                   AttentionBackendType.AITER_SPARSE_SAGE_V2,
                                   AttentionBackendType.AITER_SPARGE_V2,
 +                                 AttentionBackendType.AITER_SPARGE_FP8,
+                                  AttentionBackendType.AITER_VSA,
                                   AttentionBackendType.AITER_FLYDSL,
                                   AttentionBackendType.AITER_FLYDSL_FP8,
-                                  AttentionBackendType.FLEX_BLOCK_ATTN,
-@@ -311,6 +312,20 @@ class RuntimeState(metaclass=ABCMeta):
+@@ -321,6 +322,20 @@ class RuntimeState(metaclass=ABCMeta):
                      raise RuntimeError(msg) from None
              except ImportError:
                  raise RuntimeError(msg) from None
@@ -136,9 +136,9 @@ index fa1b75f..b102844 100644
 +                    "aiter.ops.mha.fmha_v3_fwd_fp8_sparse (reached via "
 +                    "flash_attn_fp8_sparse_pertensor_func)."
 +                ) from None
-         elif attention_backend == AttentionBackendType.AITER_FLYDSL:
+         elif attention_backend == AttentionBackendType.AITER_VSA:
              try:
-                 from aiter.ops.flydsl import flydsl_flash_attn_func
+                 from aiter.ops.jenga_sparse_attention import vsa_sparse_attention
 diff --git a/xfuser/model_executor/layers/usp.py b/xfuser/model_executor/layers/usp.py
 index 341a3c4..fc37433 100644
 --- a/xfuser/model_executor/layers/usp.py
@@ -152,7 +152,7 @@ index 341a3c4..fc37433 100644
  })
  
 diff --git a/xfuser/model_executor/models/runner_models/base_model.py b/xfuser/model_executor/models/runner_models/base_model.py
-index b06d163..21b76d8 100644
+index 5ed1d07..ebb3e22 100644
 --- a/xfuser/model_executor/models/runner_models/base_model.py
 +++ b/xfuser/model_executor/models/runner_models/base_model.py
 @@ -77,6 +77,7 @@ _SPARSE_ATTENTION_BACKENDS = frozenset({
@@ -160,6 +160,6 @@ index b06d163..21b76d8 100644
      AttentionBackendType.AITER_SPARGE,
      AttentionBackendType.AITER_SPARGE_V2,
 +    AttentionBackendType.AITER_SPARGE_FP8,
+     AttentionBackendType.AITER_VSA,
      AttentionBackendType.FLEX_BLOCK_SPARGE,
  })
- 
