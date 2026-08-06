@@ -12,6 +12,7 @@ fi
 
 while IFS= read -r name; do
     while IFS='=' read -r model prefix; do
+        [[ -z "$model" || "$model" == \#* ]] && continue
         if [[ "$name" == *"$model"* ]]; then
             echo "$prefix"
             exit 0
