@@ -27,8 +27,8 @@ fi
 if [ "$FORCE_RETUNING" = "true" ] && [ -n "$DB_PREFIX" ]; then
     echo "Force retuning enabled, removing existing tuning databases"
     echo "Removing database files matching: ${DB_PREFIX}*.{udb,ufdb}.txt"
-    rm -f $MIOPEN_USER_DB_PATH/${DB_PREFIX}*.udb.txt
-    rm -f $MIOPEN_USER_DB_PATH/${DB_PREFIX}*.ufdb.txt
+    rm -f -- "${MIOPEN_USER_DB_PATH}/${DB_PREFIX}"*.udb.txt
+    rm -f -- "${MIOPEN_USER_DB_PATH}/${DB_PREFIX}"*.ufdb.txt
     echo "Removed existing tuning databases"
 fi
 
