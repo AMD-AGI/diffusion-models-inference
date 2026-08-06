@@ -18,4 +18,4 @@ while IFS= read -r name; do
             exit 0
         fi
     done < "$MAP_FILE"
-done < <(rocminfo | grep "Marketing Name" | sed 's/.*: *//')
+done < <(rocminfo 2>/dev/null | grep "Marketing Name" | sed 's/.*: *//' || true)
