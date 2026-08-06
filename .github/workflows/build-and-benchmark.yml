@@ -55,18 +55,10 @@ on:
         type: boolean
         required: false
         default: false
-      mi300_runner:
-        description: 'MI300 runner (label or node/pool name)'
-        required: false
-        default: ''
-      mi325_runner:
-        description: 'MI325 runner (label or node/pool name)'
-        required: false
-        default: ''
-      mi355_runner:
-        description: 'MI355 runner (label or node/pool name)'
-        required: false
-        default: ''
+      gpu_runners:
+        description: 'Comma-separated list of GPU runner labels'
+        required: true
+        default: 'gfx942,gfx950'
 
 permissions:
   contents: write
@@ -108,26 +100,14 @@ jobs:
       - name: Check architectures
         id: check-archs
         env:
-          MI300_RUNNER: ${{ inputs.mi300_runner }}
-          MI325_RUNNER: ${{ inputs.mi325_runner }}
-          MI355_RUNNER: ${{ inputs.mi355_runner }}
+          GPU_RUNNERS: ${{ inputs.gpu_runners }}
         run: |
-          MI300_RUNNER=$(echo "$MI300_RUNNER" | xargs)
-          MI325_RUNNER=$(echo "$MI325_RUNNER" | xargs)
-          MI355_RUNNER=$(echo "$MI355_RUNNER" | xargs)
-          
-          ANY_ENABLED=false
-          if [ -n "$MI300_RUNNER" ] || \
-             [ -n "$MI325_RUNNER" ] || \
-             [ -n "$MI355_RUNNER" ]; then
-            ANY_ENABLED=true
-          fi
-          echo "any_enabled=${ANY_ENABLED}" >> $GITHUB_OUTPUT
-          
-          if [ "$ANY_ENABLED" = "false" ]; then
-            echo "Error: No architectures enabled"
+          GPU_RUNNERS=$(echo "$GPU_RUNNERS" | xargs)
+          if [ -z "$GPU_RUNNERS" ]; then
+            echo "Error: No GPU runners specified"
             exit 1
           fi
+          echo "any_enabled=true" >> $GITHUB_OUTPUT
       
       - name: Validate prebuilt untuned image exists
         if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image == '' }}
@@ -333,7 +313,6 @@ jobs:
         with:
           image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
           arch: ${{ matrix.arch }}
-          gfx_arch: ${{ matrix.gfx_arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: ${{ steps.metadata.outputs.benchmark_image != '' }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}

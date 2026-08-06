@@ -16,27 +16,20 @@ MIOPEN_DEBUG_CONV_DIRECT=${MIOPEN_DEBUG_CONV_DIRECT:-0}
 
 ARCH=${ARCH:-unknown}
 FORCE_RETUNING=${FORCE_RETUNING:-false}
-if [ "$FORCE_RETUNING" = "true" ]; then
-    echo "Force retuning enabled, removing existing tuning databases for $ARCH"
-    case "$ARCH" in
-        mi300)
-            GFX_PREFIX="gfx942130"
-            ;;
-        mi355)
-            GFX_PREFIX="gfx950100"
-            ;;
-        *)
-            echo "Cannot determine GFX prefix"
-            GFX_PREFIX=""
-            ;;
-    esac
-    
-    if [ -n "$GFX_PREFIX" ]; then
-        echo "Removing database files matching: ${GFX_PREFIX}*.{udb,ufdb}.txt"
-        rm -f $MIOPEN_USER_DB_PATH/${GFX_PREFIX}.*.udb.txt
-        rm -f $MIOPEN_USER_DB_PATH/${GFX_PREFIX}.*.ufdb.txt
-        echo "Removed existing tuning databases for $ARCH"
-    fi
+
+DB_PREFIX=$($ROOTDIR/data/miopen/resolve_prefix.sh)
+if [ -n "$DB_PREFIX" ]; then
+    echo "Detected MIOpen DB prefix: $DB_PREFIX"
+else
+    echo "Could not resolve MIOpen DB prefix from rocminfo, tuning will run from scratch"
+fi
+
+if [ "$FORCE_RETUNING" = "true" ] && [ -n "$DB_PREFIX" ]; then
+    echo "Force retuning enabled, removing existing tuning databases"
+    echo "Removing database files matching: ${DB_PREFIX}*.{udb,ufdb}.txt"
+    rm -f -- "${MIOPEN_USER_DB_PATH}/${DB_PREFIX}"*.udb.txt
+    rm -f -- "${MIOPEN_USER_DB_PATH}/${DB_PREFIX}"*.ufdb.txt
+    echo "Removed existing tuning databases"
 fi
 
 # glob, concatenate and retain unique MIOpen driver commands
@@ -44,12 +37,12 @@ echo "Extracting workload MIOpenDriver calls"
 sed -s '$a\\' $ROOTDIR/data/miopen/workloads/*.txt | uniq -u | sort -u > $ROOTDIR/drivercmd.txt
 
 # filter out already-tuned commands
-echo "Filtering already-tuned commands for architecture: $ARCH"
+echo "Filtering already-tuned commands"
 python $ROOTDIR/src/miopen_convolution/filter_tuned_commands.py \
     $ROOTDIR/drivercmd.txt \
     $ROOTDIR/drivercmd_filtered.txt \
     --db-path $MIOPEN_USER_DB_PATH \
-    --arch $ARCH
+    --db-prefix "$DB_PREFIX"
 
 echo "$(wc -l < $ROOTDIR/drivercmd_filtered.txt) commands need tuning"
 
