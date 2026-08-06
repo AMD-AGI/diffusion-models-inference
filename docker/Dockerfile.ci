@@ -351,7 +351,7 @@ RUN pip install --no-cache-dir pybind11 pybind11[global] && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
 
-FROM ubuntu:24.04 AS ffmpeg_builder
+FROM base AS ffmpeg_builder
 # Reference: https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
 # Install build depedencies, server use only
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
