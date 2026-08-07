@@ -209,6 +209,16 @@ def parse_args() -> argparse.Namespace:
         help="Whether to use MXFP4 quantized GEMMs"
     )
     parser.add_argument(
+        "--config",
+        type=str,
+        required=False,
+        default=None,
+        help=(
+            "Extra generation config as a JSON object (e.g. task, conditions, target). "
+            "Written to <output-directory>/config.json and passed to sglang as --config."
+        ),
+    )
+    parser.add_argument(
         "--quantization_ignored_layers",
         nargs="+",
         required=False,
@@ -239,6 +249,28 @@ def save_output(output, elapsed_times, args):
 
 def _parallel_degree(ulysses_degree: int, ring_degree: int, use_cfg_parallel: bool) -> int:
     return (int(use_cfg_parallel) + 1) * ulysses_degree * ring_degree
+
+
+def _write_config_file(config_json: str, output_directory: str) -> str:
+    """
+    Dump the --config JSON payload into the output directory and return its path.
+
+    sglang takes the extra generation config (task, conditions, target, ...) as a
+    path to a JSON file, while the benchmark YAMLs carry it inline, so the values
+    are materialised here. Writing it next to the other run artifacts keeps it
+    around for debugging.
+    """
+    config = json.loads(config_json)
+    if not isinstance(config, dict):
+        raise ValueError(f"--config must be a JSON object, got {type(config).__name__}")
+
+    os.makedirs(output_directory, exist_ok=True)
+    config_path = os.path.join(output_directory, "config.json")
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+    print(f"Wrote generation config to {config_path}: {json.dumps(config)}")
+    return config_path
 
 
 def run_cli(args):
@@ -311,6 +343,9 @@ def run_cli(args):
 
     if args.quantization_ignored_layers:
         cmd.extend(["--quantization-ignored-layers"] + args.quantization_ignored_layers)
+
+    if args.config is not None:
+        cmd.extend(["--config", _write_config_file(args.config, args.output_directory)])
 
     print(f"Running command: {' '.join(cmd)}")
 
