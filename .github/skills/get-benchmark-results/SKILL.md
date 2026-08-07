@@ -1,6 +1,9 @@
 ---
 name: get-benchmark-results
 description: "Get benchmark results from a workflow run. Use when: benchmark results, get benchmarks, latency numbers, run results, performance results, compare benchmarks."
+argument-hint: "<run-id|run-url|branch> [comparison-run-id|run-url]"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Get Benchmark Results

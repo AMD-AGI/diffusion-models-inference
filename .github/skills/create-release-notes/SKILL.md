@@ -1,6 +1,9 @@
 ---
 name: create-release-notes
 description: "Generate release notes from merged PRs between releases. Use when: release notes, create release notes, changelog, what changed, PR summary, release summary, diff between versions, categorize changes."
+argument-hint: "[from-tag] [to-ref]"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Generate Release Notes

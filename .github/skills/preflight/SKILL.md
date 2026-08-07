@@ -1,6 +1,7 @@
 ---
 name: preflight
 user-invocable: false
+disable-model-invocation: false
 description: "Shared prerequisite checks for repository skills. Used by other skills before running GitHub CLI workflows."
 ---
 

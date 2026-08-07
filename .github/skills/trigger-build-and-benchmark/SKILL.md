@@ -1,6 +1,9 @@
 ---
 name: trigger-build-and-benchmark
 description: "Maintainer-only Build and Benchmark xDiT workflow dispatch. Use when: release build, trigger build, run benchmarks, dispatch workflow, start CI, benchmark image, MIOpen tuning, trigger pipeline, build-and-benchmark."
+argument-hint: "[profile] [workflow-inputs]"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Trigger Build and Benchmark Workflow

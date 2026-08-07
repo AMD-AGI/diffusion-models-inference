@@ -1,6 +1,9 @@
 ---
 name: create-pr
 description: "Create a pull request from current branch. Use when: create pr, make pr, open pull request, submit pr, pull request from branch."
+argument-hint: "[issue-number]"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Create Pull Request

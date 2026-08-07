@@ -1,6 +1,9 @@
 ---
 name: orchestrate-release
 description: "Maintainer-only release creation and build dispatch. Use when: orchestrate release, release version, full release, end to end release, release pipeline, release v, cut and build release."
+argument-hint: "<vYY.M.P>"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Release Version — Orchestration

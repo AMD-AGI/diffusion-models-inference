@@ -1,6 +1,9 @@
 ---
 name: diagnose-run
 description: "Diagnose a build-and-benchmark workflow run. Use when: check run, diagnose run, analyze run, what failed, run status, debug workflow, why did it fail, check build."
+argument-hint: "<run-id|run-url|branch>"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Analyze Workflow Run

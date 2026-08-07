@@ -1,6 +1,9 @@
 ---
 name: create-release
 description: "Create a GitHub release with tag and notes. Use when: create release, tag release, publish release, draft release, new version, cut release."
+argument-hint: "<vYY.M.P>"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Create GitHub Release

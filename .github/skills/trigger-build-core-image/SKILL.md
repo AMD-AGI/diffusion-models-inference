@@ -1,6 +1,9 @@
 ---
 name: trigger-build-core-image
 description: "Maintainer-only core image workflow dispatch. Use when: build core image, trigger core build, rebuild core, core image build, start core build."
+argument-hint: "[branch] [workflow-inputs]"
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Trigger Core Image Build
