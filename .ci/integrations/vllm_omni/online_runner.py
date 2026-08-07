@@ -69,6 +69,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--use_torch_compile", action="store_true", default=False)
+    parser.add_argument(
+        "--diffusion_compile_reorder_comm_overlap",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable Inductor compute/communication overlap reordering.",
+    )
     parser.add_argument("--use_hsdp", action="store_true", default=False)
     parser.add_argument("--enable_slicing", action="store_true", default=False)
     parser.add_argument("--enable_tiling", action="store_true", default=False)
@@ -125,6 +131,8 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
+    if args.diffusion_compile_reorder_comm_overlap:
+        cmd += ["--diffusion-compile-reorder-comm-overlap"]
     if args.use_hsdp:
         cmd += ["--use-hsdp"]
     if args.enable_slicing:
