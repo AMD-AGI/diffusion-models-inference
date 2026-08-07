@@ -6,14 +6,26 @@
 REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 ```
 
+## List available workflows
+
+List workflow files that users can select directly:
+
+```bash
+find .github/workflows -maxdepth 1 -type f -name '*.yml' \
+  ! -name '*-reusable.yml' -printf '%f\n' | sort
+```
+
+Read each file's top-level `name:` value when presenting the choices. Accept
+either that display name or the file name as `WORKFLOW`.
+
 ## List recent runs
 
 ```bash
 gh run list \
   --repo "$REPO" \
-  --workflow build-and-benchmark.yml \
+  --workflow WORKFLOW \
   --limit 5 \
-  --json databaseId,number,displayTitle,status,conclusion,startedAt,updatedAt,url
+  --json databaseId,number,workflowName,displayTitle,status,conclusion,startedAt,updatedAt,url
 ```
 
 ## Latest run for branch
@@ -21,10 +33,10 @@ gh run list \
 ```bash
 gh run list \
   --repo "$REPO" \
-  --workflow build-and-benchmark.yml \
+  --workflow WORKFLOW \
   --branch BRANCH_NAME \
   --limit 1 \
-  --json databaseId,number,displayTitle,status,conclusion,startedAt,updatedAt,url
+  --json databaseId,number,workflowName,displayTitle,status,conclusion,startedAt,updatedAt,url
 ```
 
 ## View run summary
@@ -32,7 +44,7 @@ gh run list \
 ```bash
 gh run view RUN_ID \
   --repo "$REPO" \
-  --json databaseId,number,displayTitle,status,conclusion,startedAt,updatedAt,url
+  --json databaseId,number,workflowName,displayTitle,status,conclusion,startedAt,updatedAt,url
 ```
 
 ## Get job details
