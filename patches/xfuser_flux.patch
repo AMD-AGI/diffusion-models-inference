@@ -1,8 +1,8 @@
 diff --git a/xfuser/model_executor/models/runner_models/flux.py b/xfuser/model_executor/models/runner_models/flux.py
-index 2a17586..b5ac95f 100644
+index 2e8d32d..a9f58f8 100644
 --- a/xfuser/model_executor/models/runner_models/flux.py
 +++ b/xfuser/model_executor/models/runner_models/flux.py
-@@ -296,7 +296,7 @@ class xFuserFlux2Model(xFuserModel):
+@@ -333,7 +333,7 @@ class xFuserFlux2Model(xFuserModel):
          # and cause pathological re-captures on RDNA4.
          if self.config.use_fbcache or PACKAGES_CHECKER._on_rdna4():
              return "default"
@@ -11,10 +11,3 @@ index 2a17586..b5ac95f 100644
  
      def _get_compile_dynamic(self) -> Optional[bool]:
          return False
-@@ -444,4 +444,4 @@ class xFuserFlux2Klein4BModel(xFuserFlux2Klein9BModel):
-                 "wrap_attrs": ["model.layers"],
-             },
-         },
--    )
-\ No newline at end of file
-+    )
