@@ -5,6 +5,10 @@ description: "Maintainer-only core image workflow dispatch. Use when: build core
 
 # Trigger Core Image Build
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Steps
 
 1. **Resolve defaults**

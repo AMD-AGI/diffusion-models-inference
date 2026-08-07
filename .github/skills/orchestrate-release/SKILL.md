@@ -8,6 +8,10 @@ description: "Maintainer-only release creation and build dispatch. Use when: orc
 References `create-release`, `create-release-notes`, and `trigger-build-and-benchmark` skills — does
 not duplicate their logic.
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Phase 1: Resolve and validate [^1](./notes.md#1-single-prompt)
 
 1. **Resolve repository context** — [repository and default branch](./commands.md#resolve-context)

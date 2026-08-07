@@ -5,6 +5,10 @@ description: "Create a GitHub release with tag and notes. Use when: create relea
 
 # Create GitHub Release
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Steps
 
 1. **Determine the tag** — convention: `vYY.M.P` (e.g., `v26.5.1`)

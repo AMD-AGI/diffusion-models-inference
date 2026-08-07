@@ -5,6 +5,10 @@ description: "Generate release notes from merged PRs between releases. Use when:
 
 # Generate Release Notes
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Steps
 
 1. **Determine version range** — ask which release; default to upcoming

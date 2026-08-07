@@ -5,6 +5,10 @@ description: "Diagnose a build-and-benchmark workflow run. Use when: check run, 
 
 # Analyze Workflow Run
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Steps
 
 1. **Identify the run**

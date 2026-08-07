@@ -5,6 +5,10 @@ description: "Create a pull request from current branch. Use when: create pr, ma
 
 # Create Pull Request
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Steps
 
 1. **Identify branch and issue**

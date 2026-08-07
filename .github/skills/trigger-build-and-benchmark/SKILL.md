@@ -5,6 +5,10 @@ description: "Maintainer-only Build and Benchmark xDiT workflow dispatch. Use wh
 
 # Trigger Build and Benchmark Workflow
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Steps
 
 1. **Resolve context** — [resolve repository and current branch](./commands.md#resolve-context)

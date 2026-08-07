@@ -5,6 +5,10 @@ description: "Get benchmark results from a workflow run. Use when: benchmark res
 
 # Get Benchmark Results
 
+## Preflight
+
+Complete the shared [repository skill preflight](../preflight/SKILL.md) before continuing.
+
 ## Steps
 
 1. **Identify the run**
