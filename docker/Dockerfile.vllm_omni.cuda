@@ -34,6 +34,12 @@ RUN cd /app/vllm-omni && \
         --no-build-isolation \
         -e .
 
+# Install dependencies used directly by the benchmark runner
+RUN uv pip install \
+        --python "$(python3 -c 'import sys; print(sys.executable)')" \
+        --no-cache-dir \
+        pandas
+
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
