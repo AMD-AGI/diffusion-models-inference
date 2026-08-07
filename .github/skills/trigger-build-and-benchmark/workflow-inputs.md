@@ -54,3 +54,14 @@ none set                    → full build from source
 
 The benchmark container detects its actual `gfx*` architecture and adds the
 matching benchmark tag unless `benchmark_flags` contains `--name`.
+
+### Overlapping labels
+
+The following user-supplied combinations require explicit confirmation before
+dispatch because the model-specific runners also carry the generic label:
+
+- `gfx942` with `mi300`, `mi308`, or `mi325`
+- `gfx950` with `mi350` or `mi355`
+
+Keeping both labels creates separate matrix entries. The skill must not silently
+deduplicate them.

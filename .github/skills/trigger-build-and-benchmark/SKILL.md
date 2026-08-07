@@ -22,8 +22,11 @@ Complete the shared [repository skill preflight](../preflight/SKILL.md) before c
    4.2. Leave `git_branch` empty to build the dispatch ref, or set it to build another ref
    4.3. Include boolean fields only when overriding their workflow defaults
 5. **Validate** using [validation rules](./notes.md#3-validation-rules)
-6. **Build command** — use the [workflow run template](./commands.md#workflow-run-template) and omit empty optional fields
-7. **Present and confirm** [^2](./notes.md#2-confirmation-checklist) — wait for explicit confirmation
-8. **Execute and identify run** — record existing run IDs, dispatch, then [find the new run](./commands.md#identify-the-new-run)
+6. **Resolve runner-label ambiguity** — apply the [overlap confirmation rules](./notes.md#5-runner-label-overlap)
+   6.1. If an overlap is detected, explain it and ask whether both matrix entries are intentional
+   6.2. Do not build the command until the user confirms both labels or chooses which one to keep
+7. **Build command** — use the [workflow run template](./commands.md#workflow-run-template) and omit empty optional fields
+8. **Present and confirm** [^2](./notes.md#2-confirmation-checklist) — wait for explicit confirmation
+9. **Execute and identify run** — record existing run IDs, dispatch, then [find the new run](./commands.md#identify-the-new-run)
 
 **Validation** [^3](./notes.md#3-validation-rules)
