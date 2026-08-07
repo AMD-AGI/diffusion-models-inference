@@ -292,6 +292,7 @@ def run_cli(args):
         "dit-layerwise-offload": "False",
         "text-encoder-cpu-offload": "False",
         "image-encoder-cpu-offload": "False",
+        "offload-during-compile": "False",
         "vae-cpu-offload": "False",
         "warmup": "True",
         "warmup-steps": 2,
@@ -299,6 +300,8 @@ def run_cli(args):
         "image-encoder-precision": "bf16",
         "output-path": args.output_directory,
     }
+
+    values = {key:value for key, value in values.items() if value != None}
 
     for key, value in values.items():
         cmd.extend([f"--{key}", str(value)])
