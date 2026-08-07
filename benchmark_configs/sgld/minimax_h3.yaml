@@ -1,0 +1,19 @@
+- name: minimax_h3.default
+  tags: [instinct, gfx942, gfx950]
+  model: MiniMaxAI/MiniMax-H3
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    seed: 42
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    num_inference_steps: 50
+    ulysses_degree: 8
+    use_torch_compile: True
+    num_iterations: 1
+    attention_backend: aiter
+    config:
+      task: t2va
+      target:
+        short_edge: 768
+        aspect_ratio: "16:9"
+        duration_seconds: 5.0
