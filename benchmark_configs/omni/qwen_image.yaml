@@ -31,3 +31,20 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+
+- name: qwen_image.default.blackwell
+  tags: [lucid, hopper, b200, b300]
+  model: Qwen/Qwen-Image-2512
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    prompt: A cat holding a sign that says hello world
+    height: 2048
+    width: 2048
+    seed: 42
+    num_inference_steps: 50
+    guidance_scale: 0.0
+    warmup_calls: 5
+    num_iterations: 25
+    ulysses_degree: 8
+    use_torch_compile: True

@@ -35,3 +35,22 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+
+- name: qwen_image_edit.default.blackwell
+  tags: [lucid, hopper, b200, b300]
+  model: Qwen/Qwen-Image-Edit
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    prompt: Add a cool hat to the cat.
+    negative_prompt: " "
+    height: 2048
+    width: 2048
+    input_images: /app/data/flux_cat.png
+    seed: 42
+    num_inference_steps: 50
+    true_cfg_scale: 4.0
+    warmup_calls: 5
+    num_iterations: 25
+    ulysses_degree: 8
+    use_torch_compile: True

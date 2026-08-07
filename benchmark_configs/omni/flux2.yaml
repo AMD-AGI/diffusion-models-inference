@@ -34,3 +34,39 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+
+- name: flux2.default.hopper.h200
+  tags: [lucid, hopper, h200]
+  model: black-forest-labs/FLUX.2-dev
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
+
+- name: flux2.default.blackwell
+  tags: [lucid, hopper, b200, b300]
+  model: black-forest-labs/FLUX.2-dev
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 42
+    prompt: Add a cool hat to the cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 50
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: True
+    input_images: /app/data/flux_cat.png
+    guidance_scale: 4.0
+    num_iterations: 25
