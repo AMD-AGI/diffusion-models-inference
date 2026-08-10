@@ -46,6 +46,15 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - name: Install config tooling dependencies
+      shell: bash
+      run: python3 -m pip install 'PyYAML>=6,<7'
+
     - name: Create benchmark output directory
       shell: bash
       run: |
@@ -70,20 +79,29 @@ runs:
 
     - name: Post-process converted configs
       shell: bash
+      env:
+        BENCHMARK_ONLY: ${{ inputs.benchmark_only }}
+        COLLECT_HIPBLASLT_LOGS: ${{ inputs.collect_hipblaslt_logs }}
+        CONVERTED_DIR: ${{ steps.convert.outputs.converted_dir }}
+        HF_CACHE_VOLUME: ${{ steps.hf_cache.outputs.hf_cache_volume }}
+        OUTPUT_VOLUME: ${{ github.workspace }}/${{ inputs.output_dir }}/${{ inputs.arch }}:/outputs
       run: |
-        POST_PROCESS_ARGS=""
-        if [ -n "${{ steps.hf_cache.outputs.hf_cache_volume }}" ]; then
-          POST_PROCESS_ARGS="$POST_PROCESS_ARGS --hf-cache-volume ${{ steps.hf_cache.outputs.hf_cache_volume }}"
+        POST_PROCESS_ARGS=(
+          --workspace-volume "$GITHUB_WORKSPACE:/app/diffusion-models-inference"
+          --output-volume "$OUTPUT_VOLUME"
+        )
+        if [ -n "$HF_CACHE_VOLUME" ]; then
+          POST_PROCESS_ARGS+=(--hf-cache-volume "$HF_CACHE_VOLUME")
         fi
-        if [ "${{ inputs.benchmark_only }}" != "true" ]; then
-          POST_PROCESS_ARGS="$POST_PROCESS_ARGS --miopen-user-db"
+        if [ "$BENCHMARK_ONLY" != "true" ]; then
+          POST_PROCESS_ARGS+=(--miopen-user-db)
         fi
-        if [ "${{ inputs.collect_hipblaslt_logs }}" = "true" ]; then
-          POST_PROCESS_ARGS="$POST_PROCESS_ARGS --collect-hipblaslt-logs"
+        if [ "$COLLECT_HIPBLASLT_LOGS" = "true" ]; then
+          POST_PROCESS_ARGS+=(--collect-hipblaslt-logs)
         fi
-        python3 ${{ github.action_path }}/post-process-configs.py \
-          ${{ steps.convert.outputs.converted_dir }} \
-          $POST_PROCESS_ARGS
+        python3 "$GITHUB_ACTION_PATH/post-process-configs.py" \
+          "$CONVERTED_DIR" \
+          "${POST_PROCESS_ARGS[@]}"
 
     - name: Run inference-testing
       if: ${{ steps.convert.outputs.config_count != '0' }}
@@ -96,6 +114,14 @@ runs:
         CONVERTED_DIR: ${{ steps.convert.outputs.converted_dir }}
         INFERENCE_TESTING_IMAGE: ${{ inputs.inference_testing_image }}
       run: bash ${{ github.action_path }}/run-inference-testing.sh
+
+    - name: Verify benchmark results
+      if: ${{ steps.convert.outputs.config_count != '0' }}
+      shell: bash
+      env:
+        CONVERTED_DIR: ${{ steps.convert.outputs.converted_dir }}
+        RESULT_DIR: ${{ github.workspace }}/${{ inputs.output_dir }}/${{ inputs.arch }}
+      run: python3 "$GITHUB_ACTION_PATH/verify-results.py" "$CONVERTED_DIR" "$RESULT_DIR"
 
     - name: Upload benchmark results
       if: always()

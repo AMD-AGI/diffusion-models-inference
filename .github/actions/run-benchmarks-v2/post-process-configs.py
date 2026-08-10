@@ -25,28 +25,30 @@ from pathlib import Path
 import yaml
 
 
-def post_process(config_path: Path, *, hf_cache_volume: str | None, miopen_user_db: bool,
-                 collect_hipblaslt_logs: bool) -> None:
+def post_process(config_path: Path, *, hf_cache_volume: str | None, workspace_volume: str,
+                 output_volume: str, miopen_user_db: bool, collect_hipblaslt_logs: bool) -> None:
     with open(config_path) as f:
         data = yaml.safe_load(f)
 
     if data is None:
         return
 
-    # HF cache volume
-    if hf_cache_volume and "server" in data and "args" in data["server"]:
+    if "server" in data and "args" in data["server"]:
         volumes = data["server"]["args"].setdefault("volumes", [])
-        volumes.append(hf_cache_volume)
+        volumes.append(workspace_volume)
+        volumes.append(output_volume)
+        if hf_cache_volume:
+            volumes.append(hf_cache_volume)
 
     # MIOpen user DB path
     if miopen_user_db and "server" in data and "args" in data["server"]:
         env = data["server"]["args"].setdefault("environment", {})
-        env["MIOPEN_USER_DB_PATH"] = "/app/diffusion-models-inference-private/data/miopen/userdb"
+        env["MIOPEN_USER_DB_PATH"] = "/app/diffusion-models-inference/data/miopen/userdb"
 
-    # hipBLASLt log collection
-    if collect_hipblaslt_logs and "benchmarks" in data:
-        for bench in data["benchmarks"]:
-            bench.setdefault("args", {})["collect_hipblaslt_logs"] = True
+    if collect_hipblaslt_logs and "server" in data and "args" in data["server"]:
+        env = data["server"]["args"].setdefault("environment", {})
+        env["HIPBLASLT_LOG_MASK"] = "64"
+        env["HIPBLASLT_LOG_FILE"] = f"/outputs/{config_path.stem}/hipblaslt_gemms_pid%i.yaml"
 
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
@@ -56,6 +58,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Post-process converted inference-testing configs")
     parser.add_argument("config_dir", type=Path, help="Directory containing converted YAML configs")
     parser.add_argument("--hf-cache-volume", default=None, help="HF cache volume string (host:container)")
+    parser.add_argument("--workspace-volume", required=True, help="Repository volume string (host:container)")
+    parser.add_argument("--output-volume", required=True, help="Benchmark output volume string (host:container)")
     parser.add_argument("--miopen-user-db", action="store_true", help="Inject MIOPEN_USER_DB_PATH")
     parser.add_argument("--collect-hipblaslt-logs", action="store_true", help="Enable hipBLASLt log collection")
     args = parser.parse_args()
@@ -69,6 +73,8 @@ def main() -> None:
         post_process(
             config_path,
             hf_cache_volume=args.hf_cache_volume,
+            workspace_volume=args.workspace_volume,
+            output_volume=args.output_volume,
             miopen_user_db=args.miopen_user_db,
             collect_hipblaslt_logs=args.collect_hipblaslt_logs,
         )

@@ -73,6 +73,10 @@ def filter_by_names(entries: list[dict], names: list[str]) -> list[dict]:
     return [e for e in entries if e.get("name") in names]
 
 
+def sanitize_name(name: str) -> str:
+    return name.replace("/", "_").replace(" ", "_")
+
+
 # ---------------------------------------------------------------------------
 # Conversion
 # ---------------------------------------------------------------------------
@@ -83,7 +87,7 @@ DEFAULT_SERVER_ARGS: dict[str, Any] = {
     "devices": ["/dev/dri:/dev/dri", "/dev/kfd:/dev/kfd"],
     "environment": {
         "HF_TOKEN": "${HF_TOKEN}",
-        "CUDA_VISIBLE_DEVICES": "${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}",
+        "CUDA_VISIBLE_DEVICES": "${CUDA_VISIBLE_DEVICES}",
         "OMP_NUM_THREADS": "16",
     },
     "security_opt": ["seccomp=unconfined"],
@@ -103,11 +107,19 @@ def convert_entry(entry: dict, image: str) -> dict:
     """
     args = dict(entry.get("args", {}))
     args["model"] = entry["model"]
+    args["output_directory"] = f"/outputs/{sanitize_name(entry.get('name', 'xdit'))}"
 
     server_args = dict(DEFAULT_SERVER_ARGS)
     server_args["image"] = image
 
     config: dict[str, Any] = {
+        "reporting": {
+            "type": "mlflow",
+            "args": {
+                "uri": "file:///outputs/mlruns",
+                "experiment_name": entry.get("name", "xdit"),
+            },
+        },
         "server": {
             "type": "docker",
             "stop_between_runs": True,
@@ -260,8 +272,7 @@ def main() -> None:
         for name, config in results:
             output = dump_yaml(config)
             if args.output_dir:
-                # Sanitize name for filesystem
-                safe_name = name.replace("/", "_").replace(" ", "_")
+                safe_name = sanitize_name(name)
                 out_path = args.output_dir / f"{safe_name}.yaml"
                 out_path.write_text(output)
                 converted_count += 1

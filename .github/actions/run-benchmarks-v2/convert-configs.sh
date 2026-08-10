@@ -18,8 +18,17 @@ rm -rf "$CONVERTED_DIR"
 mkdir -p "$CONVERTED_DIR"
 
 # Parse benchmark_flags into filter args for the converter
-FILTER_ARGS=""
-eval "FLAGS_ARRAY=(${INPUT_BENCHMARK_FLAGS:-})"
+FILTER_ARGS=()
+mapfile -d '' -t FLAGS_ARRAY < <(
+  INPUT_BENCHMARK_FLAGS="${INPUT_BENCHMARK_FLAGS:-}" python3 - <<'PY'
+import os
+import shlex
+import sys
+
+for flag in shlex.split(os.environ["INPUT_BENCHMARK_FLAGS"]):
+    sys.stdout.write(flag + "\0")
+PY
+)
 
 i=0
 while [ $i -lt ${#FLAGS_ARRAY[@]} ]; do
@@ -27,11 +36,19 @@ while [ $i -lt ${#FLAGS_ARRAY[@]} ]; do
   case "$flag" in
     --tag)
       i=$((i + 1))
-      FILTER_ARGS="$FILTER_ARGS --tag ${FLAGS_ARRAY[$i]}"
+      if [ $i -ge ${#FLAGS_ARRAY[@]} ]; then
+        echo "::error::--tag requires a value"
+        exit 1
+      fi
+      FILTER_ARGS+=(--tag "${FLAGS_ARRAY[$i]}")
       ;;
     --name)
       i=$((i + 1))
-      FILTER_ARGS="$FILTER_ARGS --name ${FLAGS_ARRAY[$i]}"
+      if [ $i -ge ${#FLAGS_ARRAY[@]} ]; then
+        echo "::error::--name requires a value"
+        exit 1
+      fi
+      FILTER_ARGS+=(--name "${FLAGS_ARRAY[$i]}")
       ;;
     --collect-hipblaslt-logs|--no-clear-model-cache)
       # Not consumed here — handled by post-processing or not applicable
@@ -44,16 +61,15 @@ while [ $i -lt ${#FLAGS_ARRAY[@]} ]; do
 done
 
 # Add gfx_arch as tag filter if set and --name is not used
-if [ -n "${GFX_ARCH:-}" ] && [[ "$FILTER_ARGS" != *"--name"* ]]; then
-  FILTER_ARGS="$FILTER_ARGS --tag $GFX_ARCH"
+if [ -n "${GFX_ARCH:-}" ] && [[ ! " ${FLAGS_ARRAY[*]} " =~ [[:space:]]--name[[:space:]] ]]; then
+  FILTER_ARGS+=(--tag "$GFX_ARCH")
 fi
 
 # Run the converter
-# shellcheck disable=SC2086
 python3 "$(pwd)/scripts/convert_configs.py" \
   "$(pwd)/benchmark_configs/xdit/"*.yaml \
   --image "$DOCKER_IMAGE" \
-  $FILTER_ARGS \
+  "${FILTER_ARGS[@]}" \
   -o "$CONVERTED_DIR"
 
 CONFIG_COUNT=$(find "$CONVERTED_DIR" -name '*.yaml' | wc -l)

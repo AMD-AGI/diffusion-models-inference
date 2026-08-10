@@ -46,6 +46,15 @@ on:
         type: boolean
         required: false
         default: false
+      use_inference_testing:
+        description: 'Run benchmarks through inference-testing'
+        type: boolean
+        required: false
+        default: false
+      inference_testing_image:
+        description: 'inference-testing driver image'
+        required: false
+        default: 'amdsiloai/inference-testing:latest'
       benchmark_image:
         description: 'Image tag or full Docker Hub path for benchmark-only mode'
         required: false
@@ -341,7 +350,7 @@ jobs:
         uses: ./.github/actions/cleanup-workspace
         with:
           images: '${{ steps.metadata.outputs.tune_and_benchmark_image }}'
-          containers: 'xdit-bench miopen-tune'
+          containers: 'xdit-bench miopen-tune inference-testing-driver'
           skip_workspace_cleanup: 'true'
       
       - name: Workspace cleanup
