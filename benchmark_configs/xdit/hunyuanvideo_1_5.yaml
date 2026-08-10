@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: hunyuanvideo_1_5.default
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v

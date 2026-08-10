@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: 'Save Build Metadata'
 description: 'Creates and uploads build metadata artifact with image tags and configuration'
 inputs:

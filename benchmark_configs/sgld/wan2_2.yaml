@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: wan2_2.i2v
   tags: [release, lucid, instinct, gfx942, gfx950]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers

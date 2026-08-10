@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: flux_kontext.default
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-Kontext-dev

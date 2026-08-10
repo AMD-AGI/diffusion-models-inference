@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 scripts=(
     "/app/.ci/run.hunyuanvideo.sh"

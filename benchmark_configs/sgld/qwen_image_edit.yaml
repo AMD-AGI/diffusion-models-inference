@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: qwen_image_edit.default
   tags: [release, lucid, instinct, gfx942, gfx950]
   model: Qwen/Qwen-Image-Edit

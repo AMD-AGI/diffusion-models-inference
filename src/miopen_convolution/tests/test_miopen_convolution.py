@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import unittest
 from parameterized import parameterized # type: ignore[import-untyped]
 from miopen_convolution import MIOpenConvolution

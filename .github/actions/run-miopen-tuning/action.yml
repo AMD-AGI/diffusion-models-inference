@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Run MIOpen Tuning
 description: Run MIOpen kernel tuning for a specific architecture
 

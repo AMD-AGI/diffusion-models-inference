@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Generate a GitHub Actions matrix JSON from workflow inputs.
