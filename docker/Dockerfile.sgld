@@ -28,8 +28,8 @@ RUN git clone ${SGL_REPO} sglang && \
     cd python/sglang/kernels/aot && \
     mv pyproject_rocm.toml pyproject.toml && \
     AMDGPU_TARGET=${AMDGPU_TARGET} python setup_rocm.py install && \
-    cd ../../../ && \
-    mv python/pyproject_other.tomg python/pyproject.toml && \
+    cd ../../../../ && \
+    mv python/pyproject_other.toml python/pyproject.toml && \
     sed -i '/numpy/d' python/pyproject.toml && \
     sed -i '/torch/d' python/pyproject.toml && \
     sed -i '/torchvision/d' python/pyproject.toml && \
