@@ -5,7 +5,7 @@ ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.7"
 FROM ${BASE_IMAGE}
 
 ARG VLLM_COMMIT="ad7125a" # v0.21.0
-ARG SGL_COMMIT="f8f2870" # v0.5.16+
+ARG SGL_COMMIT="2948168" # v0.5.17
 ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
 ARG AMDGPU_TARGET="gfx950"
 
@@ -45,7 +45,8 @@ RUN pip3 install "transformers==5.12.1" --upgrade && \
 # Envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"
 ENV SGLANG_USE_ROCM_VAE=0
-ENV SGLANG_DIFFUSION_DISABLE_SP_PAD_MASK=1 # Requires SGL PR #33855
+# Requires SGL PR #33855
+ENV SGLANG_DIFFUSION_DISABLE_SP_PAD_MASK=1
 ENV MIOPEN_DEBUG_CONV_DIRECT=0
 
 WORKDIR /app
