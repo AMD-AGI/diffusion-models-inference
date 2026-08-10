@@ -3,7 +3,8 @@
 Online serving benchmark.
 
 Starts the vllm-omni server, waits for readiness, sends request(s).
-Writes per iteration wall times to timings.json.
+Writes per-iteration server generation times to timings.json, falling back to
+client wall times when server metrics are unavailable.
 
 Endpoint is auto-detected from args:
   num_frames provided → /v1/videos/sync        (T2V or I2V)
@@ -27,9 +28,6 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-ENDPOINT_VIDEO = "video"
-ENDPOINT_IMAGE = "image"
-
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -38,65 +36,64 @@ def parse_args() -> argparse.Namespace:
         description="Benchmark vllm-omni online serving (T2I / I2I / T2V / I2V)",
     )
 
-    # Required core args
-    parser.add_argument("--model", required=True)
-    parser.add_argument("--prompt", required=True)
-    parser.add_argument("--height", type=int, required=True)
-    parser.add_argument("--width", type=int, required=True)
-    parser.add_argument("--num_inference_steps", type=int, required=True)
-    parser.add_argument("--num_iterations", type=int, required=True)
+    request = parser.add_argument_group("generation request")
+    request.add_argument("--model", required=True)
+    request.add_argument("--prompt", required=True)
+    request.add_argument("--height", type=int, required=True)
+    request.add_argument("--width", type=int, required=True)
+    request.add_argument("--num_inference_steps", type=int, required=True)
+    request.add_argument("--negative_prompt")
+    request.add_argument("--guidance_scale", type=float)
+    request.add_argument("--true_cfg_scale", type=float)
+    request.add_argument("--seed", type=int, default=42)
+    request.add_argument("--num_frames", type=int, help="Set for video generation")
+    request.add_argument("--fps", type=int, help="Output video frame rate")
+    request.add_argument("--max_sequence_length", type=int)
+    request.add_argument("--input_images", help="Input image path (I2V or I2I)")
 
-    # Generation args
-    parser.add_argument("--negative_prompt", default=None)
-    parser.add_argument("--guidance_scale", type=float, default=None)
-    parser.add_argument("--true_cfg_scale", type=float, default=None)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--num_frames", type=int, default=None, help="Set for video generation")
-    parser.add_argument("--fps", type=int, default=None, help="Output video frame rate")
-    parser.add_argument("--max_sequence_length", type=int, default=None)
-    parser.add_argument("--input_images", default=None, help="Input image path (I2V or I2I)")
-
-    # Serve flags — passed to the vllm-omni serve command
-    parser.add_argument("--attention_backend", default=None,
-                        help="Override DIFFUSION_ATTENTION_BACKEND (e.g. FLASH_ATTN, TORCH_SDPA). "
-                             "Defaults to platform auto-detection when unset.")
-    parser.add_argument("--ulysses_degree", type=int, default=1)
-    parser.add_argument("--ring_degree", type=int, default=1)
-    parser.add_argument("--ulysses_mode", type=str, default=None, help="advanced_uaa enables uneven head/sequence shapes")
-    parser.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--use_torch_compile", action="store_true", default=False)
-    parser.add_argument(
+    server = parser.add_argument_group("server")
+    server.add_argument(
+        "--attention_backend",
+        help=(
+            "Override DIFFUSION_ATTENTION_BACKEND (e.g. FLASH_ATTN, TORCH_SDPA). "
+            "Defaults to platform auto-detection when unset."
+        ),
+    )
+    server.add_argument("--ulysses_degree", type=int, default=1)
+    server.add_argument("--ring_degree", type=int, default=1)
+    server.add_argument("--ulysses_mode", help="advanced_uaa enables uneven head/sequence shapes")
+    server.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
+    server.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
+    server.add_argument("--use_torch_compile", action="store_true")
+    server.add_argument(
         "--diffusion_compile_reorder_comm_overlap",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable Inductor compute/communication overlap reordering.",
     )
-    parser.add_argument("--use_hsdp", action="store_true", default=False)
-    parser.add_argument("--enable_slicing", action="store_true", default=False)
-    parser.add_argument("--enable_tiling", action="store_true", default=False)
-    parser.add_argument("--port", type=int, default=8098)
+    server.add_argument("--use_hsdp", action="store_true")
+    server.add_argument("--enable_slicing", action="store_true")
+    server.add_argument("--enable_tiling", action="store_true")
+    server.add_argument("--port", type=int, default=8098)
 
-    # Benchmark control
-    parser.add_argument("--output-directory", default="./output")
-    parser.add_argument("--warmup_calls", type=int, default=0)
-    parser.add_argument("--health_timeout", type=int, default=600, help="Seconds to wait for server readiness")
-    parser.add_argument("--request_timeout", type=int, default=600, help="Seconds to wait per inference request")
-    parser.add_argument("--profile", action="store_true", default=False)
+    benchmark = parser.add_argument_group("benchmark")
+    benchmark.add_argument("--num_iterations", type=int, required=True)
+    benchmark.add_argument("--output-directory", default="./output")
+    benchmark.add_argument("--warmup_calls", type=int, default=0)
+    benchmark.add_argument(
+        "--health_timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for server readiness",
+    )
+    benchmark.add_argument(
+        "--request_timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait per inference request",
+    )
+    benchmark.add_argument("--profile", action="store_true")
     return parser.parse_args()
-
-
-# ── Endpoint detection ────────────────────────────────────────────────────────
-
-def detect_endpoint(args: argparse.Namespace) -> str:
-    """Derive which API endpoint family to use from the supplied arguments."""
-    if args.num_frames is not None:
-        return ENDPOINT_VIDEO
-    return ENDPOINT_IMAGE
-
-
-def output_extension(endpoint: str) -> str:
-    return "mp4" if endpoint == ENDPOINT_VIDEO else "png"
 
 
 # ── Server management ─────────────────────────────────────────────────────────
@@ -172,6 +169,29 @@ def wait_for_health(base_url: str, timeout: int, proc: subprocess.Popen) -> None
 
 # ── Request helpers ───────────────────────────────────────────────────────────
 
+def _timed_post(url: str, timeout: int, **kwargs) -> tuple[requests.Response, float]:
+    t0 = time.perf_counter()
+    resp = requests.post(url, timeout=timeout, **kwargs)
+    wall_time = time.perf_counter() - t0
+    if not resp.ok:
+        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+    return resp, wall_time
+
+
+def _log_result(
+    output_path: str,
+    wall_time: float,
+    gen_time: float,
+    stage_durations: dict,
+    peak_memory: str | float | None,
+) -> None:
+    logger.info("  Saved:           %s", output_path)
+    logger.info("  Wall time:       %.3fs", wall_time)
+    logger.info("  Gen time:        %.3fs", gen_time)
+    logger.info("  Stage durations: %s", json.dumps(stage_durations) if stage_durations else "N/A")
+    logger.info("  Peak memory:     %s MB", peak_memory if peak_memory is not None else "N/A")
+
+
 def _send_video_request(base_url: str, args: argparse.Namespace, output_path: str) -> float:
     url = f"{base_url}/v1/videos/sync"
 
@@ -197,25 +217,21 @@ def _send_video_request(base_url: str, args: argparse.Namespace, output_path: st
     files = {"input_reference": input_file} if input_file else None
 
     try:
-        t0 = time.perf_counter()
-        resp = requests.post(url, data=data, files=files, timeout=args.request_timeout)
-        wall_time = time.perf_counter() - t0
+        resp, wall_time = _timed_post(
+            url,
+            args.request_timeout,
+            data=data,
+            files=files,
+        )
     finally:
         if input_file:
             input_file.close()
 
-    _check_response(resp)
-
     with open(output_path, "wb") as f:
         f.write(resp.content)
 
-    gen_time = _stage_gen_time(resp, wall_time)
-
-    logger.info("  Saved:           %s", output_path)
-    logger.info("  Wall time:       %.3fs", wall_time)
-    logger.info("  Gen time:        %.3fs", gen_time)
-    logger.info("  Stage durations: %s", resp.headers.get("X-Stage-Durations", "N/A"))
-    logger.info("  Peak memory:     %s MB", resp.headers.get("X-Peak-Memory-MB", "N/A"))
+    gen_time, stage_durations, peak_memory = _response_metrics(resp, wall_time)
+    _log_result(output_path, wall_time, gen_time, stage_durations, peak_memory)
 
     return gen_time
 
@@ -247,64 +263,87 @@ def _send_image_request(base_url: str, args: argparse.Namespace, output_path: st
             form["extra_params"] = json.dumps(form["extra_params"])
         image_file = open(args.input_images, "rb")
         try:
-            t0 = time.perf_counter()
-            resp = requests.post(url, data=form, files={"image": image_file}, timeout=args.request_timeout)
-            wall_time = time.perf_counter() - t0
+            resp, wall_time = _timed_post(
+                url,
+                args.request_timeout,
+                data=form,
+                files={"image": image_file},
+            )
         finally:
             image_file.close()
     else:
         url = f"{base_url}/v1/images/generations"
-        t0 = time.perf_counter()
-        resp = requests.post(url, json=params, timeout=args.request_timeout)
-        wall_time = time.perf_counter() - t0
+        resp, wall_time = _timed_post(
+            url,
+            args.request_timeout,
+            json=params,
+        )
 
-    _check_response(resp)
-
-    img_b64 = resp.json()["data"][0]["b64_json"]
+    response_json = resp.json()
+    img_b64 = response_json["data"][0]["b64_json"]
     with open(output_path, "wb") as f:
         f.write(base64.b64decode(img_b64))
 
-    gen_time = _stage_gen_time(resp, wall_time)
-
-    logger.info("  Saved:      %s", output_path)
-    logger.info("  Wall time:  %.3fs", wall_time)
-    logger.info("  Gen time:   %.3fs", gen_time)
-    logger.info("  Stage durations: %s", resp.headers.get("X-Stage-Durations", "N/A"))
-    logger.info("  Peak memory:     %s MB", resp.headers.get("X-Peak-Memory-MB", "N/A"))
+    gen_time, stage_durations, peak_memory = _response_metrics(resp, wall_time, response_json)
+    _log_result(output_path, wall_time, gen_time, stage_durations, peak_memory)
 
     return gen_time
 
 
-def _check_response(resp: requests.Response) -> None:
-    if not resp.ok:
-        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+def _response_metrics(
+    resp: requests.Response,
+    wall_time: float,
+    response_json: dict | None = None,
+) -> tuple[float, dict, str | float | None]:
+    """Extract server-side generation metrics from the response.
 
-
-def _stage_gen_time(resp: requests.Response, wall_time: float) -> float:
-    """Return stage_0_gen_ms (seconds) from X-Stage-Durations if available.
-
-    stage_0_gen_ms is the server-side diffusion engine time: from request
-    submission to output ready, excluding HTTP and serialisation overhead.
-    This is the closest server-side equivalent to the offline CUDA measurement.
-    Falls back to client wall time when the header is absent.
+    Video endpoints return metrics in response headers, while image endpoints
+    return them in the JSON body. Prefer headers when present, and fall back to
+    client wall time if stage_0_gen_ms is unavailable.
     """
-    header = resp.headers.get("X-Stage-Durations")
-    if header:
-        try:
-            durations = json.loads(header)
-            gen_ms = durations.get("stage_0_gen_ms")
-            if gen_ms is not None:
-                return float(gen_ms) / 1000.0
-        except (json.JSONDecodeError, TypeError, ValueError):
-            pass
-    logger.warning("X-Stage-Durations header absent — falling back to client wall time.")
-    return wall_time
+
+    metrics = (response_json or {}).get("metrics") or {}
+
+    stage_durations_header = resp.headers.get("X-Stage-Durations")
+    if stage_durations_header:
+        stage_durations = json.loads(stage_durations_header)
+    else:
+        stage_durations = metrics.get("stage_durations") or {}
+
+    peak_memory = resp.headers.get(
+        "X-Peak-Memory-MB",
+        metrics.get("peak_memory_mb"),
+    )
+
+    gen_ms = stage_durations.get("stage_0_gen_ms")
+    if gen_ms is None:
+        logger.warning("stage_0_gen_ms unavailable — falling back to client wall time.")
+        gen_time = wall_time
+    else:
+        gen_time = float(gen_ms) / 1000.0
+
+    return gen_time, stage_durations, peak_memory
 
 
-def send_request(endpoint: str, base_url: str, args: argparse.Namespace, output_path: str) -> float:
-    if endpoint == ENDPOINT_VIDEO:
+def send_request(base_url: str, args: argparse.Namespace, output_path: str) -> float:
+    if args.num_frames is not None:
         return _send_video_request(base_url, args, output_path)
     return _send_image_request(base_url, args, output_path)
+
+
+def _run_iterations(
+    label: str,
+    count: int,
+    base_url: str,
+    args: argparse.Namespace,
+    output_path: str,
+) -> list[float]:
+    gen_times = []
+    for i in range(1, count + 1):
+        logger.info("=== %s %d/%d ===", label, i, count)
+        gen_time = send_request(base_url, args, output_path)
+        gen_times.append(gen_time)
+    return gen_times
 
 
 # ── Profiling ─────────────────────────────────────────────────────────────────
@@ -319,10 +358,7 @@ def _call_profile_endpoint(base_url: str, action: str, timeout: int) -> None:
 def main() -> None:
     args = parse_args()
     base_url = f"http://localhost:{args.port}"
-    endpoint = detect_endpoint(args)
-    ext = output_extension(endpoint)
-
-    logger.info("Endpoint type: %s", endpoint)
+    ext = "mp4" if args.num_frames is not None else "png"
 
     proc = start_server(args)
     try:
@@ -334,27 +370,22 @@ def main() -> None:
         # Warmup iterations (timing discarded, output overwritten)
         if args.warmup_calls > 0:
             logger.info("Running %d warmup call(s)...", args.warmup_calls)
-            for i in range(args.warmup_calls):
-                logger.info("=== Warmup %d/%d ===", i + 1, args.warmup_calls)
-                send_request(endpoint, base_url, args, output_path)
+            _run_iterations("Warmup", args.warmup_calls, base_url, args, output_path)
             logger.info("Warmup complete.")
 
         # Timed iterations — output is overwritten each time, last one is kept
         if args.profile:
             _call_profile_endpoint(base_url, "start_profile", args.request_timeout)
 
-        elapsed_times = []
-        logger.info("Running %d timed iteration(s)...", args.num_iterations)
-        for i in range(1, args.num_iterations + 1):
-            logger.info("=== Iteration %d/%d ===", i, args.num_iterations)
-            wall_time = send_request(endpoint, base_url, args, output_path)
-            elapsed_times.append(wall_time)
-
-        if args.profile:
-            _call_profile_endpoint(base_url, "stop_profile", args.request_timeout)
+        try:
+            logger.info("Running %d timed iteration(s)...", args.num_iterations)
+            gen_times = _run_iterations("Iteration", args.num_iterations, base_url, args, output_path)
+        finally:
+            if args.profile:
+                _call_profile_endpoint(base_url, "stop_profile", args.request_timeout)
 
         with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
-            json.dump(elapsed_times, f)
+            json.dump(gen_times, f)
 
         logger.info("Done. %d iteration(s) completed.", args.num_iterations)
         logger.info("Server command: %s", shlex.join(build_serve_cmd(args)))
