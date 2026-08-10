@@ -156,6 +156,13 @@ def parse_args() -> argparse.Namespace:
         help="The number of warmup calls to run",
     )
     parser.add_argument(
+        "--warmup_steps",
+        type=int,
+        required=False,
+        default=2,
+        help="The number of steps in warmup to run",
+    )
+    parser.add_argument(
         "--max_sequence_length",
         type=int,
         required=False,
@@ -294,8 +301,8 @@ def run_cli(args):
         "image-encoder-cpu-offload": "False",
         "offload-during-compile": "False",
         "vae-cpu-offload": "False",
-        "warmup": "True",
-        "warmup-steps": 2,
+        "warmup-mode": "request",
+        "warmup-steps": args.warmup_steps,
         "vae-precision": "bf16",
         "image-encoder-precision": "bf16",
         "output-path": args.output_directory,
