@@ -5,9 +5,15 @@ ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.7"
 FROM ${BASE_IMAGE}
 
 ARG VLLM_COMMIT="ad7125a" # v0.21.0
-ARG SGL_COMMIT="2948168" # v0.5.17
-ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
+#ARG SGL_COMMIT="2948168" # v0.5.17
+#ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
+
+# Necessary PRs manually merged
+ARG SGL_COMMIT="feature/combined_perf_1008"
+ARG SGL_REPO="https://github.com/avjves/sglang.git"
 ARG AMDGPU_TARGET="gfx950"
+
+ENV SGLANG_BUILD_RUST_EXTS=none
 
 WORKDIR /app/external
 # Install vLLM
@@ -22,10 +28,11 @@ RUN git clone https://github.com/vllm-project/vllm.git && \
 RUN git clone ${SGL_REPO} sglang && \
     cd sglang && \
     git checkout ${SGL_COMMIT} && \
-    cd sgl-kernel && \
-    AMDGPU_TARGET="$AMDGPU_TARGET" python3 setup_rocm.py install && \
-    cd .. && \
-    mv python/pyproject_other.toml python/pyproject.toml && \
+    cd python/sglang/kernels/aot && \
+    mv pyproject_rocm.toml pyproject.toml && \
+    AMDGPU_TARGET=${AMDGPU_TARGET} python setup_rocm.py install && \
+    cd ../../../ && \
+    mv python/pyproject_other.tomg python/pyproject.toml && \
     sed -i '/numpy/d' python/pyproject.toml && \
     sed -i '/torch/d' python/pyproject.toml && \
     sed -i '/torchvision/d' python/pyproject.toml && \
@@ -39,10 +46,10 @@ RUN git clone ${SGL_REPO} sglang && \
 RUN pip3 install remote_pdb imageio && \
     pip3 uninstall torch_c_dlpack_ext -y
 
-RUN pip3 install "transformers==5.12.1" --upgrade && \
-    pip3 install "flydsl==0.2.4" --upgrade
+RUN pip3 install "transformers==5.12.1" --upgrade
+    #pip3 install "flydsl==0.2.4" --upgrade
 
-# Envs
+# Runtime gnvs
 ENV SGLANG_TORCH_COMPILE_MODE="default"
 ENV SGLANG_USE_ROCM_VAE=0
 # Requires SGL PR #33855
