@@ -10,6 +10,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     num_iterations: 1
+    warmup_steps: 50
     attention_backend: aiter
     config:
       task: t2va
