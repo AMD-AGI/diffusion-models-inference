@@ -115,13 +115,14 @@ runs:
         INFERENCE_TESTING_IMAGE: ${{ inputs.inference_testing_image }}
       run: bash ${{ github.action_path }}/run-inference-testing.sh
 
-    - name: Verify benchmark results
-      if: ${{ steps.convert.outputs.config_count != '0' }}
-      shell: bash
-      env:
-        CONVERTED_DIR: ${{ steps.convert.outputs.converted_dir }}
-        RESULT_DIR: ${{ github.workspace }}/${{ inputs.output_dir }}/${{ inputs.arch }}
-      run: python3 "$GITHUB_ACTION_PATH/verify-results.py" "$CONVERTED_DIR" "$RESULT_DIR"
+    # Disabled while run-inference-testing.sh runs inference-testing with --dryrun.
+    # - name: Verify benchmark results
+    #   if: ${{ steps.convert.outputs.config_count != '0' }}
+    #   shell: bash
+    #   env:
+    #     CONVERTED_DIR: ${{ steps.convert.outputs.converted_dir }}
+    #     RESULT_DIR: ${{ github.workspace }}/${{ inputs.output_dir }}/${{ inputs.arch }}
+    #   run: python3 "$GITHUB_ACTION_PATH/verify-results.py" "$CONVERTED_DIR" "$RESULT_DIR"
 
     - name: Upload benchmark results
       if: always()
