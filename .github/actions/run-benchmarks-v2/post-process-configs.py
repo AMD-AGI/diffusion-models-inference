@@ -18,15 +18,21 @@ Options:
 from __future__ import annotations
 
 import argparse
-import glob
 import sys
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 
-def post_process(config_path: Path, *, hf_cache_volume: str | None, workspace_volume: str,
-                 output_volume: str, miopen_user_db: bool, collect_hipblaslt_logs: bool) -> None:
+def post_process(
+    config_path: Path,
+    *,
+    hf_cache_volume: str | None,
+    workspace_volume: str,
+    output_volume: str,
+    miopen_user_db: bool,
+    collect_hipblaslt_logs: bool,
+) -> None:
     with open(config_path) as f:
         data = yaml.safe_load(f)
 
