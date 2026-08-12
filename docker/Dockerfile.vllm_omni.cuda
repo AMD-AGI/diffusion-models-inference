@@ -11,7 +11,7 @@ ARG BASE_IMAGE=vllm/vllm-openai:v0.26.0
 FROM ${BASE_IMAGE} AS base
 
 ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="a4ea67a" # v0.26.0 release
+ARG VLLM_OMNI_COMMIT="4ab1b4f" # v0.26.0+ release
 
 WORKDIR /app
 
@@ -25,6 +25,11 @@ RUN apt-get update && \
 RUN git clone ${VLLM_OMNI_REPO} vllm-omni && \
     cd vllm-omni && \
     git reset --hard ${VLLM_OMNI_COMMIT}
+
+# Patch vLLM-Omni: return diffusion metrics from the image-edit endpoint.
+RUN --mount=type=bind,from=patches,source=/patches,target=/patches \
+    cd /app/vllm-omni && \
+    git apply /patches/vllm_omni_image_edit_metrics.patch
 
 # Install vllm-omni as an editable install
 RUN cd /app/vllm-omni && \
