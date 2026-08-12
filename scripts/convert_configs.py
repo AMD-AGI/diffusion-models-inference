@@ -90,6 +90,7 @@ DEFAULT_SERVER_ARGS: dict[str, Any] = {
         "CUDA_VISIBLE_DEVICES": "${CUDA_VISIBLE_DEVICES}",
         "OMP_NUM_THREADS": "16",
     },
+    "labels": {"com.amd.inference-testing.exec-profile": "xdit"},
     "security_opt": ["seccomp=unconfined"],
     "shm_size": "128G",
 }
@@ -123,6 +124,7 @@ def convert_entry(entry: dict, image: str) -> dict:
         "server": {
             "type": "docker",
             "stop_between_runs": True,
+            "collect_env_cmd": [],
             "args": server_args,
         },
         "benchmarks": [

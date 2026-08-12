@@ -13,25 +13,22 @@
 #   GITHUB_WORKSPACE         — workspace root
 set -euo pipefail
 
-# docker run \
-#   --rm \
-#   --name inference-testing-driver \
-#   -e HF_TOKEN="$HF_TOKEN" \
-#   -e CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}" \
-#   --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
-#   --mount type=bind,src="$CONVERTED_DIR",dst=/configs \
-#   --mount type=bind,src="$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH",dst=/outputs \
-#   --entrypoint inference-testing \
-#   "$INFERENCE_TESTING_IMAGE" \
-#   -c /configs
+mkdir -p "$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH/.itt-driver"
 
 docker run \
   --rm \
-  --name inference-testing-preflight \
+  --name inference-testing-driver \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,size=1g \
+  --workdir /outputs/.itt-driver \
   -e HF_TOKEN="$HF_TOKEN" \
   -e CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}" \
-  --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+  -e DOCKER_HOST=tcp://host.docker.internal:2375 \
+  --add-host host.docker.internal:host-gateway \
   --mount type=bind,src="$CONVERTED_DIR",dst=/configs,readonly \
-  --entrypoint sh \
+  --mount type=bind,src="$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH",dst=/outputs \
+  --entrypoint inference-testing \
   "$INFERENCE_TESTING_IMAGE" \
-  -c 'docker version >/dev/null && inference-testing --dryrun -c /configs'
+  -c /configs
