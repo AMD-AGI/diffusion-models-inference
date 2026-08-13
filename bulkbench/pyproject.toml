@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bulkbench"
+description = "Bulk xDiT benchmarking driver with statistical analysis of the results"
+requires-python = ">=3.11"
+dynamic = ["version", "readme"]
+dependencies = [
+    "benchstats>=3.4.1",
+    "rich",
+]
+
+[project.scripts]
+bulkbench = "bulkbench.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "bulkbench.__version__"}
+readme = {file = ["README.md"], content-type = "text/markdown"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+preview = true
+exclude = [
+    ".git",
+    "build",
+    "__pycache__",
+]
+line-length = 100
+indent-width = 4
+target-version = "py311"
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 70
+line-ending = "lf"
