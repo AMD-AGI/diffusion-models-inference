@@ -121,7 +121,7 @@ def parse_args() -> argparse.Namespace:
         "--num_iterations",
         type=int,
         default=1,
-        help="The input videos to run",
+        help="Number of times to run the prompt (sequential, for timing averages)",
     )
     parser.add_argument(
         "--use_torch_compile",
@@ -294,7 +294,6 @@ def run_cli(args):
         "num-gpus": num_gpus,
         "num-inference-steps": args.num_inference_steps,
         "guidance-scale": args.guidance_scale,
-        "prompt": f'"{args.prompt}"',
         "dit-cpu-offload": "False",
         "dit-layerwise-offload": "False",
         "text-encoder-cpu-offload": "False",
@@ -313,6 +312,11 @@ def run_cli(args):
     for key, value in values.items():
         cmd.extend([f"--{key}", str(value)])
 
+    # Repeat the prompt num_iterations times so sglang runs it sequentially.
+    # Each prompt must be its own argv entry (nargs="+"); no shell quoting since
+    # subprocess is invoked with a list (shell=False).
+    cmd.extend(["--prompt", *([args.prompt] * args.num_iterations)])
+
     if args.num_frames is not None:
         cmd.extend(["--num-frames", str(args.num_frames)])
 
@@ -320,7 +324,7 @@ def run_cli(args):
         cmd.extend(["--seed", str(args.seed)])
 
     if args.negative_prompt is not None:
-        cmd.extend(["--negative-prompt", f'"{args.negative_prompt}"'])
+        cmd.extend(["--negative-prompt", args.negative_prompt])
 
     if args.input_images is not None:
         cmd.extend(["--image-path"] + args.input_images)
@@ -366,17 +370,20 @@ def run_cli(args):
     command_output = result.stdout + result.stderr
     print(f"Command output: {command_output}")
 
-    timing = None
     ansi_escape = r'\x1b\[[0-9;]*m'
-    match = re.search(rf'Warmed-up request processed in {ansi_escape}?([\d.]+){ansi_escape}? seconds', command_output)
-    if match:
-        timing = float(match.group(1))
-        print(f"Extracted post-warmup time: {timing} seconds")
-    else:
+    timings = [
+        float(m)
+        for m in re.findall(
+            rf'Warmed-up request processed in {ansi_escape}?([\d.]+){ansi_escape}? seconds',
+            command_output,
+        )
+    ]
+    if not timings:
         raise ValueError("Could not find post-warmup time in command output")
+    print(f"Extracted post-warmup times: {timings} seconds")
 
     with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
-        json.dump([timing], f)
+        json.dump(timings, f)
 
 def run_api(args):
 
