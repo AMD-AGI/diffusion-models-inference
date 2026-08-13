@@ -1,6 +1,7 @@
 """Implementation of the `bulkbench` tool."""
 
 import os
+from typing import Any
 from pathlib import Path
 
 DEFAULT_RESULTS_SUBDIR = "results"
@@ -24,21 +25,25 @@ class BulkBench:
     CLI and from other Python programs. Raises `ValueError` on an invalid argument.
     """
 
-    def __init__(self, args) -> None:
-        """`args` is any object with the `project_dir`, `configs_file`, `results_dir` and
+    def __init__(self, *args, **kwargs) -> None:
+        """`args` and `kwargs` are used to initialize the object.
+        `kwargs` takes precedence over `args`.
+        `args` is any object with the `project_dir`, `configs_file`, `results_dir` and
         `report_dir` named attributes. A missing attribute is treated as `None`, i.e. the
         default value of the corresponding argument is used."""
-        self.project_dir: Path = self._validatedProjectDir(
-            getattr(args, "project_dir", None)
-        )
-        self.configs_file: Path = self._validatedConfigsFile(
-            getattr(args, "configs_file", None)
-        )
+        assert len(args) <= 1, "Only one positional argument is allowed"
+        args = args[0] if args else {}  # type: ignore
+
+        def _get_arg(name: str) -> Any:
+            return kwargs.get(name, getattr(args, name, None))
+
+        self.project_dir: Path = self._validatedProjectDir(_get_arg("project_dir"))
+        self.configs: list[str] = self._readConfigs(_get_arg("configs_file"))
         self.results_dir: Path = self._validatedOutputDir(
-            getattr(args, "results_dir", None), DEFAULT_RESULTS_SUBDIR, "results_dir"
+            _get_arg("results_dir"), DEFAULT_RESULTS_SUBDIR, "results_dir"
         )
         self.report_dir: Path = self._validatedOutputDir(
-            getattr(args, "report_dir", None), DEFAULT_REPORT_SUBDIR, "report_dir"
+            _get_arg("report_dir"), DEFAULT_REPORT_SUBDIR, "report_dir"
         )
 
     @staticmethod
@@ -81,8 +86,12 @@ class BulkBench:
         return path
 
     def _readConfigs(self, configs_file_value: StrPath | None) -> list[str]:
-        pass
+        """Reads the configs file and returns a list of config names."""
+        configs_file = self._validatedConfigsFile(configs_file_value)
+        with open(configs_file, "r") as f:
+            return [ln for line in f if (ln := line.strip()) and not ln.startswith("#")]
 
     def run(self) -> int:
         """Executes the whole benchmarking pipeline. Returns the process exit code."""
+        print(f"Running benchmarks for configs: {self.configs}")
         return 0

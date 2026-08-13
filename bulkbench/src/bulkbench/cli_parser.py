@@ -26,7 +26,8 @@ def makeParser() -> argparse.ArgumentParser:
         "--configs_file",
         default=DEFAULT_CONFIGS_FILE,
         help="Override a file enumerating benchmark_configs to execute. If it's a "
-        "relative path, it's relative to --project_dir. The file must exist.",
+        "relative path, it's relative to --project_dir. The file must exist. Each line "
+        "must be a valid config name. Lines starting with # are ignored.",
     )
     parser.add_argument(
         "--results_dir",
