@@ -1,8 +1,8 @@
 diff --git a/cmake/therock_meson_env.cmake b/cmake/therock_meson_env.cmake
-index 9aa2df9..8785d83 100644
+index 9aa2df9..7903e0c 100644
 --- a/cmake/therock_meson_env.cmake
 +++ b/cmake/therock_meson_env.cmake
-@@ -1,13 +1,13 @@
+@@ -1,13 +1,18 @@
  # Copyright Advanced Micro Devices, Inc.
  # SPDX-License-Identifier: MIT
  
@@ -19,10 +19,15 @@ index 9aa2df9..8785d83 100644
 +# own compiler sanity check during setup and treats CC/CXX as shell strings;
 +# a "ccache /usr/bin/cc" wrapper can fail that probe even when CMake builds
 +# work fine with CMAKE_C_COMPILER_LAUNCHER=ccache.
++#
++# Do not pass LDFLAGS (version scripts, rpath, etc.) during "meson setup".
++# Meson's compiler probe links a trivial test program and inherits LDFLAGS
++# from the environment, which can fail with "cannot compile programs".
++# Pass linker flags only for "meson compile" / "meson install".
  #
  # Usage:
  #   include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
-@@ -18,14 +18,6 @@
+@@ -18,14 +23,6 @@
  function(therock_get_meson_compiler_env out_cc out_cxx)
    set(_cc "${CMAKE_C_COMPILER}")
    set(_cxx "${CMAKE_CXX_COMPILER}")
@@ -37,3 +42,93 @@ index 9aa2df9..8785d83 100644
    set(${out_cc} "${_cc}" PARENT_SCOPE)
    set(${out_cxx} "${_cxx}" PARENT_SCOPE)
  endfunction()
+diff --git a/third-party/sysdeps/linux/amd-mesa/CMakeLists.txt b/third-party/sysdeps/linux/amd-mesa/CMakeLists.txt
+index 5f4c66d..8646a85 100644
+--- a/third-party/sysdeps/linux/amd-mesa/CMakeLists.txt
++++ b/third-party/sysdeps/linux/amd-mesa/CMakeLists.txt
+@@ -65,7 +65,6 @@ add_custom_target(
+     # Step 1: Initial meson setup to download libva-2.22.0 subproject
+     # This is required before patching because patch_source.sh modifies files in the libva subproject
+     "${CMAKE_COMMAND}" -E env
+-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+       "CC=${_meson_cc}"
+       "CXX=${_meson_cxx}"
+       --
+@@ -89,7 +88,6 @@ add_custom_target(
+     # Step 3: Reconfigure meson to build from patched source
+     # This ensures the build system uses the modified source files
+     "${CMAKE_COMMAND}" -E env
+-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+       "CC=${_meson_cc}"
+       "CXX=${_meson_cxx}"
+       --
+@@ -106,7 +104,12 @@ add_custom_target(
+         "${CMAKE_CURRENT_BINARY_DIR}"
+         "${PATCH_SOURCE_DIR}"
+   COMMAND
+-    "${MESON_BUILD}" compile --verbose
++    "${CMAKE_COMMAND}" -E env
++      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
++      "CC=${_meson_cc}"
++      "CXX=${_meson_cxx}"
++      --
++      "${MESON_BUILD}" compile --verbose
+   COMMAND
+     "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
+       "${MESON_BUILD}" install
+diff --git a/third-party/sysdeps/linux/libdrm/CMakeLists.txt b/third-party/sysdeps/linux/libdrm/CMakeLists.txt
+index 969db63..c81d1b8 100644
+--- a/third-party/sysdeps/linux/libdrm/CMakeLists.txt
++++ b/third-party/sysdeps/linux/libdrm/CMakeLists.txt
+@@ -81,8 +81,6 @@ add_custom_target(
+   COMMAND
+     "${CMAKE_COMMAND}" -E chdir "${PATCH_SOURCE_DIR}"
+     "${CMAKE_COMMAND}" -E env
+-      # Escaping hack: experimentally determined to persist through the layers.
+-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+       "CC=${_meson_cc}"
+       "CXX=${_meson_cxx}"
+       --
+@@ -101,7 +99,13 @@ add_custom_target(
+         -Dradeon=disabled
+         -Dvmwgfx=disabled
+   COMMAND
+-    "${MESON_BUILD}" compile --verbose
++    "${CMAKE_COMMAND}" -E env
++      # Escaping hack: experimentally determined to persist through the layers.
++      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
++      "CC=${_meson_cc}"
++      "CXX=${_meson_cxx}"
++      --
++      "${MESON_BUILD}" compile --verbose
+   COMMAND
+     "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
+       "${MESON_BUILD}" install
+diff --git a/third-party/sysdeps/linux/libpciaccess/CMakeLists.txt b/third-party/sysdeps/linux/libpciaccess/CMakeLists.txt
+index 78e8a29..f030ef0 100644
+--- a/third-party/sysdeps/linux/libpciaccess/CMakeLists.txt
++++ b/third-party/sysdeps/linux/libpciaccess/CMakeLists.txt
+@@ -80,8 +80,6 @@ add_custom_target(
+     # Run meson from the source directory to avoid this issue.
+     "${CMAKE_COMMAND}" -E chdir "${SOURCE_DIR}"
+     "${CMAKE_COMMAND}" -E env
+-      # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
+-      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+       "CC=${_meson_cc}"
+       "CXX=${_meson_cxx}"
+       --
+@@ -94,7 +92,13 @@ add_custom_target(
+         -Dlibdir=lib
+         -Dzlib=disabled
+   COMMAND
+-    "${MESON_BUILD}" compile --verbose
++    "${CMAKE_COMMAND}" -E env
++      # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
++      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
++      "CC=${_meson_cc}"
++      "CXX=${_meson_cxx}"
++      --
++      "${MESON_BUILD}" compile --verbose
+   COMMAND
+     "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
+       "${MESON_BUILD}" install
