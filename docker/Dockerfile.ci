@@ -131,6 +131,11 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     # rocprofiler-sdk-output-library. Remove once fixed upstream:
     # https://github.com/ROCm/TheRock/issues/5868
     libsqlite3-dev \
+    # Workaround: profiler-hub generates its bundled SQLite3 amalgamation via
+    # `make sqlite3.c`, which requires tclsh even with --disable-tcl. Remove
+    # once fixed upstream:
+    # https://github.com/ROCm/rocm-systems/issues/10059
+    tcl \
     libtool \
     ninja-build \
     texinfo \
