@@ -69,6 +69,11 @@ def parse_args() -> argparse.Namespace:
     server.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
     server.add_argument("--use_torch_compile", action="store_true")
     server.add_argument(
+        "--use_fp4_gemms",
+        action="store_true",
+        help="Quantize the diffusion transformer to online MXFP4 W4A4.",
+    )
+    server.add_argument(
         "--diffusion_compile_reorder_comm_overlap",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -128,6 +133,16 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
+    if args.use_fp4_gemms:
+        quantization_config = {
+            "transformer": {"method": "mxfp4"},
+            "text_encoder": None,
+            "vae": None,
+        }
+        cmd += [
+            "--diffusion-quantization-config",
+            json.dumps(quantization_config, separators=(",", ":")),
+        ]
     if args.diffusion_compile_reorder_comm_overlap:
         cmd += ["--diffusion-compile-reorder-comm-overlap"]
     if args.use_hsdp:
