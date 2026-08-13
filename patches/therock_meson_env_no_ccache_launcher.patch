@@ -1,0 +1,39 @@
+diff --git a/cmake/therock_meson_env.cmake b/cmake/therock_meson_env.cmake
+index 9aa2df9..8785d83 100644
+--- a/cmake/therock_meson_env.cmake
++++ b/cmake/therock_meson_env.cmake
+@@ -1,13 +1,13 @@
+ # Copyright Advanced Micro Devices, Inc.
+ # SPDX-License-Identifier: MIT
+ 
+-# Assemble CC/CXX env strings for Meson from CMake's compiler and launcher
+-# variables (which are already set correctly in the sub-project toolchain).
++# Assemble CC/CXX env strings for Meson from CMake's compiler variables
++# (which are already set correctly in the sub-project toolchain).
+ #
+-# CMAKE_C_COMPILER_LAUNCHER is a CMake list (semicolon-separated) to support
+-# chained launchers (e.g. "ccache;distcc"). Meson expects a space-separated
+-# string, so the launcher is joined with spaces before being prepended to the
+-# compiler path.
++# Do not prepend CMAKE_*_COMPILER_LAUNCHER (e.g. ccache) here. Meson runs its
++# own compiler sanity check during setup and treats CC/CXX as shell strings;
++# a "ccache /usr/bin/cc" wrapper can fail that probe even when CMake builds
++# work fine with CMAKE_C_COMPILER_LAUNCHER=ccache.
+ #
+ # Usage:
+ #   include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
+@@ -18,14 +18,6 @@
+ function(therock_get_meson_compiler_env out_cc out_cxx)
+   set(_cc "${CMAKE_C_COMPILER}")
+   set(_cxx "${CMAKE_CXX_COMPILER}")
+-  if(CMAKE_C_COMPILER_LAUNCHER)
+-    string(REPLACE ";" " " _c_launcher "${CMAKE_C_COMPILER_LAUNCHER}")
+-    set(_cc "${_c_launcher} ${_cc}")
+-  endif()
+-  if(CMAKE_CXX_COMPILER_LAUNCHER)
+-    string(REPLACE ";" " " _cxx_launcher "${CMAKE_CXX_COMPILER_LAUNCHER}")
+-    set(_cxx "${_cxx_launcher} ${_cxx}")
+-  endif()
+   set(${out_cc} "${_cc}" PARENT_SCOPE)
+   set(${out_cxx} "${_cxx}" PARENT_SCOPE)
+ endfunction()
