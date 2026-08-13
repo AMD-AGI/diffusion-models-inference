@@ -197,10 +197,12 @@ ARG THEROCK_COMMIT
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
 ARG ROCM_SYSTEMS_COMMIT_OVERRIDE
 
+COPY patches/therock_meson_env_no_ccache_launcher.patch /tmp/therock_meson_env_no_ccache_launcher.patch
 WORKDIR /app
 RUN git clone https://github.com/ROCm/TheRock.git && \
     cd TheRock && \
     git reset --hard ${THEROCK_COMMIT} && \
+    git apply /tmp/therock_meson_env_no_ccache_launcher.patch && \
     if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
         echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
         git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
