@@ -65,10 +65,21 @@ def parse_args() -> argparse.Namespace:
     server.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
     server.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
     server.add_argument("--use_torch_compile", action="store_true")
-    server.add_argument(
+    quantization = server.add_mutually_exclusive_group()
+    quantization.add_argument(
         "--use_fp4_gemms",
         action="store_true",
         help="Quantize the diffusion transformer to online MXFP4 W4A4.",
+    )
+    quantization.add_argument(
+        "--use_fp8_gemms",
+        action="store_true",
+        help="Quantize the diffusion transformer with native online FP8 W8A8.",
+    )
+    quantization.add_argument(
+        "--use_fp8_gemms_torchao",
+        action="store_true",
+        help="Quantize the diffusion transformer with TorchAO online FP8 W8A8.",
     )
     server.add_argument(
         "--diffusion_compile_reorder_comm_overlap",
@@ -131,8 +142,20 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
     if args.use_fp4_gemms:
+        transformer_quantization_config = {"method": "mxfp4"}
+    elif args.use_fp8_gemms:
+        transformer_quantization_config = {"method": "fp8"}
+    elif args.use_fp8_gemms_torchao:
+        transformer_quantization_config = {
+            "method": "torchao_fp8",
+            "granularity": "per_tensor",
+            "set_inductor_config": False,
+        }
+    else:
+        transformer_quantization_config = None
+    if transformer_quantization_config is not None:
         quantization_config = {
-            "transformer": {"method": "mxfp4"},
+            "transformer": transformer_quantization_config,
             "text_encoder": None,
             "vae": None,
         }
