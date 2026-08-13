@@ -123,6 +123,11 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libglib2.0-dev \
     libglu1-mesa-dev \
     libopenblas-dev \
+    # Workaround: rocprofiler-sdk SQL output sources include <sqlite3.h>, but
+    # rocm-systems#6664 no longer propagates bundled SQLite headers to
+    # rocprofiler-sdk-output-library. Remove once fixed upstream:
+    # https://github.com/ROCm/TheRock/issues/5868
+    libsqlite3-dev \
     libtool \
     ninja-build \
     texinfo \
