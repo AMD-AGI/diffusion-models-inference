@@ -189,6 +189,23 @@ class BulkBench:
         finally:
             active_containers.remove(container_id)
 
+    @staticmethod
+    def _validatedEnabled(value: Any, group_context: str) -> bool:
+        """Validates and normalizes a config group's `enabled` value."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        if isinstance(value, str):
+            if value in ("true", "1"):
+                return True
+            if value in ("false", "0"):
+                return False
+        raise ValueError(
+            f"{group_context} attribute 'enabled' must be a YAML boolean, integer 1 or 0, "
+            'or one of the strings "true", "false", "1", "0"'
+        )
+
     def _readConfigs(self, configs_file_value: StrPath | None) -> dict[str, ConfigGroup]:
         """Reads and validates benchmark config groups from a YAML file."""
         configs_file = self._validatedConfigsFile(configs_file_value)
@@ -203,10 +220,8 @@ class BulkBench:
             raise ValueError(  # noqa: TRY004 - public API reports invalid config values
                 f"{error_prefix} must contain a YAML list"
             )
-        if not raw_groups:
-            raise ValueError(f"{error_prefix} must contain at least one config group")
 
-        allowed_attributes = {"name", "configs", "override_args"}
+        allowed_attributes = {"configs", "enabled", "name", "override_args"}
         groups: dict[str, ConfigGroup] = {}
         for group_index, raw_group in enumerate(raw_groups, start=1):
             group_context = f"{error_prefix}, group {group_index}"
@@ -214,6 +229,9 @@ class BulkBench:
                 raise ValueError(  # noqa: TRY004 - public API reports invalid config values
                     f"{group_context} must be an object"
                 )
+
+            if not self._validatedEnabled(raw_group.get("enabled", True), group_context):
+                continue
 
             non_string_attributes = [key for key in raw_group if not isinstance(key, str)]
             if non_string_attributes:
@@ -275,6 +293,9 @@ class BulkBench:
                 "configs": group_configs,
                 "override_args": serialized_override_args,
             }
+
+        if not groups:
+            raise ValueError(f"{error_prefix} must contain at least one enabled config group")
 
         self.Con.debug(f"Read {len(groups)} config groups from {configs_file}: {groups}")
         return groups

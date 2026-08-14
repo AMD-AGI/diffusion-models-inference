@@ -11,6 +11,11 @@
 - name: group2
   configs: [cfg3]
   override_args: null
+  enabled: yes
 
 - name: group3
   configs: [cfg4]
+  enabled: "1"
+
+- enabled: false
+  unknown: this disabled group is ignored

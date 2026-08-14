@@ -57,7 +57,7 @@ class TestSystem(unittest.TestCase):
     def test_configs_file_schema_errors(self):
         cases = (
             ("", "must contain a YAML list"),
-            ("[]", "must contain at least one config group"),
+            ("[]", "must contain at least one enabled config group"),
             ("{}", "must contain a YAML list"),
             ("- configs: [cfg]", "missing required attribute 'name'"),
             ("- name: group\n  configs: [cfg]\n  extra: true", "unknown attribute(s): extra"),
@@ -74,6 +74,59 @@ class TestSystem(unittest.TestCase):
         for contents, expected_message in cases:
             with self.subTest(expected_message=expected_message):
                 self.assertInvalidConfigs(contents, expected_message)
+
+    def test_enabled_values_are_normalized_and_disabled_groups_are_ignored(self):
+        bulk_bench = self._read_configs(
+            """
+- name: bool_true
+  configs: [cfg]
+  enabled: true
+- name: int_one
+  configs: [cfg]
+  enabled: 1
+- name: string_true
+  configs: [cfg]
+  enabled: "true"
+- name: string_one
+  configs: [cfg]
+  enabled: "1"
+- name: alias_yes
+  configs: [cfg]
+  enabled: yes
+- name: alias_on
+  configs: [cfg]
+  enabled: on
+- enabled: false
+  unknown: ignored
+- enabled: 0
+- enabled: "false"
+- enabled: "0"
+- enabled: no
+- enabled: off
+"""
+        )
+
+        self.assertEqual(
+            set(bulk_bench.configs),
+            {"bool_true", "int_one", "string_true", "string_one", "alias_yes", "alias_on"},
+        )
+        self.assertTrue(
+            all("enabled" not in config_group for config_group in bulk_bench.configs.values())
+        )
+
+    def test_invalid_enabled_values_are_rejected(self):
+        for value in ("2", "-1", "null", "[]", "{}", '"True"', '"yes"', '""'):
+            with self.subTest(value=value):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [cfg]\n  enabled: {value}",
+                    "attribute 'enabled' must be a YAML boolean",
+                )
+
+    def test_all_groups_disabled_is_rejected(self):
+        self.assertInvalidConfigs(
+            "- enabled: false\n- enabled: 0\n- enabled: \"false\"\n- enabled: \"0\"",
+            "must contain at least one enabled config group",
+        )
 
     def test_override_args_errors(self):
         cases = (
@@ -104,7 +157,8 @@ class TestSystem(unittest.TestCase):
 
     def test_duplicate_yaml_keys_are_rejected(self):
         self.assertInvalidConfigs(
-            "- name: group\n  name: other\n  configs: [cfg]",
+            "- enabled: false\n  name: group\n  name: other\n"
+            "- name: enabled_group\n  configs: [cfg]",
             "found duplicate key 'name'",
         )
 

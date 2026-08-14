@@ -37,7 +37,10 @@ def makeParser() -> argparse.ArgumentParser:
         "- override_args (optional) - an optional key-value object to override specific settings "
         "for all the configs in the group, such as setting `num_iterations: <number>` or similar.\n"
         "- enabled (optional) - a boolean flag indicating whether the group should be used. "
-        "Valid values are `true`, 1, `false`, 0. Defaults to `true`. Not enabled groups are ignored.\n",
+        "Accepted unquoted YAML values are `true`/`false` (including YAML aliases "
+        "`yes`/`no` and `on`/`off`) and integers 1/0. Accepted quoted values are exactly "
+        '"true", "false", "1", and "0". Defaults to `true`. Disabled groups are omitted; '
+        "their other attributes aren't validated.\n",
     )
     parser.add_argument(
         "--patches_file",
