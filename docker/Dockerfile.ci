@@ -473,6 +473,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
     git apply /patches/aiter_fp8_sparse_asm_kernel.patch && \
+    git apply /patches/aiter_torch_guard_namespace.patch && \
     cp /code_objects/fwd_hd128_fp8.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8.co && \
     cp /code_objects/fwd_hd128_fp8_sparse.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8_sparse.co && \
     git submodule update --init --recursive && \

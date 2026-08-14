@@ -1,0 +1,19 @@
+diff --git a/aiter/jit/utils/torch_guard.py b/aiter/jit/utils/torch_guard.py
+index 311b852..588007a 100644
+--- a/aiter/jit/utils/torch_guard.py
++++ b/aiter/jit/utils/torch_guard.py
+@@ -338,10 +338,11 @@ def torch_compile_guard(
+                 tags = ()
+             else:
+                 tags = (torch.Tag.needs_fixed_stride_order,)
+-            op_schema = f"aiter::{loadName}" + schema
++            # no ns prefix: aiter_lib adds it (torch>=2.13 won't strip dup)
++            op_schema = f"{loadName}" + schema
+             aiter_lib.define(op_schema, tags=tags)
+-            aiter_lib.impl(f"aiter::{loadName}", custom_func, dispatch_key="CUDA")
+-            aiter_lib.impl(f"aiter::{loadName}", custom_func, dispatch_key="CPU")
++            aiter_lib.impl(f"{loadName}", custom_func, dispatch_key="CUDA")
++            aiter_lib.impl(f"{loadName}", custom_func, dispatch_key="CPU")
+             aiter_lib._register_fake(f"{loadName}", fake_func)
+ 
+         return wrapper_custom
