@@ -31,7 +31,7 @@ def makeParser() -> argparse.ArgumentParser:
         "are resolved under --project_dir. The file must exist.\n"
         "The file must be a valid YAML file containing a list of objects describing benchmark "
         "configs with attributes:\n"
-        "- name (required) - name of the benchmark config group,\n"
+        "- name (required) - name of the benchmark config group (must be unique within the file),\n"
         "- configs (required) - a non empty list of strings naming benchmark configs to execute "
         "(these are passed as `--name` argument to the /app/ci/run.py script),\n"
         "- override_args (optional) - an optional key-value object to override specific settings "
