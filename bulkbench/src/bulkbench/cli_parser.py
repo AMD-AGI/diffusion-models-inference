@@ -4,6 +4,7 @@ import argparse
 
 from .bulkbench import (
     DEFAULT_CONFIGS_FILE,
+    DEFAULT_PATCHES_FILE,
     DEFAULT_REPORT_SUBDIR,
     DEFAULT_RESULTS_SUBDIR,
 )
@@ -20,7 +21,7 @@ def makeParser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--project_dir",
         default=None,
-        help="Path to an existing directory describing benchmark project. "
+        help="Path to an existing directory describing a benchmark project. "
         "Defaults to the current working directory.",
     )
     parser.add_argument(
@@ -34,7 +35,24 @@ def makeParser() -> argparse.ArgumentParser:
         "- configs (required) - a non empty list of strings naming benchmark configs to execute "
         "(these are passed as `--name` argument to the /app/ci/run.py script),\n"
         "- override_args (optional) - an optional key-value object to override specific settings "
-        "for all the configs in the group, such as setting `num_iterations: <number>` or like that.\n",
+        "for all the configs in the group, such as setting `num_iterations: <number>` or similar.\n"
+        "- enabled (optional) - a boolean flag indicating whether the group should be used. "
+        "Valid values are `true`, 1, `false`, 0. Defaults to `true`. Not enabled groups are ignored.\n",
+    )
+    parser.add_argument(
+        "--patches_file",
+        default=DEFAULT_PATCHES_FILE,
+        help="Override yaml file describing which code needs to be patched for each set of "
+        "benchmark runs. Relative paths are resolved under --project_dir. The file must exist.\n"
+        "The file must be a valid YAML file containing a list of arrays of patch objects, describing a patch "
+        "to apply to any single file. Each patch object might have the following attributes:\n"
+        "- patch (required) - a relative path under --project_dir to a file containing the patch to apply.\n"
+        "    The file must be generated with `diff -u original_file modified_file > changes.patch` "
+        "command or similar. Using a patch file that modifies several files is UB.\n"
+        "- target (required) - a path to a file to apply the patch to. Relative paths are resolved under "
+        "the `/app` directory! Applying several patches to the same target file is UB.\n"
+        "- enabled (optional) - a boolean flag indicating whether the patch should be applied. "
+        "Valid values are `true`, 1, `false`, 0. Defaults to `true`. Not enabled patches are ignored.\n",
     )
     parser.add_argument(
         "--results_dir",

@@ -14,6 +14,7 @@ from yaml.nodes import MappingNode  # pyright: ignore[reportMissingModuleSource]
 DEFAULT_RESULTS_SUBDIR = "results"
 DEFAULT_REPORT_SUBDIR = "report"
 DEFAULT_CONFIGS_FILE = "configs.yaml"
+DEFAULT_PATCHES_FILE = "patches.yaml"
 
 StrPath = str | os.PathLike[str]
 
