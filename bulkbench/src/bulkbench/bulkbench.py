@@ -2,10 +2,13 @@
 
 import json
 import os
+import shutil
 import subprocess
 import yaml  # pyright: ignore[reportMissingModuleSource]
 
 from benchstats.common import LoggingConsole
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypedDict
 from yaml.constructor import ConstructorError  # pyright: ignore[reportMissingModuleSource]
@@ -13,6 +16,7 @@ from yaml.nodes import MappingNode  # pyright: ignore[reportMissingModuleSource]
 
 DEFAULT_RESULTS_SUBDIR = "results"
 DEFAULT_REPORT_SUBDIR = "report"
+DEFAULT_BACKUP_SUBDIR = "_backups"
 DEFAULT_CONFIGS_FILE = "configs.yaml"
 DEFAULT_PATCHES_FILE = "patches.yaml"
 
@@ -39,6 +43,14 @@ class PatchSet(TypedDict):
 
     name: str
     patches: list[PatchData]
+
+
+class TargetBackup(TypedDict):
+    """Files needed to restore one patch target."""
+
+    backup: Path
+    path_file: Path
+    target: Path
 
 
 class _UniqueKeySafeLoader(yaml.SafeLoader):
@@ -136,6 +148,13 @@ class BulkBench:
         if any(self.report_dir.iterdir()):
             raise ValueError(f"--report_dir directory '{self.report_dir}' isn't empty")
 
+        self.backup_dir: Path = self._validatedOutputDir(
+            _get_arg("backup_dir"), DEFAULT_BACKUP_SUBDIR, "backup_dir"
+        )
+        if any(self.backup_dir.iterdir()):
+            raise ValueError(f"--backup_dir directory '{self.backup_dir}' isn't empty")
+        self._validateBackupDirIsDisjoint()
+
     @staticmethod
     def _validatedProjectDir(value: StrPath | None) -> Path:
         """Resolves `value` (defaults to the current working directory) and makes sure it
@@ -181,6 +200,21 @@ class BulkBench:
         else:
             path.mkdir(parents=True, exist_ok=True)
         return path
+
+    @staticmethod
+    def _pathsOverlap(first: Path, second: Path) -> bool:
+        return first == second or first in second.parents or second in first.parents
+
+    def _validateBackupDirIsDisjoint(self) -> None:
+        for arg_name, path in (
+            ("results_dir", self.results_dir),
+            ("report_dir", self.report_dir),
+        ):
+            if self._pathsOverlap(self.backup_dir, path):
+                raise ValueError(
+                    f"--backup_dir '{self.backup_dir}' must not overlap "
+                    f"--{arg_name} '{path}'"
+                )
 
     @staticmethod
     def _validateJsonMappingKeys(
@@ -455,10 +489,101 @@ class BulkBench:
         )
         return loaded_patch_sets
 
+    def _removeBackupArtifacts(
+        self, backups: list[TargetBackup]
+    ) -> list[BaseException]:
+        errors: list[BaseException] = []
+        for target_backup in reversed(backups):
+            try:
+                # Keep the path metadata when deleting the backup data fails.
+                target_backup["backup"].unlink(missing_ok=True)
+                target_backup["path_file"].unlink(missing_ok=True)
+            except BaseException as exc:  # noqa: BLE001 - continue all cleanup attempts
+                errors.append(exc)
+        return errors
+
+    def _snapshotTargets(self, patch_set: PatchSet) -> list[TargetBackup]:
+        """Copies every patch target to an indexed backup file before any mutation."""
+        if any(self.backup_dir.iterdir()):
+            raise RuntimeError(
+                f"backup_dir '{self.backup_dir}' must be empty before snapshotting"
+            )
+
+        backups: list[TargetBackup] = []
+        try:
+            for patch_index, patch_data in enumerate(patch_set["patches"]):
+                backup = self.backup_dir / f"{patch_index:05d}"
+                path_file = self.backup_dir / f"{patch_index:05d}.path"
+                target_backup: TargetBackup = {
+                    "backup": backup,
+                    "path_file": path_file,
+                    "target": patch_data["target"],
+                }
+                backups.append(target_backup)
+
+                shutil.copy2(patch_data["target"], backup)
+                path_file.write_text(str(patch_data["target"]), encoding="utf-8")
+        except BaseException as primary_error:
+            cleanup_errors = self._removeBackupArtifacts(backups)
+            if cleanup_errors:
+                raise BaseExceptionGroup(
+                    "target snapshot and backup cleanup both failed",
+                    [primary_error, *cleanup_errors],
+                ) from None
+            raise
+
+        return backups
+
+    def _restoreAllTargets(
+        self, backups: list[TargetBackup]
+    ) -> list[BaseException]:
+        """Restores all targets and returns failures after attempting every restoration."""
+        restore_errors: list[BaseException] = []
+        restored_backups: list[TargetBackup] = []
+
+        for target_backup in reversed(backups):
+            try:
+                shutil.copy2(target_backup["backup"], target_backup["target"])
+            except BaseException as exc:  # noqa: BLE001 - continue all restore attempts
+                restore_errors.append(exc)
+            else:
+                restored_backups.append(target_backup)
+
+        restore_errors.extend(self._removeBackupArtifacts(restored_backups))
+        return restore_errors
+
+    def _applyPatches(self, _patch_set: PatchSet) -> None:
+        """Applies a patch set. Patch application will be implemented separately."""
+        self.Con.debug(f"Applying patch set {_patch_set['name']}")
+
+    @contextmanager
+    def _appliedPatchSet(self, patch_set: PatchSet) -> Iterator[None]:
+        backups = self._snapshotTargets(patch_set)
+        try:
+            self._applyPatches(patch_set)
+            yield
+        except BaseException as primary_error:
+            restore_errors = self._restoreAllTargets(backups)
+            if restore_errors:
+                raise BaseExceptionGroup(
+                    "patch-set execution and target restoration both failed",
+                    [primary_error, *restore_errors],
+                ) from None
+            raise
+        else:
+            restore_errors = self._restoreAllTargets(backups)
+            if restore_errors:
+                raise BaseExceptionGroup(
+                    "target restoration failed", restore_errors
+                )
+
     def run(self) -> int:
         """Executes the whole benchmarking pipeline. Returns the process exit code."""
-
+        for patch_set in self.patches:
+            with self._appliedPatchSet(patch_set):
+                self._runAllConfigs()
         return 0
 
     def _runAllConfigs(self):
+        self.Con.debug("Running all configs")
         args = ["python", "/app/.ci/run.py"]

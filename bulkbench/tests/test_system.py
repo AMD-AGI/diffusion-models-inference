@@ -1,10 +1,12 @@
 import pytest
+import shutil
 import sys
 import unittest
 
 from bulkbench import BulkBench
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 
 class TestSystem(unittest.TestCase):
@@ -13,6 +15,7 @@ class TestSystem(unittest.TestCase):
         with TemporaryDirectory() as output_dir:
             bulk_bench = BulkBench(
                 project_dir=project_dir,
+                backup_dir=Path(output_dir) / "backups",
                 configs_file="my_configs",
                 results_dir=Path(output_dir) / "results",
                 report_dir=Path(output_dir) / "report",
@@ -351,6 +354,187 @@ class TestSystem(unittest.TestCase):
             "- name: group\n  patches: []\n- name: ' group '\n  patches: []",
             "contains duplicate patch set name 'group'",
         )
+
+    def _make_runnable_bulk_bench(
+        self, project_dir: Path
+    ) -> tuple[BulkBench, tuple[Path, Path]]:
+        (project_dir / "configs.yaml").write_text(
+            "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+        )
+        targets = (project_dir / "first.py", project_dir / "second.py")
+        for index, target in enumerate(targets):
+            target.write_text(f"original {index}", encoding="utf-8")
+            (project_dir / f"{index}.patch").write_text(
+                f"patch {index}", encoding="utf-8"
+            )
+        (project_dir / "patches.yaml").write_text(
+            (
+                "- name: changes\n"
+                "  patches:\n"
+                f"    - patch: 0.patch\n      target: {targets[0]}\n"
+                f"    - patch: 1.patch\n      target: {targets[1]}\n"
+            ),
+            encoding="utf-8",
+        )
+        return BulkBench(project_dir=project_dir, arch=""), targets
+
+    def test_backup_dir_must_be_empty(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "configs.yaml").write_text(
+                "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+            )
+            (project_dir / "patches.yaml").write_text(
+                "- name: baseline\n  patches: []\n", encoding="utf-8"
+            )
+            backup_dir = project_dir / "backups"
+            backup_dir.mkdir()
+            (backup_dir / "existing").touch()
+
+            with self.assertRaisesRegex(ValueError, "--backup_dir directory .* isn't empty"):
+                BulkBench(project_dir=project_dir, backup_dir=backup_dir, arch="")
+
+    def test_backup_dir_must_not_overlap_output_dirs(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "configs.yaml").write_text(
+                "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+            )
+            (project_dir / "patches.yaml").write_text(
+                "- name: baseline\n  patches: []\n", encoding="utf-8"
+            )
+            shared_dir = project_dir / "shared"
+
+            with self.assertRaisesRegex(ValueError, "must not overlap --results_dir"):
+                BulkBench(
+                    project_dir=project_dir,
+                    backup_dir=shared_dir,
+                    results_dir=shared_dir,
+                    arch="",
+                )
+
+    def test_run_snapshots_targets_by_patch_index_and_restores_them(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value)
+            )
+            original_contents = [
+                target.read_text(encoding="utf-8") for target in targets
+            ]
+
+            def run_all_configs():
+                self.assertEqual(
+                    {path.name for path in bulk_bench.backup_dir.iterdir()},
+                    {"00000", "00000.path", "00001", "00001.path"},
+                )
+                for index, target in enumerate(targets):
+                    self.assertEqual(
+                        (bulk_bench.backup_dir / f"{index:05d}.path").read_text(
+                            encoding="utf-8"
+                        ),
+                        str(target.resolve()),
+                    )
+                    target.write_text(f"modified {index}", encoding="utf-8")
+                return 37
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+
+            self.assertEqual(bulk_bench.run(), 0)
+            self.assertEqual(bulk_bench._runAllConfigs.call_count, 1)
+            self.assertEqual(
+                [target.read_text(encoding="utf-8") for target in targets],
+                original_contents,
+            )
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_run_restores_targets_when_run_all_configs_raises(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value)
+            )
+            original_contents = [
+                target.read_text(encoding="utf-8") for target in targets
+            ]
+            primary_error = RuntimeError("run failed")
+
+            def run_all_configs():
+                targets[0].write_text("modified", encoding="utf-8")
+                raise primary_error
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+
+            with self.assertRaises(RuntimeError) as context:
+                bulk_bench.run()
+            self.assertIs(context.exception, primary_error)
+            self.assertEqual(
+                [target.read_text(encoding="utf-8") for target in targets],
+                original_contents,
+            )
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_run_restores_targets_when_patch_application_raises(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value)
+            )
+            original_contents = [
+                target.read_text(encoding="utf-8") for target in targets
+            ]
+            primary_error = RuntimeError("apply failed")
+
+            def apply_patches(_patch_set):
+                targets[0].write_text("partially patched", encoding="utf-8")
+                raise primary_error
+
+            bulk_bench._applyPatches = Mock(side_effect=apply_patches)
+            bulk_bench._runAllConfigs = Mock()
+
+            with self.assertRaises(RuntimeError) as context:
+                bulk_bench.run()
+            self.assertIs(context.exception, primary_error)
+            bulk_bench._runAllConfigs.assert_not_called()
+            self.assertEqual(
+                [target.read_text(encoding="utf-8") for target in targets],
+                original_contents,
+            )
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_run_groups_primary_and_restoration_failures(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value)
+            )
+            primary_error = RuntimeError("run failed")
+
+            def run_all_configs():
+                targets[0].write_text("modified", encoding="utf-8")
+                raise primary_error
+
+            real_copy2 = shutil.copy2
+            copy_count = 0
+
+            def fail_restoration(source, destination):
+                nonlocal copy_count
+                copy_count += 1
+                if copy_count <= len(targets):
+                    return real_copy2(source, destination)
+                raise OSError(f"can't restore {destination}")
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+            with (
+                patch(
+                    "bulkbench.bulkbench.shutil.copy2",
+                    side_effect=fail_restoration,
+                ),
+                self.assertRaises(BaseExceptionGroup) as context,
+            ):
+                bulk_bench.run()
+
+            self.assertIs(context.exception.exceptions[0], primary_error)
+            self.assertEqual(
+                {path.name for path in bulk_bench.backup_dir.iterdir()},
+                {"00000", "00000.path", "00001", "00001.path"},
+            )
 
 
 if __name__ == "__main__":

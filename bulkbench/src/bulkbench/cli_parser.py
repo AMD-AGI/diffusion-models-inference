@@ -3,6 +3,7 @@
 import argparse
 
 from .bulkbench import (
+    DEFAULT_BACKUP_SUBDIR,
     DEFAULT_CONFIGS_FILE,
     DEFAULT_PATCHES_FILE,
     DEFAULT_REPORT_SUBDIR,
@@ -65,6 +66,13 @@ def makeParser() -> argparse.ArgumentParser:
         "(`yes`/`no` and `on`/`off`), integers 1/0, quoted values "
         '"true", "false", "1", and "0". Defaults to `true`. Disabled patches are omitted; '
         "their other attributes aren't validated.\n",
+    )
+    parser.add_argument(
+        "--backup_dir",
+        default=DEFAULT_BACKUP_SUBDIR,
+        help="Override the directory used to back up target files subjected to patches. Relative paths "
+        "are resolved under --project_dir. The directory must either not exist, or be empty, "
+        "and must not overlap with --results_dir or --report_dir.",
     )
     parser.add_argument(
         "--results_dir",
