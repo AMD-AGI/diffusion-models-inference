@@ -15,31 +15,55 @@ def makeParser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="bulkbench",
         description="Runs a set of benchmarks and analyzes their results statistically.",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "--project_dir",
         default=None,
-        help="Path to an existing directory with the project description to benchmark. "
+        help="Path to an existing directory describing benchmark project. "
         "Defaults to the current working directory.",
     )
     parser.add_argument(
         "--configs_file",
         default=DEFAULT_CONFIGS_FILE,
-        help="Override a file enumerating benchmark_configs to execute. If it's a "
-        "relative path, it's relative to --project_dir. The file must exist. Each line "
-        "must be a valid config name. Lines starting with # are ignored.",
+        help="Override yaml file describing benchmark configs to execute. Relative paths "
+        "are resolved under --project_dir. The file must exist.\n"
+        "The file must be a valid YAML file containing a list of objects describing benchmark "
+        "configs with attributes:\n"
+        "- name (required) - name of the benchmark config group,\n"
+        "- configs (required) - a non empty list of strings naming benchmark configs to execute "
+        "(these are passed as `--name` argument to the /app/ci/run.py script),\n"
+        "- override_args (optional) - an optional key-value object to override specific settings "
+        "for all the configs in the group, such as setting `num_iterations: <number>` or like that.\n",
     )
     parser.add_argument(
         "--results_dir",
         default=DEFAULT_RESULTS_SUBDIR,
-        help="Override a directory to store benchmarking results in. If it's a relative "
-        "path, it's relative to --project_dir. The directory must either not exist, or "
-        "be empty.",
+        help="Override a directory to store benchmarking results in. Relative paths are "
+        "resolved under --project_dir.\n"
+        "The directory may contain results from previous "
+        "runs, they will be overwritten if their paths coincide with new runs, or they "
+        "will be used for the statistical analysis.\n"
+        "The directory has the following nested structure:\n"
+        "<code_patch>/<benchmark_group>/<benchmark_config>/<result_files>\n"
+        "where:\n"
+        "- <code_patch> is the name of respective code patch (patch directory name in --project_dir),\n"
+        "- <benchmark_group> and <benchmark_config> are the names of respective benchmark "
+        "group and config from the --configs_file,\n"
+        "- <result_files> are the files containing the results of the benchmark run, suchs "
+        "as generated images/videos and timings.json file used for statistics analysis.",
     )
     parser.add_argument(
         "--report_dir",
         default=DEFAULT_REPORT_SUBDIR,
-        help="Override a directory to store the report in. If it's a relative path, it's "
-        "relative to --project_dir. The directory must either not exist, or be empty.",
+        help="Override a directory to store the report in. Relative paths are resolved "
+        "under --project_dir. The directory must either not exist, or be empty.",
+    )
+    parser.add_argument(
+        "--arch",
+        default=None,
+        help="String identifying the GPU architecture. More specifically a value for a single "
+        "--tag argument of the /app/ci/run.py script to filter benchmark configs. By default "
+        "tries to get value from rocminfo. Passing empty string disables `--tag` use.",
     )
     return parser

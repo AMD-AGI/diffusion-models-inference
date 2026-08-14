@@ -10,10 +10,9 @@ def main() -> int:
     parser = makeParser()
     args = parser.parse_args()
     try:
-        bulk_bench = BulkBench(args)
+        return BulkBench(args).run()
     except ValueError as exc:
         parser.error(str(exc))
-    return bulk_bench.run()
 
 
 if __name__ == "__main__":
