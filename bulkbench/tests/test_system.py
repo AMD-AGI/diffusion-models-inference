@@ -127,7 +127,7 @@ class TestSystem(unittest.TestCase):
 
     def test_all_groups_disabled_is_rejected(self):
         self.assertInvalidConfigs(
-            "- enabled: false\n- enabled: 0\n- enabled: \"false\"\n- enabled: \"0\"",
+            '- enabled: false\n- enabled: 0\n- enabled: "false"\n- enabled: "0"',
             "must contain at least one enabled config group",
         )
 
@@ -222,7 +222,7 @@ class TestSystem(unittest.TestCase):
     def test_patches_file_schema_errors(self):
         cases = (
             ("", "must contain a YAML list"),
-            ("[]", "must contain at least one patch group"),
+            ("[]", "must contain at least one patch set"),
             ("{}", "must contain a YAML list"),
             ("- patches: []", "missing required attribute 'name'"),
             ("- name: baseline\n  patches: []\n  extra: true", "unknown attribute(s): extra"),
@@ -298,7 +298,7 @@ class TestSystem(unittest.TestCase):
     - patch: a.patch
       target: $PROJECT/a.py
 """,
-            "patch groups 'first' and 'second' contain duplicate patch sets",
+            "patch sets 'first' and 'second' contain duplicate patch sets",
             "a.patch",
             "a.py",
             "b.patch",
@@ -324,13 +324,16 @@ class TestSystem(unittest.TestCase):
             ("shared.patch", "shared.py", "a.patch", "a.py", "b.patch", "b.py"),
         )
 
-        self.assertEqual([group["name"] for group in bulk_bench.patches], ["first", "second"])
+        self.assertEqual(
+            [patch_set["name"] for patch_set in bulk_bench.patches],
+            ["first", "second"],
+        )
         self.assertEqual(
             bulk_bench.patches[0]["patches"][0],
             bulk_bench.patches[1]["patches"][0],
         )
 
-    def test_only_one_empty_patch_group_is_allowed(self):
+    def test_only_one_empty_patch_set_is_allowed(self):
         self.assertInvalidPatches(
             """
 - name: baseline
@@ -340,13 +343,13 @@ class TestSystem(unittest.TestCase):
     - enabled: false
       unknown: ignored
 """,
-            "patch groups 'baseline' and 'disabled' contain duplicate patch sets",
+            "patch sets 'baseline' and 'disabled' contain duplicate patch sets",
         )
 
-    def test_patch_group_names_are_unique(self):
+    def test_patch_set_names_are_unique(self):
         self.assertInvalidPatches(
             "- name: group\n  patches: []\n- name: ' group '\n  patches: []",
-            "contains duplicate patch group name 'group'",
+            "contains duplicate patch set name 'group'",
         )
 
 
