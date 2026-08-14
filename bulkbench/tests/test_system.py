@@ -185,7 +185,8 @@ class TestSystem(unittest.TestCase):
             (project_dir / "patches.yaml").write_text(
                 contents.replace("$PROJECT", str(project_dir)), encoding="utf-8"
             )
-            return BulkBench(project_dir=project_dir, arch="")
+            with patch.object(BulkBench, "_dryRunPatches"):
+                return BulkBench(project_dir=project_dir, arch="")
 
     def assertInvalidPatches(self, contents: str, expected_message: str, *files: str) -> None:
         with self.assertRaises(ValueError) as context:
@@ -194,14 +195,10 @@ class TestSystem(unittest.TestCase):
 
     def test_config_group_and_patch_set_name_validation(self):
         valid_name = "aZ09-., ~!()[]_+={}"
-        bulk_bench = self._read_configs(
-            f"- name: ' {valid_name} '\n  configs: [cfg]"
-        )
+        bulk_bench = self._read_configs(f"- name: ' {valid_name} '\n  configs: [cfg]")
         self.assertEqual(list(bulk_bench.configs), [valid_name])
 
-        bulk_bench = self._read_patches(
-            f"- name: ' {valid_name} '\n  patches: []"
-        )
+        bulk_bench = self._read_patches(f"- name: ' {valid_name} '\n  patches: []")
         self.assertEqual(
             [patch_set["name"] for patch_set in bulk_bench.patches],
             [valid_name],
@@ -384,7 +381,10 @@ class TestSystem(unittest.TestCase):
         )
 
     def _make_runnable_bulk_bench(
-        self, project_dir: Path, mock_patch_commands: bool = True
+        self,
+        project_dir: Path,
+        mock_patch_commands: bool = True,
+        mock_constructor_dry_run: bool = True,
     ) -> tuple[BulkBench, tuple[Path, Path]]:
         (project_dir / "configs.yaml").write_text(
             "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
@@ -392,9 +392,7 @@ class TestSystem(unittest.TestCase):
         targets = (project_dir / "first.py", project_dir / "second.py")
         for index, target in enumerate(targets):
             target.write_text(f"original {index}", encoding="utf-8")
-            (project_dir / f"{index}.patch").write_text(
-                f"patch {index}", encoding="utf-8"
-            )
+            (project_dir / f"{index}.patch").write_text(f"patch {index}", encoding="utf-8")
         (project_dir / "patches.yaml").write_text(
             (
                 "- name: changes\n"
@@ -404,7 +402,11 @@ class TestSystem(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        bulk_bench = BulkBench(project_dir=project_dir, arch="")
+        if mock_constructor_dry_run:
+            with patch.object(BulkBench, "_dryRunPatches"):
+                bulk_bench = BulkBench(project_dir=project_dir, arch="")
+        else:
+            bulk_bench = BulkBench(project_dir=project_dir, arch="")
         if mock_patch_commands:
             bulk_bench._dryRunPatches = Mock()
             bulk_bench._applyPatches = Mock()
@@ -444,6 +446,69 @@ class TestSystem(unittest.TestCase):
                     results_dir=shared_dir,
                     arch="",
                 )
+
+    def test_constructor_dry_runs_every_loaded_patch(self):
+        with TemporaryDirectory() as project_dir_value:
+            commands = []
+
+            def run_patch(command, **_kwargs):
+                commands.append(command)
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with patch("bulkbench.bulkbench.subprocess.run", side_effect=run_patch):
+                bulk_bench, targets = self._make_runnable_bulk_bench(
+                    Path(project_dir_value),
+                    mock_patch_commands=False,
+                    mock_constructor_dry_run=False,
+                )
+
+            self.assertEqual(
+                commands,
+                [
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[0]),
+                        str(bulk_bench.project_dir / "0.patch"),
+                    ],
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[1]),
+                        str(bulk_bench.project_dir / "1.patch"),
+                    ],
+                ],
+            )
+
+    def test_constructor_dry_run_failure_prevents_output_directory_creation(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            patch_error = subprocess.CalledProcessError(
+                2,
+                ["patch"],
+                output="dry-run stdout",
+                stderr="dry-run stderr",
+            )
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.subprocess.run",
+                    side_effect=patch_error,
+                ),
+                self.assertRaises(ValueError) as context,
+            ):
+                self._make_runnable_bulk_bench(
+                    project_dir,
+                    mock_patch_commands=False,
+                    mock_constructor_dry_run=False,
+                )
+
+            self.assertIs(context.exception.__cause__, patch_error)
+            self.assertFalse((project_dir / "results").exists())
+            self.assertFalse((project_dir / "report").exists())
+            self.assertFalse((project_dir / "__backups").exists())
 
     def test_run_dry_runs_all_patches_before_snapshot_and_applies_in_order(self):
         with TemporaryDirectory() as project_dir_value:
@@ -539,12 +604,8 @@ class TestSystem(unittest.TestCase):
 
     def test_run_snapshots_targets_by_patch_index_and_restores_them(self):
         with TemporaryDirectory() as project_dir_value:
-            bulk_bench, targets = self._make_runnable_bulk_bench(
-                Path(project_dir_value)
-            )
-            original_contents = [
-                target.read_text(encoding="utf-8") for target in targets
-            ]
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
+            original_contents = [target.read_text(encoding="utf-8") for target in targets]
 
             def run_all_configs():
                 self.assertEqual(
@@ -553,9 +614,7 @@ class TestSystem(unittest.TestCase):
                 )
                 for index, target in enumerate(targets):
                     self.assertEqual(
-                        (bulk_bench.backup_dir / f"{index:05d}.path").read_text(
-                            encoding="utf-8"
-                        ),
+                        (bulk_bench.backup_dir / f"{index:05d}.path").read_text(encoding="utf-8"),
                         str(target.resolve()),
                     )
                     target.write_text(f"modified {index}", encoding="utf-8")
@@ -573,12 +632,8 @@ class TestSystem(unittest.TestCase):
 
     def test_run_restores_targets_when_run_all_configs_raises(self):
         with TemporaryDirectory() as project_dir_value:
-            bulk_bench, targets = self._make_runnable_bulk_bench(
-                Path(project_dir_value)
-            )
-            original_contents = [
-                target.read_text(encoding="utf-8") for target in targets
-            ]
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
+            original_contents = [target.read_text(encoding="utf-8") for target in targets]
             primary_error = RuntimeError("run failed")
 
             def run_all_configs():
@@ -598,12 +653,8 @@ class TestSystem(unittest.TestCase):
 
     def test_run_restores_targets_when_patch_application_raises(self):
         with TemporaryDirectory() as project_dir_value:
-            bulk_bench, targets = self._make_runnable_bulk_bench(
-                Path(project_dir_value)
-            )
-            original_contents = [
-                target.read_text(encoding="utf-8") for target in targets
-            ]
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
+            original_contents = [target.read_text(encoding="utf-8") for target in targets]
             primary_error = RuntimeError("apply failed")
 
             def apply_patches(_patch_set):
@@ -625,9 +676,7 @@ class TestSystem(unittest.TestCase):
 
     def test_run_groups_primary_and_restoration_failures(self):
         with TemporaryDirectory() as project_dir_value:
-            bulk_bench, targets = self._make_runnable_bulk_bench(
-                Path(project_dir_value)
-            )
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
             primary_error = RuntimeError("run failed")
 
             def run_all_configs():

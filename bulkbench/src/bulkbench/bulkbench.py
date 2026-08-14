@@ -216,8 +216,7 @@ class BulkBench:
         ):
             if self._pathsOverlap(self.backup_dir, path):
                 raise ValueError(
-                    f"--backup_dir '{self.backup_dir}' must not overlap "
-                    f"--{arg_name} '{path}'"
+                    f"--backup_dir '{self.backup_dir}' must not overlap --{arg_name} '{path}'"
                 )
 
     @staticmethod
@@ -271,9 +270,7 @@ class BulkBench:
     def _validatedName(value: Any, object_context: str) -> str:
         """Strips and validates a config-group or patch-set name."""
         if not isinstance(value, str) or not (name := value.strip()):
-            raise ValueError(
-                f"{object_context} attribute 'name' must be a non-empty string"
-            )
+            raise ValueError(f"{object_context} attribute 'name' must be a non-empty string")
         if name in (".", "..") or _VALID_NAME_RE.fullmatch(name) is None:
             raise ValueError(
                 f"{object_context} attribute 'name' must match "
@@ -498,14 +495,16 @@ class BulkBench:
             seen_patch_sets[patch_set_key] = name
             loaded_patch_sets.append({"name": name, "patches": patches})
 
+        # validate applicability early to prevent failures during long running work.
+        for patch_set in loaded_patch_sets:
+            self._dryRunPatches(patch_set)
+
         self.Con.debug(
             f"Read {len(loaded_patch_sets)} patch sets from {patches_file}: {loaded_patch_sets}"
         )
         return loaded_patch_sets
 
-    def _removeBackupArtifacts(
-        self, backups: list[TargetBackup]
-    ) -> list[BaseException]:
+    def _removeBackupArtifacts(self, backups: list[TargetBackup]) -> list[BaseException]:
         errors: list[BaseException] = []
         for target_backup in reversed(backups):
             try:
@@ -519,9 +518,7 @@ class BulkBench:
     def _snapshotTargets(self, patch_set: PatchSet) -> list[TargetBackup]:
         """Copies every patch target to an indexed backup file before any mutation."""
         if any(self.backup_dir.iterdir()):
-            raise RuntimeError(
-                f"backup_dir '{self.backup_dir}' must be empty before snapshotting"
-            )
+            raise RuntimeError(f"backup_dir '{self.backup_dir}' must be empty before snapshotting")
 
         backups: list[TargetBackup] = []
         try:
@@ -548,9 +545,7 @@ class BulkBench:
 
         return backups
 
-    def _restoreAllTargets(
-        self, backups: list[TargetBackup]
-    ) -> list[BaseException]:
+    def _restoreAllTargets(self, backups: list[TargetBackup]) -> list[BaseException]:
         """Restores all targets and returns failures after attempting every restoration."""
         restore_errors: list[BaseException] = []
         restored_backups: list[TargetBackup] = []
@@ -566,9 +561,7 @@ class BulkBench:
         restore_errors.extend(self._removeBackupArtifacts(restored_backups))
         return restore_errors
 
-    def _runPatchCommand(
-        self, patch_set_name: str, patch_data: PatchData, dry_run: bool
-    ) -> None:
+    def _runPatchCommand(self, patch_set_name: str, patch_data: PatchData, dry_run: bool) -> None:
         phase = "dry-run" if dry_run else "application"
         command = ["patch", "--batch"]
         if dry_run:
@@ -624,9 +617,7 @@ class BulkBench:
         else:
             restore_errors = self._restoreAllTargets(backups)
             if restore_errors:
-                raise BaseExceptionGroup(
-                    "target restoration failed", restore_errors
-                )
+                raise BaseExceptionGroup("target restoration failed", restore_errors)
 
     def run(self) -> int:
         """Executes the whole benchmarking pipeline. Returns the process exit code."""

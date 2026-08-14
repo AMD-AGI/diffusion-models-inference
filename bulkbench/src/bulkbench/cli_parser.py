@@ -50,6 +50,7 @@ def makeParser() -> argparse.ArgumentParser:
         default=DEFAULT_PATCHES_FILE,
         help="Override yaml file describing which code needs to be patched for each set of "
         "benchmark runs. Relative paths are resolved under --project_dir. The file must exist.\n"
+        "Every enabled patch must pass `patch --batch --dry-run` validation.\n"
         "The file must be a valid YAML file containing a non-empty list of patch sets. "
         "A patch set object has the following required attributes:\n"
         "- name - name of the patch set (must be unique within the file, "
