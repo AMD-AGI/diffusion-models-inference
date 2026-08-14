@@ -1,5 +1,6 @@
 import pytest
 import shutil
+import subprocess
 import sys
 import unittest
 
@@ -383,7 +384,7 @@ class TestSystem(unittest.TestCase):
         )
 
     def _make_runnable_bulk_bench(
-        self, project_dir: Path
+        self, project_dir: Path, mock_patch_commands: bool = True
     ) -> tuple[BulkBench, tuple[Path, Path]]:
         (project_dir / "configs.yaml").write_text(
             "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
@@ -403,7 +404,11 @@ class TestSystem(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        return BulkBench(project_dir=project_dir, arch=""), targets
+        bulk_bench = BulkBench(project_dir=project_dir, arch="")
+        if mock_patch_commands:
+            bulk_bench._dryRunPatches = Mock()
+            bulk_bench._applyPatches = Mock()
+        return bulk_bench, targets
 
     def test_backup_dir_must_be_empty(self):
         with TemporaryDirectory() as project_dir_value:
@@ -439,6 +444,98 @@ class TestSystem(unittest.TestCase):
                     results_dir=shared_dir,
                     arch="",
                 )
+
+    def test_run_dry_runs_all_patches_before_snapshot_and_applies_in_order(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value), mock_patch_commands=False
+            )
+            commands = []
+
+            def run_patch(command, **kwargs):
+                commands.append(command)
+                self.assertEqual(
+                    kwargs,
+                    {
+                        "capture_output": True,
+                        "check": True,
+                        "shell": False,
+                        "text": True,
+                    },
+                )
+                if "--dry-run" in command:
+                    self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+                else:
+                    self.assertEqual(
+                        {path.name for path in bulk_bench.backup_dir.iterdir()},
+                        {"00000", "00000.path", "00001", "00001.path"},
+                    )
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            bulk_bench._runAllConfigs = Mock()
+            with patch("bulkbench.bulkbench.subprocess.run", side_effect=run_patch):
+                self.assertEqual(bulk_bench.run(), 0)
+
+            patch_paths = (
+                bulk_bench.project_dir / "0.patch",
+                bulk_bench.project_dir / "1.patch",
+            )
+            self.assertEqual(
+                commands,
+                [
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[0]),
+                        str(patch_paths[0]),
+                    ],
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[1]),
+                        str(patch_paths[1]),
+                    ],
+                    ["patch", "--batch", str(targets[0]), str(patch_paths[0])],
+                    ["patch", "--batch", str(targets[1]), str(patch_paths[1])],
+                ],
+            )
+            bulk_bench._runAllConfigs.assert_called_once_with()
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_dry_run_failure_prevents_backups_patching_and_benchmarks(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value), mock_patch_commands=False
+            )
+            patch_error = subprocess.CalledProcessError(
+                2,
+                ["patch"],
+                output="dry-run stdout",
+                stderr="dry-run stderr",
+            )
+            bulk_bench._runAllConfigs = Mock()
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.subprocess.run",
+                    side_effect=patch_error,
+                ),
+                self.assertRaises(ValueError) as context,
+            ):
+                bulk_bench.run()
+
+            message = str(context.exception)
+            self.assertIn("patch dry-run failed for patch set 'changes'", message)
+            self.assertIn(str(bulk_bench.project_dir / "0.patch"), message)
+            self.assertIn(str(targets[0]), message)
+            self.assertIn("exit status 2", message)
+            self.assertIn("dry-run stdout", message)
+            self.assertIn("dry-run stderr", message)
+            self.assertIs(context.exception.__cause__, patch_error)
+            bulk_bench._runAllConfigs.assert_not_called()
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
 
     def test_run_snapshots_targets_by_patch_index_and_restores_them(self):
         with TemporaryDirectory() as project_dir_value:

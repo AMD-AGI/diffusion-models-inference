@@ -566,12 +566,49 @@ class BulkBench:
         restore_errors.extend(self._removeBackupArtifacts(restored_backups))
         return restore_errors
 
-    def _applyPatches(self, _patch_set: PatchSet) -> None:
-        """Applies a patch set. Patch application will be implemented separately."""
-        self.Con.debug(f"Applying patch set {_patch_set['name']}")
+    def _runPatchCommand(
+        self, patch_set_name: str, patch_data: PatchData, dry_run: bool
+    ) -> None:
+        phase = "dry-run" if dry_run else "application"
+        command = ["patch", "--batch"]
+        if dry_run:
+            command.append("--dry-run")
+        command.extend((str(patch_data["target"]), str(patch_data["patch"])))
+
+        try:
+            subprocess.run(
+                command,
+                capture_output=True,
+                check=True,
+                shell=False,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise ValueError(
+                f"patch {phase} failed for patch set {patch_set_name!r}, "
+                f"patch '{patch_data['patch']}', target '{patch_data['target']}', "
+                f"exit status {exc.returncode}; stdout={exc.stdout!r}; stderr={exc.stderr!r}"
+            ) from exc
+        except OSError as exc:
+            raise ValueError(
+                f"patch {phase} failed for patch set {patch_set_name!r}, "
+                f"patch '{patch_data['patch']}', target '{patch_data['target']}': {exc}"
+            ) from exc
+
+    def _dryRunPatches(self, patch_set: PatchSet) -> None:
+        """Checks that every patch can be applied before any target is backed up."""
+        for patch_data in patch_set["patches"]:
+            self._runPatchCommand(patch_set["name"], patch_data, dry_run=True)
+
+    def _applyPatches(self, patch_set: PatchSet) -> None:
+        """Applies every patch in a patch set in list order."""
+        self.Con.debug(f"Applying patch set {patch_set['name']}")
+        for patch_data in patch_set["patches"]:
+            self._runPatchCommand(patch_set["name"], patch_data, dry_run=False)
 
     @contextmanager
     def _appliedPatchSet(self, patch_set: PatchSet) -> Iterator[None]:
+        self._dryRunPatches(patch_set)
         backups = self._snapshotTargets(patch_set)
         try:
             self._applyPatches(patch_set)
