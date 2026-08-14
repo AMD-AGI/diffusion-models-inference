@@ -27,6 +27,20 @@ class ConfigGroup(TypedDict):
     override_args: str | None
 
 
+class PatchData(TypedDict):
+    """Validated patch description loaded from the patches YAML file."""
+
+    patch: Path
+    target: Path
+
+
+class PatchGroup(TypedDict):
+    """Validated group of patches loaded from the patches YAML file."""
+
+    name: str
+    patches: list[PatchData]
+
+
 class _UniqueKeySafeLoader(yaml.SafeLoader):
     """Safe YAML loader that rejects duplicate mapping keys."""
 
@@ -111,6 +125,7 @@ class BulkBench:
 
         self.project_dir: Path = self._validatedProjectDir(_get_arg("project_dir"))
         self.configs: dict[str, ConfigGroup] = self._readConfigs(_get_arg("configs_file"))
+        self.patches: list[PatchGroup] = self._readPatches(_get_arg("patches_file"))
         self.results_dir: Path = self._validatedOutputDir(
             _get_arg("results_dir"), DEFAULT_RESULTS_SUBDIR, "results_dir"
         )
@@ -144,6 +159,14 @@ class BulkBench:
         path = self._resolvedPath(value, DEFAULT_CONFIGS_FILE)
         if not path.is_file():
             raise ValueError(f"configs_file '{path}' doesn't exist or isn't a file")
+        return path
+
+    def _validatedPatchesFile(self, value: StrPath | None) -> Path:
+        """Resolves `value` (defaults to `DEFAULT_PATCHES_FILE`) and makes sure it points
+        to an existing file."""
+        path = self._resolvedPath(value, DEFAULT_PATCHES_FILE)
+        if not path.is_file():
+            raise ValueError(f"patches_file '{path}' doesn't exist or isn't a file")
         return path
 
     def _validatedOutputDir(
@@ -298,6 +321,144 @@ class BulkBench:
             raise ValueError(f"{error_prefix} must contain at least one enabled config group")
 
         self.Con.debug(f"Read {len(groups)} config groups from {configs_file}: {groups}")
+        return groups
+
+    @staticmethod
+    def _validatedPatchPath(value: Any, base_dir: Path, attribute: str, context: str) -> Path:
+        """Resolves and validates a patch or target path."""
+        if not isinstance(value, str) or not (value := value.strip()):
+            raise ValueError(f"{context} attribute '{attribute}' must be a non-empty string")
+
+        path = Path(value).expanduser()
+        path = (path if path.is_absolute() else base_dir / path).resolve()
+        if not path.is_file():
+            raise ValueError(
+                f"{context} attribute '{attribute}' path '{path}' doesn't exist or isn't a file"
+            )
+        return path
+
+    def _readPatches(self, patches_file_value: StrPath | None) -> list[PatchGroup]:
+        """Reads and validates named patch groups from a YAML file."""
+        patches_file = self._validatedPatchesFile(patches_file_value)
+        try:
+            with patches_file.open("r", encoding="utf-8") as file:
+                raw_groups = yaml.load(file, Loader=_UniqueKeySafeLoader)
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise ValueError(f"failed to read patches_file '{patches_file}': {exc}") from exc
+
+        error_prefix = f"patches_file '{patches_file}'"
+        if not isinstance(raw_groups, list):
+            raise ValueError(  # noqa: TRY004 - public API reports invalid patch values
+                f"{error_prefix} must contain a YAML list"
+            )
+        if not raw_groups:
+            raise ValueError(f"{error_prefix} must contain at least one patch group")
+
+        group_attributes = {"name", "patches"}
+        patch_attributes = {"enabled", "patch", "target"}
+        group_names: set[str] = set()
+        patch_sets: dict[frozenset[tuple[Path, Path]], str] = {}
+        groups: list[PatchGroup] = []
+
+        for group_index, raw_group in enumerate(raw_groups, start=1):
+            group_context = f"{error_prefix}, patch group {group_index}"
+            if not isinstance(raw_group, dict):
+                raise ValueError(  # noqa: TRY004 - public API reports invalid patch values
+                    f"{group_context} must be an object"
+                )
+
+            non_string_attributes = [key for key in raw_group if not isinstance(key, str)]
+            if non_string_attributes:
+                raise ValueError(
+                    f"{group_context} contains non-string attribute "
+                    f"{non_string_attributes[0]!r}"
+                )
+
+            unknown_attributes = set(raw_group) - group_attributes
+            if unknown_attributes:
+                unknown = ", ".join(sorted(unknown_attributes))
+                raise ValueError(f"{group_context} contains unknown attribute(s): {unknown}")
+
+            if "name" not in raw_group:
+                raise ValueError(f"{group_context} is missing required attribute 'name'")
+            name = raw_group["name"]
+            if not isinstance(name, str) or not (name := name.strip()):
+                raise ValueError(f"{group_context} attribute 'name' must be a non-empty string")
+            if name in group_names:
+                raise ValueError(f"{error_prefix} contains duplicate patch group name {name!r}")
+            group_names.add(name)
+
+            if "patches" not in raw_group:
+                raise ValueError(f"{group_context} is missing required attribute 'patches'")
+            raw_patches = raw_group["patches"]
+            if not isinstance(raw_patches, list):
+                raise ValueError(  # noqa: TRY004 - public API reports invalid patch values
+                    f"{group_context} attribute 'patches' must be a list"
+                )
+
+            patches: list[PatchData] = []
+            patch_keys: set[tuple[Path, Path]] = set()
+            for patch_index, raw_patch in enumerate(raw_patches, start=1):
+                patch_context = f"{group_context}, patch {patch_index}"
+                if not isinstance(raw_patch, dict):
+                    raise ValueError(  # noqa: TRY004 - public API reports invalid patch values
+                        f"{patch_context} must be an object"
+                    )
+
+                if not self._validatedEnabled(raw_patch.get("enabled", True), patch_context):
+                    continue
+
+                non_string_attributes = [
+                    key for key in raw_patch if not isinstance(key, str)
+                ]
+                if non_string_attributes:
+                    raise ValueError(
+                        f"{patch_context} contains non-string attribute "
+                        f"{non_string_attributes[0]!r}"
+                    )
+
+                unknown_attributes = set(raw_patch) - patch_attributes
+                if unknown_attributes:
+                    unknown = ", ".join(sorted(unknown_attributes))
+                    raise ValueError(
+                        f"{patch_context} contains unknown attribute(s): {unknown}"
+                    )
+
+                if "patch" not in raw_patch:
+                    raise ValueError(
+                        f"{patch_context} is missing required attribute 'patch'"
+                    )
+                if "target" not in raw_patch:
+                    raise ValueError(
+                        f"{patch_context} is missing required attribute 'target'"
+                    )
+
+                patch_path = self._validatedPatchPath(
+                    raw_patch["patch"], self.project_dir, "patch", patch_context
+                )
+                target_path = self._validatedPatchPath(
+                    raw_patch["target"], Path("/app"), "target", patch_context
+                )
+
+                patch_key = (patch_path, target_path)
+                if patch_key in patch_keys:
+                    raise ValueError(
+                        f"{group_context} contains duplicate patch object "
+                        f"({patch_path}, {target_path})"
+                    )
+                patch_keys.add(patch_key)
+                patches.append({"patch": patch_path, "target": target_path})
+
+            patch_set_key = frozenset(patch_keys)
+            if duplicate_group := patch_sets.get(patch_set_key):
+                raise ValueError(
+                    f"{error_prefix} patch groups {duplicate_group!r} and {name!r} "
+                    "contain duplicate patch sets"
+                )
+            patch_sets[patch_set_key] = name
+            groups.append({"name": name, "patches": patches})
+
+        self.Con.debug(f"Read {len(groups)} patch groups from {patches_file}: {groups}")
         return groups
 
     def run(self) -> int:

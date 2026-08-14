@@ -47,6 +47,9 @@ class TestSystem(unittest.TestCase):
         with TemporaryDirectory() as project_dir_value:
             project_dir = Path(project_dir_value)
             (project_dir / "configs.yaml").write_text(contents, encoding="utf-8")
+            (project_dir / "patches.yaml").write_text(
+                "- name: baseline\n  patches: []\n", encoding="utf-8"
+            )
             return BulkBench(project_dir=project_dir, arch="")
 
     def assertInvalidConfigs(self, contents: str, expected_message: str) -> None:
@@ -164,6 +167,187 @@ class TestSystem(unittest.TestCase):
 
     def test_malformed_yaml_is_reported_as_value_error(self):
         self.assertInvalidConfigs("- name: [", "failed to read configs_file")
+
+    def _read_patches(self, contents: str, files: tuple[str, ...] = ()) -> BulkBench:
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "configs.yaml").write_text(
+                "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+            )
+            for relative_path in files:
+                path = project_dir / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            (project_dir / "patches.yaml").write_text(
+                contents.replace("$PROJECT", str(project_dir)), encoding="utf-8"
+            )
+            return BulkBench(project_dir=project_dir, arch="")
+
+    def assertInvalidPatches(self, contents: str, expected_message: str, *files: str) -> None:
+        with self.assertRaises(ValueError) as context:
+            self._read_patches(contents, files)
+        self.assertIn(expected_message, str(context.exception))
+
+    def test_patches_file(self):
+        bulk_bench = self._read_patches(
+            """
+- name: baseline
+  patches: []
+- name: changes
+  patches:
+    - patch: " change.patch "
+      target: " $PROJECT/target.py "
+    - enabled: false
+      unknown: ignored
+""",
+            ("change.patch", "target.py"),
+        )
+
+        self.assertEqual(
+            bulk_bench.patches,
+            [
+                {"name": "baseline", "patches": []},
+                {
+                    "name": "changes",
+                    "patches": [
+                        {
+                            "patch": (bulk_bench.project_dir / "change.patch").resolve(),
+                            "target": (bulk_bench.project_dir / "target.py").resolve(),
+                        }
+                    ],
+                },
+            ],
+        )
+
+    def test_patches_file_schema_errors(self):
+        cases = (
+            ("", "must contain a YAML list"),
+            ("[]", "must contain at least one patch group"),
+            ("{}", "must contain a YAML list"),
+            ("- patches: []", "missing required attribute 'name'"),
+            ("- name: baseline\n  patches: []\n  extra: true", "unknown attribute(s): extra"),
+            ("- name: '  '\n  patches: []", "'name' must be a non-empty string"),
+            ("- name: baseline", "missing required attribute 'patches'"),
+            ("- name: baseline\n  patches: {}", "'patches' must be a list"),
+            ("- name: baseline\n  patches: [value]", "patch 1 must be an object"),
+            (
+                "- name: baseline\n  patches:\n    - patch: missing.patch",
+                "missing required attribute 'target'",
+            ),
+            (
+                (
+                    "- name: baseline\n  patches:\n"
+                    "    - patch: missing.patch\n      target: missing.py\n      extra: true"
+                ),
+                "unknown attribute(s): extra",
+            ),
+            (
+                (
+                    "- name: baseline\n  patches:\n"
+                    "    - patch: missing.patch\n      target: missing.py\n      enabled: 2"
+                ),
+                "attribute 'enabled' must be a YAML boolean",
+            ),
+        )
+        for contents, expected_message in cases:
+            with self.subTest(expected_message=expected_message):
+                self.assertInvalidPatches(contents, expected_message)
+
+    def test_patch_and_target_must_be_existing_files(self):
+        self.assertInvalidPatches(
+            "- name: changes\n  patches:\n"
+            "    - patch: missing.patch\n      target: $PROJECT/target.py",
+            "attribute 'patch' path",
+            "target.py",
+        )
+        self.assertInvalidPatches(
+            "- name: changes\n  patches:\n"
+            "    - patch: change.patch\n      target: $PROJECT/missing.py",
+            "attribute 'target' path",
+            "change.patch",
+        )
+
+    def test_duplicate_patch_objects_are_rejected(self):
+        self.assertInvalidPatches(
+            """
+- name: changes
+  patches:
+    - patch: change.patch
+      target: $PROJECT/target.py
+    - patch: ./change.patch
+      target: $PROJECT/./target.py
+""",
+            "contains duplicate patch object",
+            "change.patch",
+            "target.py",
+        )
+
+    def test_duplicate_patch_sets_are_order_independent(self):
+        self.assertInvalidPatches(
+            """
+- name: first
+  patches:
+    - patch: a.patch
+      target: $PROJECT/a.py
+    - patch: b.patch
+      target: $PROJECT/b.py
+- name: second
+  patches:
+    - patch: b.patch
+      target: $PROJECT/b.py
+    - patch: a.patch
+      target: $PROJECT/a.py
+""",
+            "patch groups 'first' and 'second' contain duplicate patch sets",
+            "a.patch",
+            "a.py",
+            "b.patch",
+            "b.py",
+        )
+
+    def test_patch_object_can_be_shared_by_distinct_patch_sets(self):
+        bulk_bench = self._read_patches(
+            """
+- name: first
+  patches:
+    - patch: shared.patch
+      target: $PROJECT/shared.py
+    - patch: a.patch
+      target: $PROJECT/a.py
+- name: second
+  patches:
+    - patch: shared.patch
+      target: $PROJECT/shared.py
+    - patch: b.patch
+      target: $PROJECT/b.py
+""",
+            ("shared.patch", "shared.py", "a.patch", "a.py", "b.patch", "b.py"),
+        )
+
+        self.assertEqual([group["name"] for group in bulk_bench.patches], ["first", "second"])
+        self.assertEqual(
+            bulk_bench.patches[0]["patches"][0],
+            bulk_bench.patches[1]["patches"][0],
+        )
+
+    def test_only_one_empty_patch_group_is_allowed(self):
+        self.assertInvalidPatches(
+            """
+- name: baseline
+  patches: []
+- name: disabled
+  patches:
+    - enabled: false
+      unknown: ignored
+""",
+            "patch groups 'baseline' and 'disabled' contain duplicate patch sets",
+        )
+
+    def test_patch_group_names_are_unique(self):
+        self.assertInvalidPatches(
+            "- name: group\n  patches: []\n- name: ' group '\n  patches: []",
+            "contains duplicate patch group name 'group'",
+        )
 
 
 if __name__ == "__main__":
