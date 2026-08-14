@@ -1,8 +1,10 @@
+import pytest
+import sys
 import unittest
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from bulkbench import BulkBench
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 class TestSystem(unittest.TestCase):
@@ -111,7 +113,4 @@ class TestSystem(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    import sys
-    import pytest
-
     sys.exit(pytest.main(sys.argv))

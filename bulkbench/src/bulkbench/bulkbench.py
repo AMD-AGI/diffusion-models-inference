@@ -3,11 +3,11 @@
 import json
 import os
 import subprocess
+import yaml  # pyright: ignore[reportMissingModuleSource]
+
+from benchstats.common import LoggingConsole
 from pathlib import Path
 from typing import Any, TypedDict
-
-import yaml  # pyright: ignore[reportMissingModuleSource]
-from benchstats.common import LoggingConsole
 from yaml.constructor import ConstructorError  # pyright: ignore[reportMissingModuleSource]
 from yaml.nodes import MappingNode  # pyright: ignore[reportMissingModuleSource]
 
