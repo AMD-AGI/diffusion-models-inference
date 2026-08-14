@@ -37,8 +37,8 @@ def makeParser() -> argparse.ArgumentParser:
         "- override_args (optional) - an optional key-value object to override specific settings "
         "for all the configs in the group, such as setting `num_iterations: <number>` or similar.\n"
         "- enabled (optional) - a boolean flag indicating whether the group should be used. "
-        "Accepted unquoted YAML values are `true`/`false` (including YAML aliases "
-        "`yes`/`no` and `on`/`off`) and integers 1/0. Accepted quoted values are exactly "
+        "Valid values are unquoted YAML `true`/`false`, standard aliases "
+        "(`yes`/`no` and `on`/`off`), integers 1/0, quoted values "
         '"true", "false", "1", and "0". Defaults to `true`. Disabled groups are omitted; '
         "their other attributes aren't validated.\n",
     )
@@ -55,7 +55,10 @@ def makeParser() -> argparse.ArgumentParser:
         "- target (required) - a path to a file to apply the patch to. Relative paths are resolved under "
         "the `/app` directory! Applying several patches to the same target file is UB.\n"
         "- enabled (optional) - a boolean flag indicating whether the patch should be applied. "
-        "Valid values are `true`, 1, `false`, 0. Defaults to `true`. Not enabled patches are ignored.\n",
+        "Valid values are unquoted YAML `true`/`false`, standard aliases "
+        "(`yes`/`no` and `on`/`off`), integers 1/0, quoted values "
+        '"true", "false", "1", and "0". Defaults to `true`. Disabled patches are omitted; '
+        "their other attributes aren't validated.\n",
     )
     parser.add_argument(
         "--results_dir",
