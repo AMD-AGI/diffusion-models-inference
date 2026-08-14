@@ -287,9 +287,11 @@ RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | tr '\n' ' '); \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
         -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-# Install amdsmi Python module
-RUN cd /opt/rocm/share/amd_smi && \
-    pip install --no-cache-dir .
+# Install amdsmi Python module into system site-packages. TheRock stages
+# sources under share/amd_smi/amdsmi/ without setup.py (packaging rework in
+# rocm-systems 5bc651a8+); pip install from share/amd_smi no longer works.
+RUN AMDSMI_SITELIB="$(python3 -c "import site; print([p for p in site.getsitepackages() if not p.startswith('/usr/local')][0])")" && \
+    cp -r /opt/rocm/share/amd_smi/amdsmi "${AMDSMI_SITELIB}/"
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
     echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
     ldconfig
