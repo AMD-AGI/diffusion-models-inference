@@ -191,6 +191,33 @@ class TestSystem(unittest.TestCase):
             self._read_patches(contents, files)
         self.assertIn(expected_message, str(context.exception))
 
+    def test_config_group_and_patch_set_name_validation(self):
+        valid_name = "aZ09-., ~!()[]_+={}"
+        bulk_bench = self._read_configs(
+            f"- name: ' {valid_name} '\n  configs: [cfg]"
+        )
+        self.assertEqual(list(bulk_bench.configs), [valid_name])
+
+        bulk_bench = self._read_patches(
+            f"- name: ' {valid_name} '\n  patches: []"
+        )
+        self.assertEqual(
+            [patch_set["name"] for patch_set in bulk_bench.patches],
+            [valid_name],
+        )
+
+        for invalid_name in (".", "..", "has/slash", "has:colon", "has?question", "has\\backslash"):
+            with self.subTest(invalid_name=invalid_name, object_type="config group"):
+                self.assertInvalidConfigs(
+                    f"- name: '{invalid_name}'\n  configs: [cfg]",
+                    "attribute 'name' must match",
+                )
+            with self.subTest(invalid_name=invalid_name, object_type="patch set"):
+                self.assertInvalidPatches(
+                    f"- name: '{invalid_name}'\n  patches: []",
+                    "attribute 'name' must match",
+                )
+
     def test_patches_file(self):
         bulk_bench = self._read_patches(
             """

@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import yaml  # pyright: ignore[reportMissingModuleSource]
@@ -19,6 +20,9 @@ DEFAULT_REPORT_SUBDIR = "report"
 DEFAULT_BACKUP_SUBDIR = "_backups"
 DEFAULT_CONFIGS_FILE = "configs.yaml"
 DEFAULT_PATCHES_FILE = "patches.yaml"
+VALID_NAME_PATTERN = r"[-a-zA-Z0-9_+={}., ~!()\[\]]+"
+
+_VALID_NAME_RE = re.compile(VALID_NAME_PATTERN)
 
 StrPath = str | os.PathLike[str]
 
@@ -263,6 +267,20 @@ class BulkBench:
             'or one of the strings "true", "false", "1", "0"'
         )
 
+    @staticmethod
+    def _validatedName(value: Any, object_context: str) -> str:
+        """Strips and validates a config-group or patch-set name."""
+        if not isinstance(value, str) or not (name := value.strip()):
+            raise ValueError(
+                f"{object_context} attribute 'name' must be a non-empty string"
+            )
+        if name in (".", "..") or _VALID_NAME_RE.fullmatch(name) is None:
+            raise ValueError(
+                f"{object_context} attribute 'name' must match "
+                f"{VALID_NAME_PATTERN!r} and must not be '.' or '..'"
+            )
+        return name
+
     def _readConfigs(self, configs_file_value: StrPath | None) -> dict[str, ConfigGroup]:
         """Reads and validates benchmark config groups from a YAML file."""
         configs_file = self._validatedConfigsFile(configs_file_value)
@@ -303,9 +321,7 @@ class BulkBench:
 
             if "name" not in raw_group:
                 raise ValueError(f"{group_context} is missing required attribute 'name'")
-            name = raw_group["name"]
-            if not isinstance(name, str) or not (name := name.strip()):
-                raise ValueError(f"{group_context} attribute 'name' must be a non-empty string")
+            name = self._validatedName(raw_group["name"], group_context)
             if name in groups:
                 raise ValueError(f"{error_prefix} contains duplicate group name {name!r}")
 
@@ -415,9 +431,7 @@ class BulkBench:
 
             if "name" not in raw_patch_set:
                 raise ValueError(f"{patch_set_context} is missing required attribute 'name'")
-            name = raw_patch_set["name"]
-            if not isinstance(name, str) or not (name := name.strip()):
-                raise ValueError(f"{patch_set_context} attribute 'name' must be a non-empty string")
+            name = self._validatedName(raw_patch_set["name"], patch_set_context)
             if name in patch_set_names:
                 raise ValueError(f"{error_prefix} contains duplicate patch set name {name!r}")
             patch_set_names.add(name)

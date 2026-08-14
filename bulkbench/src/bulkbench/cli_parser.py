@@ -8,6 +8,7 @@ from .bulkbench import (
     DEFAULT_PATCHES_FILE,
     DEFAULT_REPORT_SUBDIR,
     DEFAULT_RESULTS_SUBDIR,
+    VALID_NAME_PATTERN,
 )
 
 
@@ -32,7 +33,8 @@ def makeParser() -> argparse.ArgumentParser:
         "are resolved under --project_dir. The file must exist.\n"
         "The file must be a valid YAML file containing a list of objects describing benchmark "
         "configs with attributes:\n"
-        "- name (required) - name of the benchmark config group (must be unique within the file),\n"
+        "- name (required) - name of the benchmark config group (must be unique within the file, "
+        f"match `{VALID_NAME_PATTERN}` after stripping, and not be `.` or `..`),\n"
         "- configs (required) - a non empty list of strings naming benchmark configs to execute "
         "(these are passed as `--name` argument to the /app/ci/run.py script),\n"
         "- override_args (optional) - an optional key-value object to override specific settings "
@@ -50,7 +52,8 @@ def makeParser() -> argparse.ArgumentParser:
         "benchmark runs. Relative paths are resolved under --project_dir. The file must exist.\n"
         "The file must be a valid YAML file containing a non-empty list of patch sets. "
         "A patch set object has the following required attributes:\n"
-        "- name - name of the patch set (must be unique within the file),\n"
+        "- name - name of the patch set (must be unique within the file, "
+        f"match `{VALID_NAME_PATTERN}` after stripping, and not be `.` or `..`),\n"
         "- patches - a list of patch objects, each describing a patch to apply to a single file. "
         "Patch lists must be unique regardless of object order; only one empty baseline is allowed. "
         "A patch object may occur only once in its set. Each patch object has the following attributes:\n"
