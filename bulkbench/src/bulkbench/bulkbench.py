@@ -1,17 +1,53 @@
 """Implementation of the `bulkbench` tool."""
 
+import json
 import os
 import subprocess
-
-from benchstats.common import LoggingConsole
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
+
+import yaml  # pyright: ignore[reportMissingModuleSource]
+from benchstats.common import LoggingConsole
+from yaml.constructor import ConstructorError  # pyright: ignore[reportMissingModuleSource]
+from yaml.nodes import MappingNode  # pyright: ignore[reportMissingModuleSource]
 
 DEFAULT_RESULTS_SUBDIR = "results"
 DEFAULT_REPORT_SUBDIR = "report"
 DEFAULT_CONFIGS_FILE = "configs.yaml"
 
 StrPath = str | os.PathLike[str]
+
+
+class ConfigGroup(TypedDict):
+    """Validated benchmark config group loaded from the configs YAML file."""
+
+    name: str
+    configs: list[str]
+    override_args: str | None
+
+
+class _UniqueKeySafeLoader(yaml.SafeLoader):
+    """Safe YAML loader that rejects duplicate mapping keys."""
+
+    def construct_mapping(self, node: MappingNode, deep: bool = False) -> dict[Any, Any]:
+        self.flatten_mapping(node)
+        keys: set[Any] = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                duplicate = key in keys
+                keys.add(key)
+            except TypeError:
+                # The base constructor emits a contextual error for unhashable keys.
+                continue
+            if duplicate:
+                raise ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"found duplicate key {key!r}",
+                    key_node.start_mark,
+                )
+        return super().construct_mapping(node, deep=deep)
 
 
 _gArch = None
@@ -73,7 +109,7 @@ class BulkBench:
         )
 
         self.project_dir: Path = self._validatedProjectDir(_get_arg("project_dir"))
-        self.configs: list[str] = self._readConfigs(_get_arg("configs_file"))
+        self.configs: dict[str, ConfigGroup] = self._readConfigs(_get_arg("configs_file"))
         self.results_dir: Path = self._validatedOutputDir(
             _get_arg("results_dir"), DEFAULT_RESULTS_SUBDIR, "results_dir"
         )
@@ -122,17 +158,125 @@ class BulkBench:
             path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _readConfigs(self, configs_file_value: StrPath | None) -> list[str]:
-        """Reads the configs file and returns a list of config names."""
+    @staticmethod
+    def _validateJsonMappingKeys(
+        value: Any, location: str, active_containers: set[int] | None = None
+    ) -> None:
+        """Makes sure every mapping nested in `value` has string keys and no cycles."""
+        if not isinstance(value, (dict, list)):
+            return
+
+        active_containers = active_containers if active_containers is not None else set()
+        container_id = id(value)
+        if container_id in active_containers:
+            raise ValueError(f"{location} contains a circular reference")
+
+        active_containers.add(container_id)
+        try:
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if not isinstance(key, str):
+                        raise ValueError(  # noqa: TRY004 - invalid public config value
+                            f"{location} contains non-string mapping key {key!r}"
+                        )
+                    BulkBench._validateJsonMappingKeys(item, f"{location}.{key}", active_containers)
+            else:
+                for index, item in enumerate(value):
+                    BulkBench._validateJsonMappingKeys(
+                        item, f"{location}[{index}]", active_containers
+                    )
+        finally:
+            active_containers.remove(container_id)
+
+    def _readConfigs(self, configs_file_value: StrPath | None) -> dict[str, ConfigGroup]:
+        """Reads and validates benchmark config groups from a YAML file."""
         configs_file = self._validatedConfigsFile(configs_file_value)
-        with open(configs_file, "r") as f:
-            configs = [ln for line in f if (ln := line.strip()) and not ln.startswith("#")]
+        try:
+            with configs_file.open("r", encoding="utf-8") as file:
+                raw_groups = yaml.load(file, Loader=_UniqueKeySafeLoader)
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise ValueError(f"failed to read configs_file '{configs_file}': {exc}") from exc
 
-        self.Con.debug(f"Read {len(configs)} configs from {configs_file}: {configs}")
-        if not configs:
-            raise ValueError(f"configs_file '{configs_file}' is empty")
+        error_prefix = f"configs_file '{configs_file}'"
+        if not isinstance(raw_groups, list):
+            raise ValueError(  # noqa: TRY004 - public API reports invalid config values
+                f"{error_prefix} must contain a YAML list"
+            )
+        if not raw_groups:
+            raise ValueError(f"{error_prefix} must contain at least one config group")
 
-        return configs
+        allowed_attributes = {"name", "configs", "override_args"}
+        groups: dict[str, ConfigGroup] = {}
+        for group_index, raw_group in enumerate(raw_groups, start=1):
+            group_context = f"{error_prefix}, group {group_index}"
+            if not isinstance(raw_group, dict):
+                raise ValueError(  # noqa: TRY004 - public API reports invalid config values
+                    f"{group_context} must be an object"
+                )
+
+            non_string_attributes = [key for key in raw_group if not isinstance(key, str)]
+            if non_string_attributes:
+                raise ValueError(
+                    f"{group_context} contains non-string attribute {non_string_attributes[0]!r}"
+                )
+
+            unknown_attributes = set(raw_group) - allowed_attributes
+            if unknown_attributes:
+                unknown = ", ".join(sorted(unknown_attributes))
+                raise ValueError(f"{group_context} contains unknown attribute(s): {unknown}")
+
+            if "name" not in raw_group:
+                raise ValueError(f"{group_context} is missing required attribute 'name'")
+            name = raw_group["name"]
+            if not isinstance(name, str) or not (name := name.strip()):
+                raise ValueError(f"{group_context} attribute 'name' must be a non-empty string")
+            if name in groups:
+                raise ValueError(f"{error_prefix} contains duplicate group name {name!r}")
+
+            if "configs" not in raw_group:
+                raise ValueError(f"{group_context} is missing required attribute 'configs'")
+            group_configs = raw_group["configs"]
+            if not isinstance(group_configs, list) or not group_configs:
+                raise ValueError(f"{group_context} attribute 'configs' must be a non-empty list")
+
+            seen_configs: set[str] = set()
+            for config_index, config in enumerate(group_configs, start=1):
+                if not isinstance(config, str) or not (config := config.strip()):
+                    raise ValueError(
+                        f"{group_context} attribute 'configs', item {config_index} "
+                        "must be a non-empty string"
+                    )
+                if config in seen_configs:
+                    raise ValueError(f"{group_context} contains duplicate config name {config!r}")
+                seen_configs.add(config)
+
+            override_args = raw_group.get("override_args")
+            serialized_override_args: str | None = None
+            if override_args is not None:
+                if not isinstance(override_args, dict):
+                    raise ValueError(
+                        f"{group_context} attribute 'override_args' must be an object or null"
+                    )
+                try:
+                    self._validateJsonMappingKeys(
+                        override_args, f"{group_context} attribute 'override_args'"
+                    )
+                    serialized_override_args = json.dumps(
+                        override_args, allow_nan=False, separators=(",", ":")
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"{group_context} attribute 'override_args' isn't valid JSON: {exc}"
+                    ) from exc
+
+            groups[name] = {
+                "name": name,
+                "configs": group_configs,
+                "override_args": serialized_override_args,
+            }
+
+        self.Con.debug(f"Read {len(groups)} config groups from {configs_file}: {groups}")
+        return groups
 
     def run(self) -> int:
         """Executes the whole benchmarking pipeline. Returns the process exit code."""

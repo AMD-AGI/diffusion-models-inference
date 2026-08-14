@@ -1,6 +1,16 @@
-cfg1
+- name: group1
+  configs:
+    - cfg1
+    - cfg2
+  override_args:
+    num_iterations: 5
+    use_cfg_parallel: true
+    nested:
+      values: [1, null]
 
-cfg2
+- name: group2
+  configs: [cfg3]
+  override_args: null
 
-# comment
-cfg3
+- name: group3
+  configs: [cfg4]
