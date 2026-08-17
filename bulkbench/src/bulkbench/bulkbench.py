@@ -688,13 +688,14 @@ class BulkBench:
         self, patch_set_name: str, rr: ConfigRunResult, err_pfx: str = ""
     ) -> None:
         self.Con.error(
-            f"{err_pfx}Patch set '{patch_set_name}', config '{rr.config_name}' failed. Stderr:\n{rr.stderr}"
+            f"{err_pfx}Patch set '{patch_set_name}', config group '{rr.config_name}' "
+            f"({', '.join(self.configs[rr.config_name]['configs'])}) failed.\nStderr:\n{rr.stderr}"
         )
         self.Con.debug(f"Return code: {rr.returncode}. Stdout:\n{rr.stdout}")
 
     def _runAllConfigs(self, patch_set_name: str) -> None:
         """Runs every config group and records its outcome for the patch set."""
-        self.Con.info(f"Running all configs for patch set {patch_set_name}")
+        self.Con.info(f"Running all config groups for patch set {patch_set_name}")
         successful: list[str] = []
         unsuccessful: dict[str, ConfigRunResult] = {}
         for cfg in self.configs.values():
@@ -715,14 +716,19 @@ class BulkBench:
                 self._logConfigRunError(patch_set_name, exc_result, "[UNEXPECTED ERROR] ")
             else:
                 successful.append(cfg["name"])
-                self.Con.info(f"Config {cfg['name']} succeeded")
+                self.Con.info(
+                    f"Config {cfg['name']} ({', '.join(cfg['configs'])}) succeeded"
+                    + (f" with --tag={self.arch}" if self.arch else "")
+                )
 
         self.successful_runs[patch_set_name] = successful
         self.unsuccessful_runs[patch_set_name] = unsuccessful
 
     def _runConfig(self, patch_set_name: str, cfg: ConfigGroup) -> None:
         """Runs one config group and raises ConfigRunError on process failure."""
-        self.Con.debug(f"Running '{cfg['name']}' config for patch set {patch_set_name}")
+        self.Con.debug(
+            f"Running '{cfg['name']}' config group ({', '.join(cfg['configs'])}) for patch set {patch_set_name}"
+        )
         workdir = self.results_dir / patch_set_name
         workdir.mkdir(parents=True, exist_ok=True)
 
