@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic
 from typing import Any, TypedDict
 from yaml.constructor import ConstructorError  # pyright: ignore[reportMissingModuleSource]
 from yaml.nodes import MappingNode  # pyright: ignore[reportMissingModuleSource]
@@ -84,6 +85,15 @@ class ConfigRunError(RuntimeError):
             else "process start failure"
         )
         super().__init__(f"benchmark config group {result.config_name!r} failed: {status}")
+
+
+def _formatDuration(duration_seconds: float) -> str:
+    """Formats a nonnegative duration as unbounded hours, minutes, and seconds."""
+    total_tenths = int(duration_seconds * 10 + 0.5)
+    hours, remaining_tenths = divmod(total_tenths, 60 * 60 * 10)
+    minutes, remaining_tenths = divmod(remaining_tenths, 60 * 10)
+    seconds = remaining_tenths / 10
+    return f"{hours:02d}:{minutes:02d}:{seconds:04.1f}"
 
 
 class _UniqueKeySafeLoader(yaml.SafeLoader):
@@ -165,8 +175,8 @@ class BulkBench:
             f"Using arch tag = {self.arch}" if self.arch else "Arch is not set, tags won't be used"
         )
 
-        self.successful_runs: dict[str, list[str]] = {}
-        self.unsuccessful_runs: dict[str, dict[str, ConfigRunResult]] = {}
+        self.successful_runs: dict[str, list[tuple[str, float]]] = {}
+        self.unsuccessful_runs: dict[str, dict[str, tuple[ConfigRunResult, float]]] = {}
 
         self.project_dir: Path = self._validatedProjectDir(_get_arg("project_dir"))
         self.configs: dict[str, ConfigGroup] = self._readConfigs(_get_arg("configs_file"))
@@ -692,33 +702,42 @@ class BulkBench:
 
     def run(self) -> int:
         """Executes the whole benchmarking pipeline. Returns the process exit code."""
-        self.successful_runs: dict[str, list[str]] = {}
-        self.unsuccessful_runs: dict[str, dict[str, ConfigRunResult]] = {}
+        self.successful_runs: dict[str, list[tuple[str, float]]] = {}
+        self.unsuccessful_runs: dict[str, dict[str, tuple[ConfigRunResult, float]]] = {}
         for patch_set in self.patches:
             with self._appliedPatchSet(patch_set):
                 self._runAllConfigs(patch_set["name"])
         return 0
 
     def _logConfigRunError(
-        self, patch_set_name: str, rr: ConfigRunResult, err_pfx: str = ""
+        self,
+        patch_set_name: str,
+        rr: ConfigRunResult,
+        duration: float,
+        err_pfx: str = "",
     ) -> None:
         self.Con.error(
             f"{err_pfx}Patch set '{patch_set_name}', config group '{rr.config_name}' "
-            f"({', '.join(self.configs[rr.config_name]['configs'])}) failed."
+            f"({', '.join(self.configs[rr.config_name]['configs'])}) failed in "
+            f"{_formatDuration(duration)}."
         )
         self.Con.debug(f"Return code: {rr.returncode}")
 
     def _runAllConfigs(self, patch_set_name: str) -> None:
         """Runs every config group and records its outcome for the patch set."""
         self.Con.info(f"Running all config groups for patch set '{patch_set_name}'")
-        successful: list[str] = []
-        unsuccessful: dict[str, ConfigRunResult] = {}
+        successful: list[tuple[str, float]] = []
+        unsuccessful: dict[str, tuple[ConfigRunResult, float]] = {}
         for cfg in self.configs.values():
+            started = monotonic()
             try:
-                self._runConfig(patch_set_name, cfg)
+                try:
+                    self._runConfig(patch_set_name, cfg)
+                finally:
+                    duration = monotonic() - started
             except ConfigRunError as exc:
-                unsuccessful[cfg["name"]] = exc.result
-                self._logConfigRunError(patch_set_name, exc.result)
+                unsuccessful[cfg["name"]] = (exc.result, duration)
+                self._logConfigRunError(patch_set_name, exc.result, duration)
 
             except Exception as exc:  # noqa: BLE001 - one config must not stop the remaining runs
                 exc_result = ConfigRunResult(
@@ -726,13 +745,16 @@ class BulkBench:
                     output="".join(traceback.format_exception(exc)),
                     returncode=None,
                 )
-                unsuccessful[cfg["name"]] = exc_result
-                self._logConfigRunError(patch_set_name, exc_result, "[UNEXPECTED ERROR] ")
+                unsuccessful[cfg["name"]] = (exc_result, duration)
+                self._logConfigRunError(
+                    patch_set_name, exc_result, duration, "[UNEXPECTED ERROR] "
+                )
             else:
-                successful.append(cfg["name"])
+                successful.append((cfg["name"], duration))
                 self.Con.info(
                     f"Config '{cfg['name']}' succeeded"
                     + (f" with --tag={self.arch}" if self.arch else "")
+                    + f" in {_formatDuration(duration)}"
                 )
                 self.Con.trace(cfg)
 

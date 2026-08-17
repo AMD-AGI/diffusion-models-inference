@@ -593,7 +593,11 @@ class TestSystem(unittest.TestCase):
             bulk_bench.successful_runs = {}
             bulk_bench.unsuccessful_runs = {}
 
-            bulk_bench._runAllConfigs("changes")
+            with patch(
+                "bulkbench.bulkbench.monotonic",
+                side_effect=(1.0, 2.0, 3.0, 5.0),
+            ):
+                bulk_bench._runAllConfigs("changes")
 
             self.assertEqual(
                 bulk_bench._runConfig.call_args_list,
@@ -604,7 +608,7 @@ class TestSystem(unittest.TestCase):
             )
             self.assertEqual(
                 bulk_bench.successful_runs,
-                {"changes": ["first", "second"]},
+                {"changes": [("first", 1.0), ("second", 2.0)]},
             )
             self.assertEqual(
                 bulk_bench.unsuccessful_runs,
@@ -613,7 +617,7 @@ class TestSystem(unittest.TestCase):
 
     def test_run_all_configs_records_expected_and_unexpected_failures(self):
         with TemporaryDirectory() as project_dir_value:
-            bulk_bench, _ = self._make_config_runner_bulk_bench(
+            bulk_bench, console = self._make_config_runner_bulk_bench(
                 Path(project_dir_value),
                 (
                     "- name: successful\n"
@@ -639,18 +643,43 @@ class TestSystem(unittest.TestCase):
             bulk_bench.successful_runs = {}
             bulk_bench.unsuccessful_runs = {}
 
-            bulk_bench._runAllConfigs("changes")
+            with patch(
+                "bulkbench.bulkbench.monotonic",
+                side_effect=(
+                    0.0,
+                    1.25,
+                    10.0,
+                    176_533.4,
+                    176_540.0,
+                    176_540.1,
+                ),
+            ):
+                bulk_bench._runAllConfigs("changes")
 
             self.assertEqual(
                 bulk_bench.successful_runs,
-                {"changes": ["successful"]},
+                {"changes": [("successful", 1.25)]},
             )
             failures = bulk_bench.unsuccessful_runs["changes"]
-            self.assertIs(failures["process_failure"], process_result)
-            unexpected_result = failures["unexpected_failure"]
+            stored_process_result, process_duration = failures["process_failure"]
+            self.assertIs(stored_process_result, process_result)
+            self.assertAlmostEqual(process_duration, 49 * 60 * 60 + 2 * 60 + 3.4)
+            unexpected_result, unexpected_duration = failures["unexpected_failure"]
             self.assertEqual(unexpected_result.config_name, "unexpected_failure")
             self.assertIsNone(unexpected_result.returncode)
             self.assertIn("ValueError: invalid runtime state", unexpected_result.output)
+            self.assertAlmostEqual(unexpected_duration, 0.1)
+            console.info.assert_any_call(
+                "Config 'successful' succeeded with --tag=gfx942 in 00:00:01.3"
+            )
+            console.error.assert_any_call(
+                "Patch set 'changes', config group 'process_failure' "
+                "(cfg2) failed in 49:02:03.4."
+            )
+            console.error.assert_any_call(
+                "[UNEXPECTED ERROR] Patch set 'changes', config group "
+                "'unexpected_failure' (cfg3) failed in 00:00:00.1."
+            )
             self.assertEqual(bulk_bench._runConfig.call_count, 3)
 
     def test_run_all_configs_does_not_catch_keyboard_interrupt(self):
