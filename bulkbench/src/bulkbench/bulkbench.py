@@ -5,10 +5,10 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import traceback
 import yaml  # pyright: ignore[reportMissingModuleSource]
 
+from .script_runner import run_with_script
 from benchstats.common import LoggingConsole
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -69,8 +69,7 @@ class ConfigRunResult:
     """Captured outcome of one benchmark config-group process."""
 
     config_name: str
-    stdout: str
-    stderr: str
+    output: str
     returncode: int | None
 
 
@@ -704,9 +703,9 @@ class BulkBench:
     ) -> None:
         self.Con.error(
             f"{err_pfx}Patch set '{patch_set_name}', config group '{rr.config_name}' "
-            f"({', '.join(self.configs[rr.config_name]['configs'])}) failed.\nStderr:\n{rr.stderr}"
+            f"({', '.join(self.configs[rr.config_name]['configs'])}) failed."
         )
-        self.Con.debug(f"Return code: {rr.returncode}. Stdout:\n{rr.stdout}")
+        self.Con.debug(f"Return code: {rr.returncode}")
 
     def _runAllConfigs(self, patch_set_name: str) -> None:
         """Runs every config group and records its outcome for the patch set."""
@@ -723,8 +722,7 @@ class BulkBench:
             except Exception as exc:  # noqa: BLE001 - one config must not stop the remaining runs
                 exc_result = ConfigRunResult(
                     config_name=cfg["name"],
-                    stdout="",
-                    stderr="".join(traceback.format_exception(exc)),
+                    output="".join(traceback.format_exception(exc)),
                     returncode=None,
                 )
                 unsuccessful[cfg["name"]] = exc_result
@@ -766,44 +764,32 @@ class BulkBench:
         args.extend(str(path) for path in benchmark_configs)
         self.Con.trace(f"Running command: {' '.join(args)}")
 
-        try:        
-            try:
-                completed = subprocess.run(
-                    args,
-                    capture_output=True,
-                    check=False,
-                    cwd=str(_APP_DIR),
-                    shell=False,
-                    text=True,
+        try:
+            completed = run_with_script(args, cwd=_APP_DIR)
+        except KeyboardInterrupt as exc:
+            self.Con.warning(
+                "Caught KeyboardInterrupt. If you want to abort BulkBench too, hit Ctrl-C again."
+            )
+            raise ConfigRunError(
+                ConfigRunResult(
+                    config_name=cfg["name"],
+                    output="User interrupted!",
+                    returncode=None,
                 )
-            except KeyboardInterrupt:
-                self.Con.warning("Caught KeyboardInterrupt. If you want to abort BulkBench too, hit Ctrl-C again.")
-                completed = subprocess.CompletedProcess(args, None, "", "User interrupted!")
-
+            ) from exc
         except OSError as exc:
             result = ConfigRunResult(
                 config_name=cfg["name"],
-                stdout="",
-                stderr=str(exc),
+                output=str(exc),
                 returncode=None,
             )
             raise ConfigRunError(result) from exc
-
-        if (show_headers:=(bool(completed.stdout) or bool(completed.stderr))):
-            self._Con_end(LoggingConsole.LogLevel.Trace)
-        if completed.stdout:
-            self.Con.trace(f"\nConfig '{cfg['name']}' stdout:\n{completed.stdout}")
-        if completed.stderr:
-            self.Con.trace(f"\nConfig '{cfg['name']}' stderr:\n{completed.stderr}")
-        if show_headers:
-            self._Con_begin(LoggingConsole.LogLevel.Trace)
 
         if completed.returncode != 0:
             raise ConfigRunError(
                 ConfigRunResult(
                     config_name=cfg["name"],
-                    stdout=completed.stdout,
-                    stderr=completed.stderr,
+                    output=completed.output,
                     returncode=completed.returncode,
                 )
             )

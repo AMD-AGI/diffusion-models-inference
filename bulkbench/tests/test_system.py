@@ -6,6 +6,7 @@ import sys
 import unittest
 
 from bulkbench import BulkBench, ConfigRunError, ConfigRunResult
+from bulkbench.script_runner import ScriptRunResult
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, call, patch
@@ -472,15 +473,14 @@ class TestSystem(unittest.TestCase):
                     "    iterations: 5\n"
                 ),
             )
-            completed = subprocess.CompletedProcess(
-                args=[],
+            completed = ScriptRunResult(
+                args=(),
                 returncode=0,
-                stdout="benchmark output",
-                stderr="benchmark warning",
+                output="benchmark output\nbenchmark warning",
             )
 
             with patch(
-                "bulkbench.bulkbench.subprocess.run",
+                "bulkbench.bulkbench.run_with_script",
                 return_value=completed,
             ) as run_process:
                 bulk_bench._runConfig("changes", bulk_bench.configs["group"])
@@ -506,17 +506,13 @@ class TestSystem(unittest.TestCase):
                     str(self.benchmark_configs_dir / "cfg.yaml"),
                     str(self.benchmark_configs_dir / "cfg2.yaml"),
                 ],
-                capture_output=True,
-                check=False,
-                cwd="/app",
-                shell=False,
-                text=True,
+                cwd=Path("/app"),
             )
-            console.trace.assert_has_calls(
-                [
-                    call("\nConfig 'group' stdout:\nbenchmark output"),
-                    call("\nConfig 'group' stderr:\nbenchmark warning"),
-                ]
+            self.assertFalse(
+                any(
+                    "benchmark output" in trace_call.args[0]
+                    for trace_call in console.trace.call_args_list
+                )
             )
 
     def test_run_config_raises_with_captured_nonzero_result(self):
@@ -527,16 +523,15 @@ class TestSystem(unittest.TestCase):
                 "- name: group\n  configs: [cfg]\n",
                 arch="",
             )
-            completed = subprocess.CompletedProcess(
-                args=[],
+            completed = ScriptRunResult(
+                args=(),
                 returncode=7,
-                stdout="partial output",
-                stderr="runner failed",
+                output="partial output\nrunner failed",
             )
 
             with (
                 patch(
-                    "bulkbench.bulkbench.subprocess.run",
+                    "bulkbench.bulkbench.run_with_script",
                     return_value=completed,
                 ) as run_process,
                 self.assertRaises(ConfigRunError) as context,
@@ -547,8 +542,7 @@ class TestSystem(unittest.TestCase):
                 context.exception.result,
                 ConfigRunResult(
                     config_name="group",
-                    stdout="partial output",
-                    stderr="runner failed",
+                    output="partial output\nrunner failed",
                     returncode=7,
                 ),
             )
@@ -567,7 +561,7 @@ class TestSystem(unittest.TestCase):
 
             with (
                 patch(
-                    "bulkbench.bulkbench.subprocess.run",
+                    "bulkbench.bulkbench.run_with_script",
                     side_effect=failure,
                 ),
                 self.assertRaises(ConfigRunError) as context,
@@ -579,8 +573,7 @@ class TestSystem(unittest.TestCase):
                 context.exception.result,
                 ConfigRunResult(
                     config_name="group",
-                    stdout="",
-                    stderr="python isn't executable",
+                    output="python isn't executable",
                     returncode=None,
                 ),
             )
@@ -633,8 +626,7 @@ class TestSystem(unittest.TestCase):
             )
             process_result = ConfigRunResult(
                 config_name="process_failure",
-                stdout="partial output",
-                stderr="runner failed",
+                output="partial output\nrunner failed",
                 returncode=3,
             )
             bulk_bench._runConfig = Mock(
@@ -657,9 +649,8 @@ class TestSystem(unittest.TestCase):
             self.assertIs(failures["process_failure"], process_result)
             unexpected_result = failures["unexpected_failure"]
             self.assertEqual(unexpected_result.config_name, "unexpected_failure")
-            self.assertEqual(unexpected_result.stdout, "")
             self.assertIsNone(unexpected_result.returncode)
-            self.assertIn("ValueError: invalid runtime state", unexpected_result.stderr)
+            self.assertIn("ValueError: invalid runtime state", unexpected_result.output)
             self.assertEqual(bulk_bench._runConfig.call_count, 3)
 
     def test_run_all_configs_does_not_catch_keyboard_interrupt(self):
@@ -689,8 +680,7 @@ class TestSystem(unittest.TestCase):
                 "old": {
                     "group": ConfigRunResult(
                         config_name="group",
-                        stdout="",
-                        stderr="old failure",
+                        output="old failure",
                         returncode=1,
                     )
                 }
