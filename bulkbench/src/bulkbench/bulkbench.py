@@ -10,6 +10,7 @@ import yaml  # pyright: ignore[reportMissingModuleSource]
 from benchstats.common import LoggingConsole
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypedDict
 from yaml.constructor import ConstructorError  # pyright: ignore[reportMissingModuleSource]
@@ -23,6 +24,9 @@ DEFAULT_PATCHES_FILE = "patches.yaml"
 VALID_NAME_PATTERN = r"[-a-zA-Z0-9_+={}., ~!()\[\]]+"
 
 _VALID_NAME_RE = re.compile(VALID_NAME_PATTERN)
+_APP_DIR = Path("/app")
+_BENCHMARK_CONFIGS_DIR = _APP_DIR / ".ci" / "benchmark_configs"
+_BENCHMARK_RUNNER = _APP_DIR / ".ci" / "run.py"
 
 StrPath = str | os.PathLike[str]
 
@@ -55,6 +59,29 @@ class TargetBackup(TypedDict):
     backup: Path
     path_file: Path
     target: Path
+
+
+@dataclass(frozen=True)
+class ConfigRunResult:
+    """Captured outcome of one benchmark config-group process."""
+
+    config_name: str
+    stdout: str
+    stderr: str
+    returncode: int | None
+
+
+class ConfigRunError(RuntimeError):
+    """Raised when a benchmark config-group process fails."""
+
+    def __init__(self, result: ConfigRunResult) -> None:
+        self.result = result
+        status = (
+            f"exit status {result.returncode}"
+            if result.returncode is not None
+            else "process start failure"
+        )
+        super().__init__(f"benchmark config group {result.config_name!r} failed: {status}")
 
 
 class _UniqueKeySafeLoader(yaml.SafeLoader):
@@ -278,6 +305,26 @@ class BulkBench:
             )
         return name
 
+    @staticmethod
+    def _benchmarkConfigPath(config_name: str, config_context: str) -> Path:
+        """Builds a benchmark YAML path from a validated config name."""
+        stem = config_name.partition(".")[0]
+        if not stem or stem in (".", "..") or _VALID_NAME_RE.fullmatch(stem) is None:
+            raise ValueError(
+                f"{config_context} prefix before the first dot must match "
+                f"{VALID_NAME_PATTERN!r} and must not be '.' or '..'"
+            )
+        return _BENCHMARK_CONFIGS_DIR / f"{stem}.yaml"
+
+    def _validateBenchmarkConfigPath(self, config_name: str, config_context: str) -> None:
+        """Checks that a config's benchmark YAML exists."""
+        path = self._benchmarkConfigPath(config_name, config_context)
+        if not path.is_file():
+            raise ValueError(
+                f"{config_context} requires benchmark config file '{path}', "
+                "which doesn't exist or isn't a file"
+            )
+
     def _readConfigs(self, configs_file_value: StrPath | None) -> dict[str, ConfigGroup]:
         """Reads and validates benchmark config groups from a YAML file."""
         configs_file = self._validatedConfigsFile(configs_file_value)
@@ -330,11 +377,10 @@ class BulkBench:
 
             seen_configs: set[str] = set()
             for config_index, config in enumerate(group_configs, start=1):
+                config_context = f"{group_context} attribute 'configs', item {config_index}"
                 if not isinstance(config, str) or not (config := config.strip()):
-                    raise ValueError(
-                        f"{group_context} attribute 'configs', item {config_index} "
-                        "must be a non-empty string"
-                    )
+                    raise ValueError(f"{config_context} must be a non-empty string")
+                self._validateBenchmarkConfigPath(config, config_context)
                 if config in seen_configs:
                     raise ValueError(f"{group_context} contains duplicate config name {config!r}")
                 seen_configs.add(config)
@@ -623,9 +669,68 @@ class BulkBench:
         """Executes the whole benchmarking pipeline. Returns the process exit code."""
         for patch_set in self.patches:
             with self._appliedPatchSet(patch_set):
-                self._runAllConfigs()
+                self._runAllConfigs(patch_set["name"])
         return 0
 
-    def _runAllConfigs(self):
-        self.Con.debug("Running all configs")
-        args = ["python", "/app/.ci/run.py"]
+    def _runAllConfigs(self, patch_set_name: str) -> None:
+        """Runs every config group for the applied patch set."""
+        self.Con.debug(f"Running all configs for patch set {patch_set_name}")
+        for cfg in self.configs.values():
+            self._runConfig(patch_set_name, cfg)
+
+    def _runConfig(self, patch_set_name: str, cfg: ConfigGroup) -> None:
+        """Runs one config group and raises ConfigRunError on process failure."""
+        self.Con.debug(f"Running '{cfg['name']}' config for patch set {patch_set_name}")
+        workdir = self.results_dir / patch_set_name
+        workdir.mkdir(parents=True, exist_ok=True)
+
+        args = ["python", str(_BENCHMARK_RUNNER)]
+        for config_name in cfg["configs"]:
+            args.extend(("--name", config_name))
+        if cfg["override_args"] is not None:
+            args.extend(("--override-args-json", cfg["override_args"]))
+        if self.arch:
+            args.extend(("--tag", self.arch))
+        args.extend(("--results-directory", str(workdir)))
+
+        benchmark_configs = dict.fromkeys(
+            self._benchmarkConfigPath(
+                config_name,
+                f"config group {cfg['name']!r}, config {config_name!r}",
+            )
+            for config_name in cfg["configs"]
+        )
+        args.extend(str(path) for path in benchmark_configs)
+
+        try:
+            completed = subprocess.run(
+                args,
+                capture_output=True,
+                check=False,
+                cwd=str(_APP_DIR),
+                shell=False,
+                text=True,
+            )
+        except OSError as exc:
+            result = ConfigRunResult(
+                config_name=cfg["name"],
+                stdout="",
+                stderr=str(exc),
+                returncode=None,
+            )
+            raise ConfigRunError(result) from exc
+
+        if completed.stdout:
+            self.Con.trace(f"\n{cfg['name']} stdout:\n{completed.stdout}")
+        if completed.stderr:
+            self.Con.trace(f"\n{cfg['name']} stderr:\n{completed.stderr}")
+
+        if completed.returncode != 0:
+            raise ConfigRunError(
+                ConfigRunResult(
+                    config_name=cfg["name"],
+                    stdout=completed.stdout,
+                    stderr=completed.stderr,
+                    returncode=completed.returncode,
+                )
+            )

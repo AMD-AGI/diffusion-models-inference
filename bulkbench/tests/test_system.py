@@ -5,13 +5,30 @@ import subprocess
 import sys
 import unittest
 
-from bulkbench import BulkBench
+from bulkbench import BulkBench, ConfigRunError, ConfigRunResult
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 
 class TestSystem(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._benchmark_configs_temp = TemporaryDirectory()
+        cls.benchmark_configs_dir = Path(cls._benchmark_configs_temp.name)
+        for stem in ("cfg", "cfg1", "cfg2", "cfg3", "cfg4"):
+            (cls.benchmark_configs_dir / f"{stem}.yaml").touch()
+        cls._benchmark_configs_patch = patch(
+            "bulkbench.bulkbench._BENCHMARK_CONFIGS_DIR",
+            cls.benchmark_configs_dir,
+        )
+        cls._benchmark_configs_patch.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._benchmark_configs_patch.stop()
+        cls._benchmark_configs_temp.cleanup()
+
     def test_configs_file(self):
         project_dir = Path(__file__).parent / "proj0"
         with TemporaryDirectory() as output_dir:
@@ -172,6 +189,32 @@ class TestSystem(unittest.TestCase):
 
     def test_malformed_yaml_is_reported_as_value_error(self):
         self.assertInvalidConfigs("- name: [", "failed to read configs_file")
+
+    def test_config_prefix_selects_an_existing_benchmark_yaml(self):
+        bulk_bench = self._read_configs(
+            "- name: group\n  configs: [cfg.variant, cfg2]\n"
+        )
+        self.assertEqual(
+            bulk_bench.configs["group"]["configs"],
+            ["cfg.variant", "cfg2"],
+        )
+
+    def test_invalid_config_prefix_is_rejected(self):
+        for config_name in (".variant", "has/slash.variant", "has:colon.variant"):
+            with self.subTest(config_name=config_name):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [{config_name!r}]\n",
+                    "prefix before the first dot must match",
+                )
+
+    def test_benchmark_yaml_must_be_a_file(self):
+        (self.benchmark_configs_dir / "directory.yaml").mkdir()
+        for config_name in ("missing.variant", "directory.variant"):
+            with self.subTest(config_name=config_name):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [{config_name}]\n",
+                    "doesn't exist or isn't a file",
+                )
 
     def _read_patches(self, contents: str, files: tuple[str, ...] = ()) -> BulkBench:
         with TemporaryDirectory() as project_dir_value:
@@ -381,6 +424,178 @@ class TestSystem(unittest.TestCase):
             "contains duplicate patch set name 'group'",
         )
 
+    def _make_config_runner_bulk_bench(
+        self,
+        project_dir: Path,
+        configs: str,
+        *,
+        arch: str = "gfx942",
+    ) -> tuple[BulkBench, Mock]:
+        (project_dir / "configs.yaml").write_text(configs, encoding="utf-8")
+        (project_dir / "patches.yaml").write_text(
+            "- name: baseline\n  patches: []\n",
+            encoding="utf-8",
+        )
+        bulk_bench = BulkBench(
+            project_dir=project_dir,
+            results_dir=project_dir / "results",
+            report_dir=project_dir / "report",
+            backup_dir=project_dir / "backups",
+            arch=arch,
+        )
+        console = Mock()
+        bulk_bench.Con = console
+        return bulk_bench, console
+
+    def test_run_config_builds_command_and_logs_output(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, console = self._make_config_runner_bulk_bench(
+                project_dir,
+                (
+                    "- name: group\n"
+                    "  configs: [cfg.first, cfg.second, cfg2]\n"
+                    "  override_args:\n"
+                    "    iterations: 5\n"
+                ),
+            )
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="benchmark output",
+                stderr="benchmark warning",
+            )
+
+            with patch(
+                "bulkbench.bulkbench.subprocess.run",
+                return_value=completed,
+            ) as run_process:
+                bulk_bench._runConfig("changes", bulk_bench.configs["group"])
+
+            workdir = project_dir / "results" / "changes"
+            self.assertTrue(workdir.is_dir())
+            run_process.assert_called_once_with(
+                [
+                    "python",
+                    "/app/.ci/run.py",
+                    "--name",
+                    "cfg.first",
+                    "--name",
+                    "cfg.second",
+                    "--name",
+                    "cfg2",
+                    "--override-args-json",
+                    '{"iterations":5}',
+                    "--tag",
+                    "gfx942",
+                    "--results-directory",
+                    str(workdir),
+                    str(self.benchmark_configs_dir / "cfg.yaml"),
+                    str(self.benchmark_configs_dir / "cfg2.yaml"),
+                ],
+                capture_output=True,
+                check=False,
+                cwd="/app",
+                shell=False,
+                text=True,
+            )
+            self.assertEqual(
+                console.trace.call_args_list,
+                [
+                    call("\ngroup stdout:\nbenchmark output"),
+                    call("\ngroup stderr:\nbenchmark warning"),
+                ],
+            )
+
+    def test_run_config_raises_with_captured_nonzero_result(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+                arch="",
+            )
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=7,
+                stdout="partial output",
+                stderr="runner failed",
+            )
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.subprocess.run",
+                    return_value=completed,
+                ) as run_process,
+                self.assertRaises(ConfigRunError) as context,
+            ):
+                bulk_bench._runConfig("baseline", bulk_bench.configs["group"])
+
+            self.assertEqual(
+                context.exception.result,
+                ConfigRunResult(
+                    config_name="group",
+                    stdout="partial output",
+                    stderr="runner failed",
+                    returncode=7,
+                ),
+            )
+            command = run_process.call_args.args[0]
+            self.assertNotIn("--tag", command)
+            self.assertNotIn("--override-args-json", command)
+
+    def test_run_config_raises_with_process_start_failure(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+            )
+            failure = OSError("python isn't executable")
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.subprocess.run",
+                    side_effect=failure,
+                ),
+                self.assertRaises(ConfigRunError) as context,
+            ):
+                bulk_bench._runConfig("baseline", bulk_bench.configs["group"])
+
+            self.assertIs(context.exception.__cause__, failure)
+            self.assertEqual(
+                context.exception.result,
+                ConfigRunResult(
+                    config_name="group",
+                    stdout="",
+                    stderr="python isn't executable",
+                    returncode=None,
+                ),
+            )
+
+    def test_run_all_configs_preserves_group_order(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                (
+                    "- name: first\n"
+                    "  configs: [cfg]\n"
+                    "- name: second\n"
+                    "  configs: [cfg2]\n"
+                ),
+            )
+            bulk_bench._runConfig = Mock()
+
+            bulk_bench._runAllConfigs("changes")
+
+            self.assertEqual(
+                bulk_bench._runConfig.call_args_list,
+                [
+                    call("changes", bulk_bench.configs["first"]),
+                    call("changes", bulk_bench.configs["second"]),
+                ],
+            )
+
     def _make_runnable_bulk_bench(
         self,
         project_dir: Path,
@@ -465,7 +680,7 @@ class TestSystem(unittest.TestCase):
             )
             invocation = 0
 
-            def run_all_configs():
+            def run_all_configs(_patch_set_name):
                 nonlocal invocation
                 expected = (
                     (patched[0], originals[1]) if invocation == 0 else patched
@@ -662,7 +877,7 @@ class TestSystem(unittest.TestCase):
                     ["patch", "--batch", str(targets[1]), str(patch_paths[1])],
                 ],
             )
-            bulk_bench._runAllConfigs.assert_called_once_with()
+            bulk_bench._runAllConfigs.assert_called_once_with("changes")
             self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
 
     def test_dry_run_failure_prevents_backups_patching_and_benchmarks(self):
@@ -703,7 +918,7 @@ class TestSystem(unittest.TestCase):
             bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
             original_contents = [target.read_text(encoding="utf-8") for target in targets]
 
-            def run_all_configs():
+            def run_all_configs(_patch_set_name):
                 self.assertEqual(
                     {path.name for path in bulk_bench.backup_dir.iterdir()},
                     {"00000", "00000.path", "00001", "00001.path"},
@@ -732,7 +947,7 @@ class TestSystem(unittest.TestCase):
             original_contents = [target.read_text(encoding="utf-8") for target in targets]
             primary_error = RuntimeError("run failed")
 
-            def run_all_configs():
+            def run_all_configs(_patch_set_name):
                 targets[0].write_text("modified", encoding="utf-8")
                 raise primary_error
 
@@ -775,7 +990,7 @@ class TestSystem(unittest.TestCase):
             bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
             primary_error = RuntimeError("run failed")
 
-            def run_all_configs():
+            def run_all_configs(_patch_set_name):
                 targets[0].write_text("modified", encoding="utf-8")
                 raise primary_error
 
