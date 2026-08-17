@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import traceback
 import yaml  # pyright: ignore[reportMissingModuleSource]
 
 from benchstats.common import LoggingConsole
@@ -171,6 +172,9 @@ class BulkBench:
         self.Con.debug(
             f"Using arch tag = {self.arch}" if self.arch else "Arch is not set, tags won't be used"
         )
+
+        self.successful_runs: dict[str, list[str]] = {}
+        self.unsuccessful_runs: dict[str, dict[str, ConfigRunResult]] = {}
 
         self.project_dir: Path = self._validatedProjectDir(_get_arg("project_dir"))
         self.configs: dict[str, ConfigGroup] = self._readConfigs(_get_arg("configs_file"))
@@ -673,16 +677,48 @@ class BulkBench:
 
     def run(self) -> int:
         """Executes the whole benchmarking pipeline. Returns the process exit code."""
+        self.successful_runs: dict[str, list[str]] = {}
+        self.unsuccessful_runs: dict[str, dict[str, ConfigRunResult]] = {}
         for patch_set in self.patches:
             with self._appliedPatchSet(patch_set):
                 self._runAllConfigs(patch_set["name"])
         return 0
 
+    def _logConfigRunError(
+        self, patch_set_name: str, rr: ConfigRunResult, err_pfx: str = ""
+    ) -> None:
+        self.Con.error(
+            f"{err_pfx}Patch set '{patch_set_name}', config '{rr.config_name}' failed. Stderr:\n{rr.stderr}"
+        )
+        self.Con.debug(f"Return code: {rr.returncode}. Stdout:\n{rr.stdout}")
+
     def _runAllConfigs(self, patch_set_name: str) -> None:
-        """Runs every config group for the applied patch set."""
-        self.Con.debug(f"Running all configs for patch set {patch_set_name}")
+        """Runs every config group and records its outcome for the patch set."""
+        self.Con.info(f"Running all configs for patch set {patch_set_name}")
+        successful: list[str] = []
+        unsuccessful: dict[str, ConfigRunResult] = {}
         for cfg in self.configs.values():
-            self._runConfig(patch_set_name, cfg)
+            try:
+                self._runConfig(patch_set_name, cfg)
+            except ConfigRunError as exc:
+                unsuccessful[cfg["name"]] = exc.result
+                self._logConfigRunError(patch_set_name, exc.result)
+
+            except Exception as exc:  # noqa: BLE001 - one config must not stop the remaining runs
+                exc_result = ConfigRunResult(
+                    config_name=cfg["name"],
+                    stdout="",
+                    stderr="".join(traceback.format_exception(exc)),
+                    returncode=None,
+                )
+                unsuccessful[cfg["name"]] = exc_result
+                self._logConfigRunError(patch_set_name, exc_result, "[UNEXPECTED ERROR] ")
+            else:
+                successful.append(cfg["name"])
+                self.Con.info(f"Config {cfg['name']} succeeded")
+
+        self.successful_runs[patch_set_name] = successful
+        self.unsuccessful_runs[patch_set_name] = unsuccessful
 
     def _runConfig(self, patch_set_name: str, cfg: ConfigGroup) -> None:
         """Runs one config group and raises ConfigRunError on process failure."""

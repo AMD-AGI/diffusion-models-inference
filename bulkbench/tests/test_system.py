@@ -585,6 +585,8 @@ class TestSystem(unittest.TestCase):
                 ),
             )
             bulk_bench._runConfig = Mock()
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
 
             bulk_bench._runAllConfigs("changes")
 
@@ -595,6 +597,101 @@ class TestSystem(unittest.TestCase):
                     call("changes", bulk_bench.configs["second"]),
                 ],
             )
+            self.assertEqual(
+                bulk_bench.successful_runs,
+                {"changes": ["first", "second"]},
+            )
+            self.assertEqual(
+                bulk_bench.unsuccessful_runs,
+                {"changes": {}},
+            )
+
+    def test_run_all_configs_records_expected_and_unexpected_failures(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                (
+                    "- name: successful\n"
+                    "  configs: [cfg]\n"
+                    "- name: process_failure\n"
+                    "  configs: [cfg2]\n"
+                    "- name: unexpected_failure\n"
+                    "  configs: [cfg3]\n"
+                ),
+            )
+            process_result = ConfigRunResult(
+                config_name="process_failure",
+                stdout="partial output",
+                stderr="runner failed",
+                returncode=3,
+            )
+            bulk_bench._runConfig = Mock(
+                side_effect=(
+                    None,
+                    ConfigRunError(process_result),
+                    ValueError("invalid runtime state"),
+                )
+            )
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
+
+            bulk_bench._runAllConfigs("changes")
+
+            self.assertEqual(
+                bulk_bench.successful_runs,
+                {"changes": ["successful"]},
+            )
+            failures = bulk_bench.unsuccessful_runs["changes"]
+            self.assertIs(failures["process_failure"], process_result)
+            unexpected_result = failures["unexpected_failure"]
+            self.assertEqual(unexpected_result.config_name, "unexpected_failure")
+            self.assertEqual(unexpected_result.stdout, "")
+            self.assertIsNone(unexpected_result.returncode)
+            self.assertIn("ValueError: invalid runtime state", unexpected_result.stderr)
+            self.assertEqual(bulk_bench._runConfig.call_count, 3)
+
+    def test_run_all_configs_does_not_catch_keyboard_interrupt(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                "- name: group\n  configs: [cfg]\n",
+            )
+            bulk_bench._runConfig = Mock(side_effect=KeyboardInterrupt)
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
+
+            with self.assertRaises(KeyboardInterrupt):
+                bulk_bench._runAllConfigs("changes")
+
+            self.assertNotIn("changes", bulk_bench.successful_runs)
+            self.assertNotIn("changes", bulk_bench.unsuccessful_runs)
+
+    def test_run_reinitializes_result_dictionaries(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                "- name: group\n  configs: [cfg]\n",
+            )
+            bulk_bench.successful_runs = {"old": ["group"]}
+            bulk_bench.unsuccessful_runs = {
+                "old": {
+                    "group": ConfigRunResult(
+                        config_name="group",
+                        stdout="",
+                        stderr="old failure",
+                        returncode=1,
+                    )
+                }
+            }
+
+            def verify_reset(_patch_set_name):
+                self.assertEqual(bulk_bench.successful_runs, {})
+                self.assertEqual(bulk_bench.unsuccessful_runs, {})
+
+            bulk_bench._runAllConfigs = Mock(side_effect=verify_reset)
+
+            self.assertEqual(bulk_bench.run(), 0)
+            bulk_bench._runAllConfigs.assert_called_once_with("baseline")
 
     def _make_runnable_bulk_bench(
         self,
