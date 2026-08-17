@@ -28,8 +28,8 @@ def makeParser() -> argparse.ArgumentParser:
         choices=[level.value for level in LoggingConsole.LogLevel],
         type=int,
         help="Set the logging level for the console output verbosity (as an integer).\nValid values are: "
-        + ", ".join([ f"{level.value} ({level.name})" for level in LoggingConsole.LogLevel]) +
-        ".\nDefaults to `%(default)s`.",
+        + ", ".join([f"{level.value} ({level.name})" for level in LoggingConsole.LogLevel])
+        + ".\nDefaults to `%(default)s`.",
     )
     parser.add_argument(
         "--project_dir",

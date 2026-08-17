@@ -56,9 +56,7 @@ class TestScriptRunner(unittest.TestCase):
         with TemporaryDirectory() as cwd:
             argument = "value with spaces; $(not-a-command)"
             code = (
-                "import os, sys\n"
-                "print(os.getcwd(), flush=True)\n"
-                "print(sys.argv[1], flush=True)\n"
+                "import os, sys\nprint(os.getcwd(), flush=True)\nprint(sys.argv[1], flush=True)\n"
             )
 
             result = run_with_script(

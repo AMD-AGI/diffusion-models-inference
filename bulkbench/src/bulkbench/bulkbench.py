@@ -40,8 +40,7 @@ def _configMightHaveRunSuccessfully(workdir: Path, config_name: str) -> bool:
     """Checks whether a config's direct result files indicate a successful prior run."""
     config_dir = workdir / config_name
     return (config_dir / "timings.json").is_file() and any(
-        child.is_file() and child.suffix in _RESULT_MEDIA_SUFFIXES
-        for child in config_dir.iterdir()
+        child.is_file() and child.suffix in _RESULT_MEDIA_SUFFIXES for child in config_dir.iterdir()
     )
 
 
@@ -764,14 +763,15 @@ class BulkBench:
     def _logConfigRunError(
         self,
         patch_set_name: str,
+        configs_to_run: list[str],
         rr: ConfigRunResult,
         duration: float,
         err_pfx: str = "",
     ) -> None:
         self.Con.error(
-            f"{err_pfx}Patch set '{patch_set_name}', config group '{rr.config_name}' "
-            f"({', '.join(self.configs[rr.config_name]['configs'])}) failed in "
-            f"{_formatDuration(duration)}."
+            f"{err_pfx}Config group '{rr.config_name}' "
+            f"(individual configs:{', '.join(configs_to_run)}) "
+            f"on patch set '{patch_set_name}' failed in {_formatDuration(duration)}."
         )
         self.Con.debug(f"Return code: {rr.returncode}")
 
@@ -781,62 +781,88 @@ class BulkBench:
         successful: list[tuple[str, float]] = []
         unsuccessful: dict[str, tuple[ConfigRunResult, float]] = {}
         for cfg in self.configs.values():
+            cfg_name = cfg["name"]
+            configs_to_run: list[str] = []
             started = monotonic()
             try:
                 try:
-                    self._runConfig(patch_set_name, cfg)
+                    workdir = self.results_dir / patch_set_name / cfg_name
+                    for config_name in cfg["configs"]:
+                        if self.append_results and _configMightHaveRunSuccessfully(
+                            workdir, config_name
+                        ):
+                            self.Con.info(
+                                f"Skipping config '{config_name}' in config group "
+                                f"'{cfg_name}' for patch set '{patch_set_name}': "
+                                "its existing results might be successful"
+                            )
+                        else:
+                            configs_to_run.append(config_name)
+
+                    if configs_to_run:
+                        self._runConfig(
+                            patch_set_name,
+                            workdir,
+                            cfg_name,
+                            configs_to_run,
+                            cfg["override_args"],
+                        )
+                    else:
+                        self.Con.info(
+                            f"All configs in config group '{cfg_name}' for patch set "
+                            f"'{patch_set_name}' might already have run successfully; "
+                            "treating the config group as successful"
+                        )
                 finally:
                     duration = monotonic() - started
             except ConfigRunError as exc:
-                unsuccessful[cfg["name"]] = (exc.result, duration)
-                self._logConfigRunError(patch_set_name, exc.result, duration)
+                unsuccessful[cfg_name] = (exc.result, duration)
+                self._logConfigRunError(patch_set_name, configs_to_run, exc.result, duration)
 
             except Exception as exc:  # noqa: BLE001 - one config must not stop the remaining runs
                 exc_result = ConfigRunResult(
-                    config_name=cfg["name"],
+                    config_name=cfg_name,
                     output="".join(traceback.format_exception(exc)),
                     returncode=None,
                 )
-                unsuccessful[cfg["name"]] = (exc_result, duration)
-                self._logConfigRunError(patch_set_name, exc_result, duration, "[UNEXPECTED ERROR] ")
+                unsuccessful[cfg_name] = (exc_result, duration)
+                self._logConfigRunError(
+                    patch_set_name,
+                    configs_to_run,
+                    exc_result,
+                    duration,
+                    "[UNEXPECTED ERROR] ",
+                )
             else:
-                successful.append((cfg["name"], duration))
-                self.Con.info(f"Config '{cfg['name']}' succeeded in {_formatDuration(duration)}")
-                self.Con.trace(cfg)
+                successful.append((cfg_name, duration))
+                self.Con.info(
+                    f"Config '{cfg_name}' (individual configs:{', '.join(configs_to_run)}) "
+                    f"succeeded in {_formatDuration(duration)}"
+                )
 
         self.successful_runs[patch_set_name] = successful
         self.unsuccessful_runs[patch_set_name] = unsuccessful
 
-    def _runConfig(self, patch_set_name: str, cfg: ConfigGroup) -> None:
+    def _runConfig(
+        self,
+        patch_set_name: str,
+        workdir: Path,
+        cfg_name: str,
+        configs_to_run: list[str],
+        cfg_override_args: str | None,
+    ) -> None:
         """Runs one config group and raises ConfigRunError on process failure."""
-        self.Con.info(f"Running '{cfg['name']}' config group for patch set '{patch_set_name}'")
-        self.Con.trace(cfg)
-        workdir = self.results_dir / patch_set_name / cfg["name"]
+        self.Con.info(
+            f"Running '{cfg_name}' config group ({', '.join(configs_to_run)}) "
+            f"for patch set '{patch_set_name}'"
+        )
         workdir.mkdir(parents=True, exist_ok=True)
-
-        configs_to_run: list[str] = []
-        for config_name in cfg["configs"]:
-            if self.append_results and _configMightHaveRunSuccessfully(workdir, config_name):
-                self.Con.info(
-                    f"Skipping config '{config_name}' in config group '{cfg['name']}' "
-                    f"for patch set '{patch_set_name}': its existing results might be successful"
-                )
-            else:
-                configs_to_run.append(config_name)
-
-        if not configs_to_run:
-            self.Con.info(
-                f"All configs in config group '{cfg['name']}' for patch set "
-                f"'{patch_set_name}' might already have run successfully; "
-                "treating the config group as successful"
-            )
-            return
 
         args = ["python", str(_BENCHMARK_RUNNER)]
         for config_name in configs_to_run:
             args.extend(("--name", config_name))
-        if cfg["override_args"] is not None:
-            args.extend(("--override-args-json", cfg["override_args"]))
+        if cfg_override_args is not None:
+            args.extend(("--override-args-json", cfg_override_args))
         # if self.arch:
         #    args.extend(("--tag", self.arch))
         args.extend(("--results-directory", str(workdir)))
@@ -844,7 +870,7 @@ class BulkBench:
         benchmark_configs = dict.fromkeys(
             self._benchmarkConfigPath(
                 config_name,
-                f"config group {cfg['name']!r}, config {config_name!r}",
+                f"config group {cfg_name!r}, config {config_name!r}",
             )
             for config_name in configs_to_run
         )
@@ -861,7 +887,7 @@ class BulkBench:
             )
             raise ConfigRunError(
                 ConfigRunResult(
-                    config_name=cfg["name"],
+                    config_name=cfg_name,
                     output="User interrupted!",
                     returncode=None,
                 )
@@ -869,7 +895,7 @@ class BulkBench:
         except OSError as exc:
             self._Con_begin()
             result = ConfigRunResult(
-                config_name=cfg["name"],
+                config_name=cfg_name,
                 output=str(exc),
                 returncode=None,
             )
@@ -880,7 +906,7 @@ class BulkBench:
         if completed.returncode != 0:
             raise ConfigRunError(
                 ConfigRunResult(
-                    config_name=cfg["name"],
+                    config_name=cfg_name,
                     output=completed.output,
                     returncode=completed.returncode,
                 )

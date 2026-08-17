@@ -215,9 +215,7 @@ class TestSystem(unittest.TestCase):
         self.assertInvalidConfigs("- name: [", "failed to read configs_file")
 
     def test_config_prefix_selects_an_existing_benchmark_yaml(self):
-        bulk_bench = self._read_configs(
-            "- name: group\n  configs: [cfg.variant, cfg2]\n"
-        )
+        bulk_bench = self._read_configs("- name: group\n  configs: [cfg.variant, cfg2]\n")
         self.assertEqual(
             bulk_bench.configs["group"]["configs"],
             ["cfg.variant", "cfg2"],
@@ -541,9 +539,7 @@ class TestSystem(unittest.TestCase):
                 config_dir.mkdir()
                 (config_dir / "timings.json").touch()
                 (config_dir / f"result{suffix}").touch()
-                self.assertTrue(
-                    _configMightHaveRunSuccessfully(workdir, config_dir.name)
-                )
+                self.assertTrue(_configMightHaveRunSuccessfully(workdir, config_dir.name))
 
             uppercase_dir = workdir / "uppercase"
             uppercase_dir.mkdir()
@@ -561,17 +557,13 @@ class TestSystem(unittest.TestCase):
             media_directory.mkdir()
             (media_directory / "timings.json").touch()
             (media_directory / "result.jpg").mkdir()
-            self.assertFalse(
-                _configMightHaveRunSuccessfully(workdir, "media-directory")
-            )
+            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "media-directory"))
 
             timings_directory = workdir / "timings-directory"
             timings_directory.mkdir()
             (timings_directory / "timings.json").mkdir()
             (timings_directory / "result.mp4").touch()
-            self.assertFalse(
-                _configMightHaveRunSuccessfully(workdir, "timings-directory")
-            )
+            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "timings-directory"))
 
             self.assertFalse(_configMightHaveRunSuccessfully(workdir, "missing"))
 
@@ -592,14 +584,21 @@ class TestSystem(unittest.TestCase):
                 returncode=0,
                 output="benchmark output\nbenchmark warning",
             )
+            workdir = project_dir / "results" / "changes" / "group"
 
             with patch(
                 "bulkbench.bulkbench.run_with_script",
                 return_value=completed,
             ) as run_process:
-                bulk_bench._runConfig("changes", bulk_bench.configs["group"])
+                cfg = bulk_bench.configs["group"]
+                bulk_bench._runConfig(
+                    "changes",
+                    workdir,
+                    cfg["name"],
+                    cfg["configs"],
+                    cfg["override_args"],
+                )
 
-            workdir = project_dir / "results" / "changes" / "group"
             self.assertTrue(workdir.is_dir())
             run_process.assert_called_once_with(
                 [
@@ -650,7 +649,7 @@ class TestSystem(unittest.TestCase):
                 "bulkbench.bulkbench.run_with_script",
                 return_value=completed,
             ) as run_process:
-                bulk_bench._runConfig("changes", bulk_bench.configs["group"])
+                bulk_bench._runAllConfigs("changes")
 
             run_process.assert_called_once_with(
                 [
@@ -672,6 +671,14 @@ class TestSystem(unittest.TestCase):
                 "Skipping config 'cfg2' in config group 'group' for patch set "
                 "'changes': its existing results might be successful"
             )
+            self.assertTrue(
+                any(
+                    info_call.args[0].startswith(
+                        "Config 'group' (individual configs:cfg.second) succeeded in "
+                    )
+                    for info_call in console.info.call_args_list
+                )
+            )
 
     def test_run_config_append_results_treats_fully_skipped_group_as_successful(self):
         with TemporaryDirectory() as project_dir_value:
@@ -687,7 +694,7 @@ class TestSystem(unittest.TestCase):
             (config_dir / "result.png").touch()
 
             with patch("bulkbench.bulkbench.run_with_script") as run_process:
-                bulk_bench._runConfig("baseline", bulk_bench.configs["group"])
+                bulk_bench._runAllConfigs("baseline")
 
             run_process.assert_not_called()
             console.info.assert_any_call(
@@ -720,7 +727,13 @@ class TestSystem(unittest.TestCase):
                 ) as run_process,
                 self.assertRaises(ConfigRunError) as context,
             ):
-                bulk_bench._runConfig("baseline", bulk_bench.configs["group"])
+                bulk_bench._runConfig(
+                    "baseline",
+                    project_dir / "results" / "baseline" / "group",
+                    "group",
+                    ["cfg"],
+                    None,
+                )
 
             self.assertEqual(
                 context.exception.result,
@@ -750,7 +763,13 @@ class TestSystem(unittest.TestCase):
                 ),
                 self.assertRaises(ConfigRunError) as context,
             ):
-                bulk_bench._runConfig("baseline", bulk_bench.configs["group"])
+                bulk_bench._runConfig(
+                    "baseline",
+                    project_dir / "results" / "baseline" / "group",
+                    "group",
+                    ["cfg"],
+                    None,
+                )
 
             self.assertIs(context.exception.__cause__, failure)
             self.assertEqual(
@@ -766,12 +785,7 @@ class TestSystem(unittest.TestCase):
         with TemporaryDirectory() as project_dir_value:
             bulk_bench, _ = self._make_config_runner_bulk_bench(
                 Path(project_dir_value),
-                (
-                    "- name: first\n"
-                    "  configs: [cfg]\n"
-                    "- name: second\n"
-                    "  configs: [cfg2]\n"
-                ),
+                ("- name: first\n  configs: [cfg]\n- name: second\n  configs: [cfg2]\n"),
             )
             bulk_bench._runConfig = Mock()
             bulk_bench.successful_runs = {}
@@ -786,8 +800,20 @@ class TestSystem(unittest.TestCase):
             self.assertEqual(
                 bulk_bench._runConfig.call_args_list,
                 [
-                    call("changes", bulk_bench.configs["first"]),
-                    call("changes", bulk_bench.configs["second"]),
+                    call(
+                        "changes",
+                        bulk_bench.results_dir / "changes" / "first",
+                        "first",
+                        ["cfg"],
+                        None,
+                    ),
+                    call(
+                        "changes",
+                        bulk_bench.results_dir / "changes" / "second",
+                        "second",
+                        ["cfg2"],
+                        None,
+                    ),
                 ],
             )
             self.assertEqual(
@@ -801,17 +827,25 @@ class TestSystem(unittest.TestCase):
 
     def test_run_all_configs_records_expected_and_unexpected_failures(self):
         with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
             bulk_bench, console = self._make_config_runner_bulk_bench(
-                Path(project_dir_value),
+                project_dir,
                 (
                     "- name: successful\n"
                     "  configs: [cfg]\n"
                     "- name: process_failure\n"
-                    "  configs: [cfg2]\n"
+                    "  configs: [cfg.first, cfg2]\n"
                     "- name: unexpected_failure\n"
                     "  configs: [cfg3]\n"
                 ),
+                append_results=True,
             )
+            completed_config_dir = (
+                project_dir / "results" / "changes" / "process_failure" / "cfg.first"
+            )
+            completed_config_dir.mkdir(parents=True)
+            (completed_config_dir / "timings.json").touch()
+            (completed_config_dir / "result.png").touch()
             process_result = ConfigRunResult(
                 config_name="process_failure",
                 output="partial output\nrunner failed",
@@ -854,15 +888,15 @@ class TestSystem(unittest.TestCase):
             self.assertIn("ValueError: invalid runtime state", unexpected_result.output)
             self.assertAlmostEqual(unexpected_duration, 0.1)
             console.info.assert_any_call(
-                "Config 'successful' succeeded in 00:00:01.3"
+                "Config 'successful' (individual configs:cfg) succeeded in 00:00:01.3"
             )
             console.error.assert_any_call(
-                "Patch set 'changes', config group 'process_failure' "
-                "(cfg2) failed in 49:02:03.4."
+                "Config group 'process_failure' (individual configs:cfg2) "
+                "on patch set 'changes' failed in 49:02:03.4."
             )
             console.error.assert_any_call(
-                "[UNEXPECTED ERROR] Patch set 'changes', config group "
-                "'unexpected_failure' (cfg3) failed in 00:00:00.1."
+                "[UNEXPECTED ERROR] Config group 'unexpected_failure' "
+                "(individual configs:cfg3) on patch set 'changes' failed in 00:00:00.1."
             )
             self.assertEqual(bulk_bench._runConfig.call_count, 3)
 
@@ -968,9 +1002,7 @@ class TestSystem(unittest.TestCase):
             for patch_set_name in patch_set_names:
                 patch_dir = project_dir / patch_set_name
                 patch_dir.mkdir(exist_ok=True)
-                (patch_dir / f"{index}.patch").write_text(
-                    patch_contents, encoding="utf-8"
-                )
+                (patch_dir / f"{index}.patch").write_text(patch_contents, encoding="utf-8")
 
         (project_dir / "patches.yaml").write_text(
             (
@@ -993,21 +1025,16 @@ class TestSystem(unittest.TestCase):
 
     def _assert_real_patch_lifecycle(self, failure: BaseException | None) -> None:
         with TemporaryDirectory() as project_dir_value:
-            bulk_bench, targets, originals, patched = (
-                self._make_patch_integration_project(Path(project_dir_value))
+            bulk_bench, targets, originals, patched = self._make_patch_integration_project(
+                Path(project_dir_value)
             )
             invocation = 0
 
             def run_all_configs(_patch_set_name):
                 nonlocal invocation
-                expected = (
-                    (patched[0], originals[1]) if invocation == 0 else patched
-                )
+                expected = (patched[0], originals[1]) if invocation == 0 else patched
                 self.assertEqual(
-                    tuple(
-                        target.read_text(encoding="utf-8")
-                        for target in targets
-                    ),
+                    tuple(target.read_text(encoding="utf-8") for target in targets),
                     expected,
                 )
                 invocation += 1
@@ -1025,9 +1052,7 @@ class TestSystem(unittest.TestCase):
 
             self.assertEqual(bulk_bench._runAllConfigs.call_count, 2)
             self.assertEqual(
-                tuple(
-                    target.read_text(encoding="utf-8") for target in targets
-                ),
+                tuple(target.read_text(encoding="utf-8") for target in targets),
                 originals,
             )
             self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
