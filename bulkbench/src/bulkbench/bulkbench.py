@@ -617,6 +617,7 @@ class BulkBench:
 
     def _restoreAllTargets(self, backups: list[TargetBackup]) -> list[BaseException]:
         """Restores all targets and returns failures after attempting every restoration."""
+        self.Con.debug(f"Restoring all targets from {len(backups)} backups")
         restore_errors: list[BaseException] = []
         restored_backups: list[TargetBackup] = []
 
@@ -740,7 +741,7 @@ class BulkBench:
 
     def _runConfig(self, patch_set_name: str, cfg: ConfigGroup) -> None:
         """Runs one config group and raises ConfigRunError on process failure."""
-        self.Con.debug(f"Running '{cfg['name']}' config group for patch set '{patch_set_name}'")
+        self.Con.info(f"Running '{cfg['name']}' config group for patch set '{patch_set_name}'")
         self.Con.trace(cfg)
         workdir = self.results_dir / patch_set_name / cfg["name"]
         workdir.mkdir(parents=True, exist_ok=True)
