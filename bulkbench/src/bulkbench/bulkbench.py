@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import traceback
 import yaml  # pyright: ignore[reportMissingModuleSource]
 
@@ -154,16 +155,8 @@ class BulkBench:
         def _get_arg(name: str, default: Any = None) -> Any:
             return kwargs.get(name, getattr(args, name, default))
 
-        Con = _get_arg("console")
-        if Con is None:
-            Con = LoggingConsole(
-                log_level=LoggingConsole.LogLevel(
-                    _get_arg("console_log_level", DEFAULT_CONSOLE_LOG_LEVEL.value)
-                )
-            )
-        assert isinstance(Con, LoggingConsole), "console must be a LoggingConsole"
-        self.Con = Con
-        Con.trace(f"Console log level: {Con.log_level}")
+        self.Con = self._validatedConsole(_get_arg("console"), _get_arg("console_log_level"))
+        self.Con.trace(f"Console log level: {self.Con.log_level}")
 
         self.arch: str = _get_arg("arch")
         if self.arch is None:
@@ -195,6 +188,28 @@ class BulkBench:
         if any(self.backup_dir.iterdir()):
             raise ValueError(f"--backup_dir directory '{self.backup_dir}' isn't empty")
         self._validateBackupDirIsDisjoint()
+
+    @staticmethod
+    def _validatedConsole(Con: Any | None, console_log_level: int | None) -> LoggingConsole:
+        if Con is None:
+            Con = LoggingConsole(
+                log_level=LoggingConsole.LogLevel(
+                    console_log_level
+                    if isinstance(console_log_level, int) and (0 <= console_log_level <= 5)
+                    else DEFAULT_CONSOLE_LOG_LEVEL.value
+                )
+            )
+        else:
+            assert isinstance(Con, LoggingConsole), "console must be a LoggingConsole"
+        return Con
+
+    def _Con_begin(self, level: LoggingConsole.LogLevel) -> None:
+        if self.Con.will_log(level):
+            self.Con.print("[bold bright_blue]==== BulkBench >>>>>>>>[/bold bright_blue]")
+
+    def _Con_end(self, level: LoggingConsole.LogLevel) -> None:
+        if self.Con.will_log(level):
+            self.Con.print("[bold bright_blue]<<<<<<<< BulkBench ====[/bold bright_blue]")
 
     @staticmethod
     def _validatedProjectDir(value: StrPath | None) -> Path:
@@ -423,7 +438,7 @@ class BulkBench:
         if not groups:
             raise ValueError(f"{error_prefix} must contain at least one enabled config group")
 
-        self.Con.debug(f"Read {len(groups)} config groups from {configs_file}: {groups}")
+        self.Con.debug(f"Read {len(groups)} config groups from {configs_file}: ", groups)
         return groups
 
     @staticmethod
@@ -556,7 +571,7 @@ class BulkBench:
             self._dryRunPatches(patch_set)
 
         self.Con.debug(
-            f"Read {len(loaded_patch_sets)} patch sets from {patches_file}: {loaded_patch_sets}"
+            f"Read {len(loaded_patch_sets)} patch sets from {patches_file}:", loaded_patch_sets
         )
         return loaded_patch_sets
 
@@ -634,13 +649,13 @@ class BulkBench:
             )
         except subprocess.CalledProcessError as exc:
             raise ValueError(
-                f"patch {phase} failed for patch set {patch_set_name!r}, "
+                f"patch {phase} failed for patch set '{patch_set_name!r}', "
                 f"patch '{patch_data['patch']}', target '{patch_data['target']}', "
                 f"exit status {exc.returncode}; stdout={exc.stdout!r}; stderr={exc.stderr!r}"
             ) from exc
         except OSError as exc:
             raise ValueError(
-                f"patch {phase} failed for patch set {patch_set_name!r}, "
+                f"patch {phase} failed for patch set '{patch_set_name!r}', "
                 f"patch '{patch_data['patch']}', target '{patch_data['target']}': {exc}"
             ) from exc
 
@@ -651,7 +666,7 @@ class BulkBench:
 
     def _applyPatches(self, patch_set: PatchSet) -> None:
         """Applies every patch in a patch set in list order."""
-        self.Con.debug(f"Applying patch set {patch_set['name']}")
+        self.Con.debug(f"Applying patch set '{patch_set['name']}'")
         for patch_data in patch_set["patches"]:
             self._runPatchCommand(patch_set["name"], patch_data, dry_run=False)
 
@@ -695,7 +710,7 @@ class BulkBench:
 
     def _runAllConfigs(self, patch_set_name: str) -> None:
         """Runs every config group and records its outcome for the patch set."""
-        self.Con.info(f"Running all config groups for patch set {patch_set_name}")
+        self.Con.info(f"Running all config groups for patch set '{patch_set_name}'")
         successful: list[str] = []
         unsuccessful: dict[str, ConfigRunResult] = {}
         for cfg in self.configs.values():
@@ -717,19 +732,19 @@ class BulkBench:
             else:
                 successful.append(cfg["name"])
                 self.Con.info(
-                    f"Config {cfg['name']} ({', '.join(cfg['configs'])}) succeeded"
+                    f"Config '{cfg['name']}' succeeded"
                     + (f" with --tag={self.arch}" if self.arch else "")
                 )
+                self.Con.trace(cfg)
 
         self.successful_runs[patch_set_name] = successful
         self.unsuccessful_runs[patch_set_name] = unsuccessful
 
     def _runConfig(self, patch_set_name: str, cfg: ConfigGroup) -> None:
         """Runs one config group and raises ConfigRunError on process failure."""
-        self.Con.debug(
-            f"Running '{cfg['name']}' config group ({', '.join(cfg['configs'])}) for patch set {patch_set_name}"
-        )
-        workdir = self.results_dir / patch_set_name
+        self.Con.debug(f"Running '{cfg['name']}' config group for patch set '{patch_set_name}'")
+        self.Con.trace(cfg)
+        workdir = self.results_dir / patch_set_name / cfg["name"]
         workdir.mkdir(parents=True, exist_ok=True)
 
         args = ["python", str(_BENCHMARK_RUNNER)]
@@ -749,16 +764,22 @@ class BulkBench:
             for config_name in cfg["configs"]
         )
         args.extend(str(path) for path in benchmark_configs)
+        self.Con.trace(f"Running command: {' '.join(args)}")
 
-        try:
-            completed = subprocess.run(
-                args,
-                capture_output=True,
-                check=False,
-                cwd=str(_APP_DIR),
-                shell=False,
-                text=True,
-            )
+        try:        
+            try:
+                completed = subprocess.run(
+                    args,
+                    capture_output=True,
+                    check=False,
+                    cwd=str(_APP_DIR),
+                    shell=False,
+                    text=True,
+                )
+            except KeyboardInterrupt:
+                self.Con.warning("Caught KeyboardInterrupt. If you want to abort BulkBench too, hit Ctrl-C again.")
+                completed = subprocess.CompletedProcess(args, None, "", "User interrupted!")
+
         except OSError as exc:
             result = ConfigRunResult(
                 config_name=cfg["name"],
@@ -768,10 +789,14 @@ class BulkBench:
             )
             raise ConfigRunError(result) from exc
 
+        if (show_headers:=(bool(completed.stdout) or bool(completed.stderr))):
+            self._Con_end(LoggingConsole.LogLevel.Trace)
         if completed.stdout:
-            self.Con.trace(f"\n{cfg['name']} stdout:\n{completed.stdout}")
+            self.Con.trace(f"\nConfig '{cfg['name']}' stdout:\n{completed.stdout}")
         if completed.stderr:
-            self.Con.trace(f"\n{cfg['name']} stderr:\n{completed.stderr}")
+            self.Con.trace(f"\nConfig '{cfg['name']}' stderr:\n{completed.stderr}")
+        if show_headers:
+            self._Con_begin(LoggingConsole.LogLevel.Trace)
 
         if completed.returncode != 0:
             raise ConfigRunError(

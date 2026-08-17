@@ -485,7 +485,7 @@ class TestSystem(unittest.TestCase):
             ) as run_process:
                 bulk_bench._runConfig("changes", bulk_bench.configs["group"])
 
-            workdir = project_dir / "results" / "changes"
+            workdir = project_dir / "results" / "changes" / "group"
             self.assertTrue(workdir.is_dir())
             run_process.assert_called_once_with(
                 [
@@ -512,12 +512,11 @@ class TestSystem(unittest.TestCase):
                 shell=False,
                 text=True,
             )
-            self.assertEqual(
-                console.trace.call_args_list,
+            console.trace.assert_has_calls(
                 [
-                    call("\ngroup stdout:\nbenchmark output"),
-                    call("\ngroup stderr:\nbenchmark warning"),
-                ],
+                    call("\nConfig 'group' stdout:\nbenchmark output"),
+                    call("\nConfig 'group' stderr:\nbenchmark warning"),
+                ]
             )
 
     def test_run_config_raises_with_captured_nonzero_result(self):
@@ -1019,7 +1018,7 @@ class TestSystem(unittest.TestCase):
                 bulk_bench.run()
 
             message = str(context.exception)
-            self.assertIn("patch dry-run failed for patch set 'changes'", message)
+            self.assertIn("patch dry-run failed for patch set ''changes''", message)
             self.assertIn(
                 str(bulk_bench.project_dir / "changes" / "0.patch"),
                 message,
