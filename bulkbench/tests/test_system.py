@@ -1,3 +1,4 @@
+import difflib
 import pytest
 import shutil
 import subprocess
@@ -411,6 +412,101 @@ class TestSystem(unittest.TestCase):
             bulk_bench._dryRunPatches = Mock()
             bulk_bench._applyPatches = Mock()
         return bulk_bench, targets
+
+    def _make_patch_integration_project(
+        self, project_dir: Path
+    ) -> tuple[BulkBench, tuple[Path, Path], tuple[str, str], tuple[str, str]]:
+        (project_dir / "configs.yaml").write_text(
+            "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+        )
+
+        targets = (project_dir / "first.py", project_dir / "second.py")
+        original_contents = ("alpha\ncommon\n", "one\ntwo\n")
+        patched_contents = ("patched alpha\ncommon\n", "one\npatched two\n")
+        for index, (target, original, patched_content) in enumerate(
+            zip(targets, original_contents, patched_contents, strict=True)
+        ):
+            target.write_text(original, encoding="utf-8")
+            patch_contents = "".join(
+                difflib.unified_diff(
+                    original.splitlines(keepends=True),
+                    patched_content.splitlines(keepends=True),
+                    fromfile=str(target),
+                    tofile=str(target),
+                )
+            )
+            (project_dir / f"{index}.patch").write_text(
+                patch_contents, encoding="utf-8"
+            )
+
+        (project_dir / "patches.yaml").write_text(
+            (
+                "- name: first\n"
+                "  patches:\n"
+                f"    - patch: 0.patch\n      target: {targets[0]}\n"
+                "- name: second\n"
+                "  patches:\n"
+                f"    - patch: 0.patch\n      target: {targets[0]}\n"
+                f"    - patch: 1.patch\n      target: {targets[1]}\n"
+            ),
+            encoding="utf-8",
+        )
+        return (
+            BulkBench(project_dir=project_dir, arch=""),
+            targets,
+            original_contents,
+            patched_contents,
+        )
+
+    def _assert_real_patch_lifecycle(self, failure: BaseException | None) -> None:
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets, originals, patched = (
+                self._make_patch_integration_project(Path(project_dir_value))
+            )
+            invocation = 0
+
+            def run_all_configs():
+                nonlocal invocation
+                expected = (
+                    (patched[0], originals[1]) if invocation == 0 else patched
+                )
+                self.assertEqual(
+                    tuple(
+                        target.read_text(encoding="utf-8")
+                        for target in targets
+                    ),
+                    expected,
+                )
+                invocation += 1
+                if failure is not None and invocation == 2:
+                    raise failure
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+
+            if failure is None:
+                self.assertEqual(bulk_bench.run(), 0)
+            else:
+                with self.assertRaises(type(failure)) as context:
+                    bulk_bench.run()
+                self.assertIs(context.exception, failure)
+
+            self.assertEqual(bulk_bench._runAllConfigs.call_count, 2)
+            self.assertEqual(
+                tuple(
+                    target.read_text(encoding="utf-8") for target in targets
+                ),
+                originals,
+            )
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_real_patches_are_visible_to_benchmarks_and_always_reverted(self):
+        for failure in (
+            None,
+            RuntimeError("benchmark failed"),
+            AssertionError("benchmark assertion failed"),
+        ):
+            with self.subTest(failure_type=type(failure).__name__):
+                self._assert_real_patch_lifecycle(failure)
 
     def test_backup_dir_must_be_empty(self):
         with TemporaryDirectory() as project_dir_value:
