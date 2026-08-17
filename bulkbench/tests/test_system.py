@@ -17,8 +17,23 @@ class TestSystem(unittest.TestCase):
     def setUpClass(cls):
         cls._benchmark_configs_temp = TemporaryDirectory()
         cls.benchmark_configs_dir = Path(cls._benchmark_configs_temp.name)
-        for stem in ("cfg", "cfg1", "cfg2", "cfg3", "cfg4"):
-            (cls.benchmark_configs_dir / f"{stem}.yaml").touch()
+        (cls.benchmark_configs_dir / "cfg.yaml").write_text(
+            """
+- name: cfg
+  tags: [gfx942]
+- name: cfg.variant
+  tags: [gfx950]
+- name: cfg.first
+- name: cfg.second
+  tags: []
+""",
+            encoding="utf-8",
+        )
+        for stem in ("cfg1", "cfg2", "cfg3", "cfg4"):
+            (cls.benchmark_configs_dir / f"{stem}.yaml").write_text(
+                f"- name: {stem}\n  tags: [gfx942]\n",
+                encoding="utf-8",
+            )
         cls._benchmark_configs_patch = patch(
             "bulkbench.bulkbench._BENCHMARK_CONFIGS_DIR",
             cls.benchmark_configs_dir,
@@ -66,14 +81,14 @@ class TestSystem(unittest.TestCase):
             },
         )
 
-    def _read_configs(self, contents: str) -> BulkBench:
+    def _read_configs(self, contents: str, *, arch: str = "") -> BulkBench:
         with TemporaryDirectory() as project_dir_value:
             project_dir = Path(project_dir_value)
             (project_dir / "configs.yaml").write_text(contents, encoding="utf-8")
             (project_dir / "patches.yaml").write_text(
                 "- name: baseline\n  patches: []\n", encoding="utf-8"
             )
-            return BulkBench(project_dir=project_dir, arch="")
+            return BulkBench(project_dir=project_dir, arch=arch)
 
     def assertInvalidConfigs(self, contents: str, expected_message: str) -> None:
         with self.assertRaises(ValueError) as context:
@@ -198,6 +213,52 @@ class TestSystem(unittest.TestCase):
         self.assertEqual(
             bulk_bench.configs["group"]["configs"],
             ["cfg.variant", "cfg2"],
+        )
+
+    def test_benchmark_config_name_must_exist_in_selected_yaml(self):
+        self.assertInvalidConfigs(
+            "- name: group\n  configs: [cfg.unknown]\n",
+            "config 'cfg.unknown' wasn't found",
+        )
+
+    def test_arch_filters_configs_and_omits_empty_groups(self):
+        with patch("bulkbench.bulkbench.LoggingConsole.warning") as warning:
+            bulk_bench = self._read_configs(
+                """
+- name: partly_supported
+  configs: [cfg, cfg.variant, cfg.first, cfg.second]
+- name: unsupported
+  configs: [cfg.variant]
+""",
+                arch="gfx942",
+            )
+
+        self.assertEqual(
+            bulk_bench.configs,
+            {
+                "partly_supported": {
+                    "name": "partly_supported",
+                    "configs": ["cfg", "cfg.first", "cfg.second"],
+                    "override_args": None,
+                }
+            },
+        )
+        self.assertEqual(
+            warning.call_args_list,
+            [
+                call(
+                    "Config 'cfg.variant' is not supported for the current architecture "
+                    "(--tag=gfx942 mismatch)"
+                ),
+                call(
+                    "Config 'cfg.variant' is not supported for the current architecture "
+                    "(--tag=gfx942 mismatch)"
+                ),
+                call(
+                    "Group 'unsupported' was fully omitted; "
+                    "no config matches the architecture (--tag=gfx942 mismatch)"
+                ),
+            ],
         )
 
     def test_invalid_config_prefix_is_rejected(self):
@@ -499,8 +560,6 @@ class TestSystem(unittest.TestCase):
                     "cfg2",
                     "--override-args-json",
                     '{"iterations":5}',
-                    "--tag",
-                    "gfx942",
                     "--results-directory",
                     str(workdir),
                     str(self.benchmark_configs_dir / "cfg.yaml"),
@@ -670,7 +729,7 @@ class TestSystem(unittest.TestCase):
             self.assertIn("ValueError: invalid runtime state", unexpected_result.output)
             self.assertAlmostEqual(unexpected_duration, 0.1)
             console.info.assert_any_call(
-                "Config 'successful' succeeded with --tag=gfx942 in 00:00:01.3"
+                "Config 'successful' succeeded in 00:00:01.3"
             )
             console.error.assert_any_call(
                 "Patch set 'changes', config group 'process_failure' "

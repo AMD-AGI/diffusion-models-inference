@@ -350,14 +350,35 @@ class BulkBench:
             )
         return _BENCHMARK_CONFIGS_DIR / f"{stem}.yaml"
 
-    def _validateBenchmarkConfigPath(self, config_name: str, config_context: str) -> None:
-        """Checks that a config's benchmark YAML exists."""
+    def _benchmarkConfigTags(
+        self,
+        config_name: str,
+        config_context: str,
+        benchmark_configs_cache: dict[Path, list[Any]],
+    ) -> Any:
+        """Checks that a benchmark config exists and returns its tags."""
         path = self._benchmarkConfigPath(config_name, config_context)
         if not path.is_file():
             raise ValueError(
                 f"{config_context} requires benchmark config file '{path}', "
                 "which doesn't exist or isn't a file"
             )
+
+        if path not in benchmark_configs_cache:
+            try:
+                with path.open("r", encoding="utf-8") as file:
+                    raw_benchmark_configs = yaml.safe_load(file)
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                raise ValueError(f"failed to read benchmark config file '{path}': {exc}") from exc
+            if not isinstance(raw_benchmark_configs, list):
+                raise ValueError(f"benchmark config file '{path}' must contain a YAML list")
+            benchmark_configs_cache[path] = raw_benchmark_configs
+
+        for benchmark_config in benchmark_configs_cache[path]:
+            if isinstance(benchmark_config, dict) and benchmark_config.get("name") == config_name:
+                return benchmark_config.get("tags")
+
+        raise ValueError(f"{config_context} config {config_name!r} wasn't found in '{path}'")
 
     def _readConfigs(self, configs_file_value: StrPath | None) -> dict[str, ConfigGroup]:
         """Reads and validates benchmark config groups from a YAML file."""
@@ -375,6 +396,8 @@ class BulkBench:
             )
 
         allowed_attributes = {"configs", "enabled", "name", "override_args"}
+        benchmark_configs_cache: dict[Path, list[Any]] = {}
+        enabled_group_names: set[str] = set()
         groups: dict[str, ConfigGroup] = {}
         for group_index, raw_group in enumerate(raw_groups, start=1):
             group_context = f"{error_prefix}, group {group_index}"
@@ -400,8 +423,9 @@ class BulkBench:
             if "name" not in raw_group:
                 raise ValueError(f"{group_context} is missing required attribute 'name'")
             name = self._validatedName(raw_group["name"], group_context)
-            if name in groups:
+            if name in enabled_group_names:
                 raise ValueError(f"{error_prefix} contains duplicate group name {name!r}")
+            enabled_group_names.add(name)
 
             if "configs" not in raw_group:
                 raise ValueError(f"{group_context} is missing required attribute 'configs'")
@@ -410,14 +434,22 @@ class BulkBench:
                 raise ValueError(f"{group_context} attribute 'configs' must be a non-empty list")
 
             seen_configs: set[str] = set()
+            supported_configs: list[str] = []
             for config_index, config in enumerate(group_configs, start=1):
                 config_context = f"{group_context} attribute 'configs', item {config_index}"
                 if not isinstance(config, str) or not (config := config.strip()):
                     raise ValueError(f"{config_context} must be a non-empty string")
-                self._validateBenchmarkConfigPath(config, config_context)
+                tags = self._benchmarkConfigTags(config, config_context, benchmark_configs_cache)
                 if config in seen_configs:
                     raise ValueError(f"{group_context} contains duplicate config name {config!r}")
                 seen_configs.add(config)
+                if self.arch and tags and self.arch not in tags:
+                    self.Con.warning(
+                        f"Config '{config}' is not supported for the current architecture "
+                        f"(--tag={self.arch} mismatch)"
+                    )
+                    continue
+                supported_configs.append(config)
 
             override_args = raw_group.get("override_args")
             serialized_override_args: str | None = None
@@ -438,13 +470,20 @@ class BulkBench:
                         f"{group_context} attribute 'override_args' isn't valid JSON: {exc}"
                     ) from exc
 
+            if not supported_configs:
+                self.Con.warning(
+                    f"Group '{name}' was fully omitted; "
+                    f"no config matches the architecture (--tag={self.arch} mismatch)"
+                )
+                continue
+
             groups[name] = {
                 "name": name,
-                "configs": group_configs,
+                "configs": supported_configs,
                 "override_args": serialized_override_args,
             }
 
-        if not groups:
+        if not enabled_group_names:
             raise ValueError(f"{error_prefix} must contain at least one enabled config group")
 
         self.Con.debug(f"Read {len(groups)} config groups from {configs_file}: ", groups)
@@ -746,16 +785,10 @@ class BulkBench:
                     returncode=None,
                 )
                 unsuccessful[cfg["name"]] = (exc_result, duration)
-                self._logConfigRunError(
-                    patch_set_name, exc_result, duration, "[UNEXPECTED ERROR] "
-                )
+                self._logConfigRunError(patch_set_name, exc_result, duration, "[UNEXPECTED ERROR] ")
             else:
                 successful.append((cfg["name"], duration))
-                self.Con.info(
-                    f"Config '{cfg['name']}' succeeded"
-                    + (f" with --tag={self.arch}" if self.arch else "")
-                    + f" in {_formatDuration(duration)}"
-                )
+                self.Con.info(f"Config '{cfg['name']}' succeeded in {_formatDuration(duration)}")
                 self.Con.trace(cfg)
 
         self.successful_runs[patch_set_name] = successful
@@ -773,8 +806,8 @@ class BulkBench:
             args.extend(("--name", config_name))
         if cfg["override_args"] is not None:
             args.extend(("--override-args-json", cfg["override_args"]))
-        if self.arch:
-            args.extend(("--tag", self.arch))
+        # if self.arch:
+        #    args.extend(("--tag", self.arch))
         args.extend(("--results-directory", str(workdir)))
 
         benchmark_configs = dict.fromkeys(
