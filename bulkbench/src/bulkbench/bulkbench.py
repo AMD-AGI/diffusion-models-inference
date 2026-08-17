@@ -176,8 +176,8 @@ class BulkBench:
         self.Con = self._validatedConsole(_get_arg("console"), _get_arg("console_log_level"))
         self.Con.trace(f"Console log level: {self.Con.log_level}")
 
-        self.append_results = _get_arg("append_results", False)
-        assert isinstance(self.append_results, bool), "append_results must be a boolean"
+        self.regenerate_results = _get_arg("regenerate_results", False)
+        assert isinstance(self.regenerate_results, bool), "regenerate_results must be a boolean"
 
         self.arch: str = _get_arg("arch")
         if self.arch is None:
@@ -788,7 +788,7 @@ class BulkBench:
                 try:
                     workdir = self.results_dir / patch_set_name / cfg_name
                     for config_name in cfg["configs"]:
-                        if self.append_results and _configMightHaveRunSuccessfully(
+                        if not self.regenerate_results and _configMightHaveRunSuccessfully(
                             workdir, config_name
                         ):
                             self.Con.info(

@@ -82,12 +82,12 @@ class TestSystem(unittest.TestCase):
             },
         )
 
-    def test_append_results_cli_argument(self):
+    def test_regenerate_results_cli_argument(self):
         parser = makeParser()
 
-        self.assertFalse(parser.parse_args([]).append_results)
-        self.assertTrue(parser.parse_args(["-a"]).append_results)
-        self.assertTrue(parser.parse_args(["--append_results"]).append_results)
+        self.assertFalse(parser.parse_args([]).regenerate_results)
+        self.assertTrue(parser.parse_args(["-r"]).regenerate_results)
+        self.assertTrue(parser.parse_args(["--regenerate_results"]).regenerate_results)
 
     def _read_configs(self, contents: str, *, arch: str = "") -> BulkBench:
         with TemporaryDirectory() as project_dir_value:
@@ -511,7 +511,7 @@ class TestSystem(unittest.TestCase):
         configs: str,
         *,
         arch: str = "gfx942",
-        append_results: bool = False,
+        regenerate_results: bool = False,
     ) -> tuple[BulkBench, Mock]:
         (project_dir / "configs.yaml").write_text(configs, encoding="utf-8")
         (project_dir / "patches.yaml").write_text(
@@ -524,7 +524,7 @@ class TestSystem(unittest.TestCase):
             report_dir=project_dir / "report",
             backup_dir=project_dir / "backups",
             arch=arch,
-            append_results=append_results,
+            regenerate_results=regenerate_results,
         )
         console = Mock()
         bulk_bench.Con = console
@@ -626,13 +626,12 @@ class TestSystem(unittest.TestCase):
                 )
             )
 
-    def test_run_config_append_results_skips_completed_configs(self):
+    def test_run_config_skips_completed_configs_by_default(self):
         with TemporaryDirectory() as project_dir_value:
             project_dir = Path(project_dir_value)
             bulk_bench, console = self._make_config_runner_bulk_bench(
                 project_dir,
                 "- name: group\n  configs: [cfg.first, cfg.second, cfg2]\n",
-                append_results=True,
             )
             workdir = project_dir / "results" / "changes" / "group"
             for config_name, media_name in (
@@ -680,13 +679,37 @@ class TestSystem(unittest.TestCase):
                 )
             )
 
-    def test_run_config_append_results_treats_fully_skipped_group_as_successful(self):
+    def test_run_config_regenerate_results_runs_completed_configs(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+                regenerate_results=True,
+            )
+            workdir = project_dir / "results" / "baseline" / "group"
+            config_dir = workdir / "cfg"
+            config_dir.mkdir(parents=True)
+            (config_dir / "timings.json").touch()
+            (config_dir / "result.png").touch()
+            bulk_bench._runConfig = Mock()
+
+            bulk_bench._runAllConfigs("baseline")
+
+            bulk_bench._runConfig.assert_called_once_with(
+                "baseline",
+                workdir,
+                "group",
+                ["cfg"],
+                None,
+            )
+
+    def test_run_config_treats_fully_skipped_group_as_successful(self):
         with TemporaryDirectory() as project_dir_value:
             project_dir = Path(project_dir_value)
             bulk_bench, console = self._make_config_runner_bulk_bench(
                 project_dir,
                 "- name: group\n  configs: [cfg]\n",
-                append_results=True,
             )
             config_dir = project_dir / "results" / "baseline" / "group" / "cfg"
             config_dir.mkdir(parents=True)
@@ -838,7 +861,6 @@ class TestSystem(unittest.TestCase):
                     "- name: unexpected_failure\n"
                     "  configs: [cfg3]\n"
                 ),
-                append_results=True,
             )
             completed_config_dir = (
                 project_dir / "results" / "changes" / "process_failure" / "cfg.first"
