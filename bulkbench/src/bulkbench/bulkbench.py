@@ -527,7 +527,7 @@ class BulkBench:
                     raise ValueError(f"{patch_context} is missing required attribute 'target'")
 
                 patch_path = self._validatedPatchPath(
-                    raw_patch["patch"], self.project_dir, "patch", patch_context
+                    raw_patch["patch"], self.project_dir / name, "patch", patch_context
                 )
                 target_path = self._validatedPatchPath(
                     raw_patch["target"], Path("/app"), "target", patch_context

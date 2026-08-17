@@ -70,7 +70,7 @@ def makeParser() -> argparse.ArgumentParser:
         "Patch lists must be unique regardless of object order; only one empty baseline is allowed. "
         "A patch object may occur only once in its set. Each patch object has the following attributes:\n"
         "- patch (required) - a path to a file containing the patch to apply. Relative paths are "
-        "resolved under --project_dir; absolute paths are used as-is.\n"
+        "resolved under --project_dir/<patch-set name>; absolute paths are used as-is.\n"
         "    The file must be generated with `diff -u original_file modified_file > changes.patch` "
         "command or similar. Using a patch file that modifies several files is UB.\n"
         "- target (required) - a path to a file to apply the patch to. Relative paths are resolved under "

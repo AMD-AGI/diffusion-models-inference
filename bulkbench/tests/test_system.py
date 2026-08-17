@@ -265,14 +265,14 @@ class TestSystem(unittest.TestCase):
             """
 - name: baseline
   patches: []
-- name: changes
+- name: " changes "
   patches:
     - patch: " change.patch "
       target: " $PROJECT/target.py "
     - enabled: false
       unknown: ignored
 """,
-            ("change.patch", "target.py"),
+            ("changes/change.patch", "target.py"),
         )
 
         self.assertEqual(
@@ -283,7 +283,9 @@ class TestSystem(unittest.TestCase):
                     "name": "changes",
                     "patches": [
                         {
-                            "patch": (bulk_bench.project_dir / "change.patch").resolve(),
+                            "patch": (
+                                bulk_bench.project_dir / "changes" / "change.patch"
+                            ).resolve(),
                             "target": (bulk_bench.project_dir / "target.py").resolve(),
                         }
                     ],
@@ -336,7 +338,7 @@ class TestSystem(unittest.TestCase):
             "- name: changes\n  patches:\n"
             "    - patch: change.patch\n      target: $PROJECT/missing.py",
             "attribute 'target' path",
-            "change.patch",
+            "changes/change.patch",
         )
 
     def test_duplicate_patch_objects_are_rejected(self):
@@ -350,7 +352,7 @@ class TestSystem(unittest.TestCase):
       target: $PROJECT/./target.py
 """,
             "contains duplicate patch object",
-            "change.patch",
+            "changes/change.patch",
             "target.py",
         )
 
@@ -359,15 +361,15 @@ class TestSystem(unittest.TestCase):
             """
 - name: first
   patches:
-    - patch: a.patch
+    - patch: $PROJECT/a.patch
       target: $PROJECT/a.py
-    - patch: b.patch
+    - patch: $PROJECT/b.patch
       target: $PROJECT/b.py
 - name: second
   patches:
-    - patch: b.patch
+    - patch: $PROJECT/b.patch
       target: $PROJECT/b.py
-    - patch: a.patch
+    - patch: $PROJECT/a.patch
       target: $PROJECT/a.py
 """,
             "patch sets 'first' and 'second' contain duplicate patch sets",
@@ -382,18 +384,25 @@ class TestSystem(unittest.TestCase):
             """
 - name: first
   patches:
-    - patch: shared.patch
+    - patch: $PROJECT/shared.patch
       target: $PROJECT/shared.py
     - patch: a.patch
       target: $PROJECT/a.py
 - name: second
   patches:
-    - patch: shared.patch
+    - patch: $PROJECT/shared.patch
       target: $PROJECT/shared.py
     - patch: b.patch
       target: $PROJECT/b.py
 """,
-            ("shared.patch", "shared.py", "a.patch", "a.py", "b.patch", "b.py"),
+            (
+                "shared.patch",
+                "shared.py",
+                "first/a.patch",
+                "a.py",
+                "second/b.patch",
+                "b.py",
+            ),
         )
 
         self.assertEqual(
@@ -403,6 +412,10 @@ class TestSystem(unittest.TestCase):
         self.assertEqual(
             bulk_bench.patches[0]["patches"][0],
             bulk_bench.patches[1]["patches"][0],
+        )
+        self.assertEqual(
+            bulk_bench.patches[0]["patches"][0]["patch"],
+            (bulk_bench.project_dir / "shared.patch").resolve(),
         )
 
     def test_only_one_empty_patch_set_is_allowed(self):
@@ -703,9 +716,11 @@ class TestSystem(unittest.TestCase):
             "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
         )
         targets = (project_dir / "first.py", project_dir / "second.py")
+        patch_dir = project_dir / "changes"
+        patch_dir.mkdir()
         for index, target in enumerate(targets):
             target.write_text(f"original {index}", encoding="utf-8")
-            (project_dir / f"{index}.patch").write_text(f"patch {index}", encoding="utf-8")
+            (patch_dir / f"{index}.patch").write_text(f"patch {index}", encoding="utf-8")
         (project_dir / "patches.yaml").write_text(
             (
                 "- name: changes\n"
@@ -747,9 +762,13 @@ class TestSystem(unittest.TestCase):
                     tofile=str(target),
                 )
             )
-            (project_dir / f"{index}.patch").write_text(
-                patch_contents, encoding="utf-8"
-            )
+            patch_set_names = ("first", "second") if index == 0 else ("second",)
+            for patch_set_name in patch_set_names:
+                patch_dir = project_dir / patch_set_name
+                patch_dir.mkdir(exist_ok=True)
+                (patch_dir / f"{index}.patch").write_text(
+                    patch_contents, encoding="utf-8"
+                )
 
         (project_dir / "patches.yaml").write_text(
             (
@@ -878,14 +897,14 @@ class TestSystem(unittest.TestCase):
                         "--batch",
                         "--dry-run",
                         str(targets[0]),
-                        str(bulk_bench.project_dir / "0.patch"),
+                        str(bulk_bench.project_dir / "changes" / "0.patch"),
                     ],
                     [
                         "patch",
                         "--batch",
                         "--dry-run",
                         str(targets[1]),
-                        str(bulk_bench.project_dir / "1.patch"),
+                        str(bulk_bench.project_dir / "changes" / "1.patch"),
                     ],
                 ],
             )
@@ -950,8 +969,8 @@ class TestSystem(unittest.TestCase):
                 self.assertEqual(bulk_bench.run(), 0)
 
             patch_paths = (
-                bulk_bench.project_dir / "0.patch",
-                bulk_bench.project_dir / "1.patch",
+                bulk_bench.project_dir / "changes" / "0.patch",
+                bulk_bench.project_dir / "changes" / "1.patch",
             )
             self.assertEqual(
                 commands,
@@ -1001,7 +1020,10 @@ class TestSystem(unittest.TestCase):
 
             message = str(context.exception)
             self.assertIn("patch dry-run failed for patch set 'changes'", message)
-            self.assertIn(str(bulk_bench.project_dir / "0.patch"), message)
+            self.assertIn(
+                str(bulk_bench.project_dir / "changes" / "0.patch"),
+                message,
+            )
             self.assertIn(str(targets[0]), message)
             self.assertIn("exit status 2", message)
             self.assertIn("dry-run stdout", message)
