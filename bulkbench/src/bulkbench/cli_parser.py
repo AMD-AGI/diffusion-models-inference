@@ -1,9 +1,11 @@
 """Command line interface of the `bulkbench` tool."""
 
 import argparse
+from benchstats.common import LoggingConsole
 
 from .bulkbench import (
     DEFAULT_BACKUP_SUBDIR,
+    DEFAULT_CONSOLE_LOG_LEVEL,
     DEFAULT_CONFIGS_FILE,
     DEFAULT_PATCHES_FILE,
     DEFAULT_REPORT_SUBDIR,
@@ -19,6 +21,15 @@ def makeParser() -> argparse.ArgumentParser:
         prog="bulkbench",
         description="Runs a set of benchmarks and analyzes their results statistically.",
         formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "--console_log_level",
+        default=DEFAULT_CONSOLE_LOG_LEVEL.value,
+        choices=[level.value for level in LoggingConsole.LogLevel],
+        type=int,
+        help="Set the logging level for the console output verbosity (as an integer).\nValid values are: "
+        + ", ".join([ f"{level.value} ({level.name})" for level in LoggingConsole.LogLevel]) +
+        ".\nDefaults to `%(default)s`.",
     )
     parser.add_argument(
         "--project_dir",

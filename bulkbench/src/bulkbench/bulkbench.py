@@ -16,6 +16,7 @@ from typing import Any, TypedDict
 from yaml.constructor import ConstructorError  # pyright: ignore[reportMissingModuleSource]
 from yaml.nodes import MappingNode  # pyright: ignore[reportMissingModuleSource]
 
+DEFAULT_CONSOLE_LOG_LEVEL = LoggingConsole.LogLevel.Info
 DEFAULT_RESULTS_SUBDIR = "results"
 DEFAULT_REPORT_SUBDIR = "report"
 DEFAULT_BACKUP_SUBDIR = "_backups"
@@ -149,14 +150,19 @@ class BulkBench:
         assert len(args) <= 1, "Only one positional argument is allowed"
         args = args[0] if args else {}  # type: ignore
 
-        def _get_arg(name: str) -> Any:
-            return kwargs.get(name, getattr(args, name, None))
+        def _get_arg(name: str, default: Any = None) -> Any:
+            return kwargs.get(name, getattr(args, name, default))
 
         Con = _get_arg("console")
         if Con is None:
-            Con = LoggingConsole()
+            Con = LoggingConsole(
+                log_level=LoggingConsole.LogLevel(
+                    _get_arg("console_log_level", DEFAULT_CONSOLE_LOG_LEVEL.value)
+                )
+            )
         assert isinstance(Con, LoggingConsole), "console must be a LoggingConsole"
         self.Con = Con
+        Con.trace(f"Console log level: {Con.log_level}")
 
         self.arch: str = _get_arg("arch")
         if self.arch is None:
