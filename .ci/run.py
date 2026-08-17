@@ -56,16 +56,14 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description="Run benchmarks based on model, benchmark name, or tags",
     )
-
-    selection_group = parser.add_mutually_exclusive_group()
-    selection_group.add_argument(
+    parser.add_argument(
         "--name",
         action="append",
         dest="names",
         help="Run only experiments whose name matches one of these names",
         default=[],
     )
-    selection_group.add_argument(
+    parser.add_argument(
         "--tag",
         action="append",
         dest="tags",
