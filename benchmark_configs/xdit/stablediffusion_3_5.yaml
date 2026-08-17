@@ -48,16 +48,15 @@
     width: 1024
     num_inference_steps: 28
     warmup_calls: 2
-    ulysses_degree: 1
-    ring_degree: 1
-    guidance_scale: 3.5
     num_iterations: 5
-    attention_backend: aiter_flydsl
+    guidance_scale: 3.5
+    attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
-    enable_model_cpu_offload: true
     enable_tiling: true
     enable_slicing: true
-
+    vae_tile_latent_size: 64
+    vae_tile_sample_size: 512
+    cache_method: dbcache
 - name: stablediffusion_3_5.2gpu.rdna4
   tags: [rdna4, gfx1201]
   model: stabilityai/stable-diffusion-3.5-large
@@ -71,14 +70,14 @@
     warmup_calls: 2
     num_iterations: 5
     guidance_scale: 3.5
-    pipefusion_parallel_degree: 1
+    attention_backend: aiter_flydsl_fp8
     use_cfg_parallel: true
-    attention_backend: aiter_flydsl
     use_torch_compile: true
-    use_fp8_gemms: true
+    cache_method: dbcache
     enable_tiling: true
     enable_slicing: true
-
+    vae_tile_latent_size: 64
+    vae_tile_sample_size: 512
 - name: stablediffusion_3_5.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: stabilityai/stable-diffusion-3.5-large
@@ -92,10 +91,12 @@
     warmup_calls: 2
     num_iterations: 5
     guidance_scale: 3.5
-    pipefusion_parallel_degree: 2
+    attention_backend: aiter_flydsl_fp8
     use_cfg_parallel: true
-    attention_backend: aiter_flydsl
+    ulysses_degree: 2
     use_torch_compile: true
-    use_fp8_gemms: true
+    cache_method: dbcache
     enable_tiling: true
     enable_slicing: true
+    vae_tile_latent_size: 64
+    vae_tile_sample_size: 512
