@@ -31,8 +31,18 @@ _VALID_NAME_RE = re.compile(VALID_NAME_PATTERN)
 _APP_DIR = Path("/app")
 _BENCHMARK_CONFIGS_DIR = _APP_DIR / ".ci" / "benchmark_configs"
 _BENCHMARK_RUNNER = _APP_DIR / ".ci" / "run.py"
+_RESULT_MEDIA_SUFFIXES = {".jpg", ".mp4", ".png"}
 
 StrPath = str | os.PathLike[str]
+
+
+def _configMightHaveRunSuccessfully(workdir: Path, config_name: str) -> bool:
+    """Checks whether a config's direct result files indicate a successful prior run."""
+    config_dir = workdir / config_name
+    return (config_dir / "timings.json").is_file() and any(
+        child.is_file() and child.suffix in _RESULT_MEDIA_SUFFIXES
+        for child in config_dir.iterdir()
+    )
 
 
 class ConfigGroup(TypedDict):
@@ -166,6 +176,9 @@ class BulkBench:
 
         self.Con = self._validatedConsole(_get_arg("console"), _get_arg("console_log_level"))
         self.Con.trace(f"Console log level: {self.Con.log_level}")
+
+        self.append_results = _get_arg("append_results", False)
+        assert isinstance(self.append_results, bool), "append_results must be a boolean"
 
         self.arch: str = _get_arg("arch")
         if self.arch is None:
@@ -801,8 +814,26 @@ class BulkBench:
         workdir = self.results_dir / patch_set_name / cfg["name"]
         workdir.mkdir(parents=True, exist_ok=True)
 
-        args = ["python", str(_BENCHMARK_RUNNER)]
+        configs_to_run: list[str] = []
         for config_name in cfg["configs"]:
+            if self.append_results and _configMightHaveRunSuccessfully(workdir, config_name):
+                self.Con.info(
+                    f"Skipping config '{config_name}' in config group '{cfg['name']}' "
+                    f"for patch set '{patch_set_name}': its existing results might be successful"
+                )
+            else:
+                configs_to_run.append(config_name)
+
+        if not configs_to_run:
+            self.Con.info(
+                f"All configs in config group '{cfg['name']}' for patch set "
+                f"'{patch_set_name}' might already have run successfully; "
+                "treating the config group as successful"
+            )
+            return
+
+        args = ["python", str(_BENCHMARK_RUNNER)]
+        for config_name in configs_to_run:
             args.extend(("--name", config_name))
         if cfg["override_args"] is not None:
             args.extend(("--override-args-json", cfg["override_args"]))
@@ -815,7 +846,7 @@ class BulkBench:
                 config_name,
                 f"config group {cfg['name']!r}, config {config_name!r}",
             )
-            for config_name in cfg["configs"]
+            for config_name in configs_to_run
         )
         args.extend(str(path) for path in benchmark_configs)
         self.Con.trace(f"Running command: {' '.join(args)}")

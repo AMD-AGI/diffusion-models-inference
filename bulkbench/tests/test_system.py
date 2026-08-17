@@ -5,7 +5,8 @@ import subprocess
 import sys
 import unittest
 
-from bulkbench import BulkBench, ConfigRunError, ConfigRunResult
+from bulkbench import BulkBench, ConfigRunError, ConfigRunResult, makeParser
+from bulkbench.bulkbench import _configMightHaveRunSuccessfully
 from bulkbench.script_runner import ScriptRunResult
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -80,6 +81,13 @@ class TestSystem(unittest.TestCase):
                 },
             },
         )
+
+    def test_append_results_cli_argument(self):
+        parser = makeParser()
+
+        self.assertFalse(parser.parse_args([]).append_results)
+        self.assertTrue(parser.parse_args(["-a"]).append_results)
+        self.assertTrue(parser.parse_args(["--append_results"]).append_results)
 
     def _read_configs(self, contents: str, *, arch: str = "") -> BulkBench:
         with TemporaryDirectory() as project_dir_value:
@@ -505,6 +513,7 @@ class TestSystem(unittest.TestCase):
         configs: str,
         *,
         arch: str = "gfx942",
+        append_results: bool = False,
     ) -> tuple[BulkBench, Mock]:
         (project_dir / "configs.yaml").write_text(configs, encoding="utf-8")
         (project_dir / "patches.yaml").write_text(
@@ -517,10 +526,54 @@ class TestSystem(unittest.TestCase):
             report_dir=project_dir / "report",
             backup_dir=project_dir / "backups",
             arch=arch,
+            append_results=append_results,
         )
         console = Mock()
         bulk_bench.Con = console
         return bulk_bench, console
+
+    def test_config_might_have_run_successfully_checks_direct_result_files(self):
+        with TemporaryDirectory() as workdir_value:
+            workdir = Path(workdir_value)
+
+            for suffix in (".jpg", ".mp4", ".png"):
+                config_dir = workdir / f"valid-{suffix[1:]}"
+                config_dir.mkdir()
+                (config_dir / "timings.json").touch()
+                (config_dir / f"result{suffix}").touch()
+                self.assertTrue(
+                    _configMightHaveRunSuccessfully(workdir, config_dir.name)
+                )
+
+            uppercase_dir = workdir / "uppercase"
+            uppercase_dir.mkdir()
+            (uppercase_dir / "timings.json").touch()
+            (uppercase_dir / "result.PNG").touch()
+            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "uppercase"))
+
+            nested_dir = workdir / "nested"
+            (nested_dir / "output").mkdir(parents=True)
+            (nested_dir / "timings.json").touch()
+            (nested_dir / "output" / "result.png").touch()
+            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "nested"))
+
+            media_directory = workdir / "media-directory"
+            media_directory.mkdir()
+            (media_directory / "timings.json").touch()
+            (media_directory / "result.jpg").mkdir()
+            self.assertFalse(
+                _configMightHaveRunSuccessfully(workdir, "media-directory")
+            )
+
+            timings_directory = workdir / "timings-directory"
+            timings_directory.mkdir()
+            (timings_directory / "timings.json").mkdir()
+            (timings_directory / "result.mp4").touch()
+            self.assertFalse(
+                _configMightHaveRunSuccessfully(workdir, "timings-directory")
+            )
+
+            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "missing"))
 
     def test_run_config_builds_command_and_logs_output(self):
         with TemporaryDirectory() as project_dir_value:
@@ -572,6 +625,78 @@ class TestSystem(unittest.TestCase):
                     "benchmark output" in trace_call.args[0]
                     for trace_call in console.trace.call_args_list
                 )
+            )
+
+    def test_run_config_append_results_skips_completed_configs(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, console = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg.first, cfg.second, cfg2]\n",
+                append_results=True,
+            )
+            workdir = project_dir / "results" / "changes" / "group"
+            for config_name, media_name in (
+                ("cfg.first", "result.jpg"),
+                ("cfg2", "result.mp4"),
+            ):
+                config_dir = workdir / config_name
+                config_dir.mkdir(parents=True)
+                (config_dir / "timings.json").touch()
+                (config_dir / media_name).touch()
+
+            completed = ScriptRunResult(args=(), returncode=0, output="")
+            with patch(
+                "bulkbench.bulkbench.run_with_script",
+                return_value=completed,
+            ) as run_process:
+                bulk_bench._runConfig("changes", bulk_bench.configs["group"])
+
+            run_process.assert_called_once_with(
+                [
+                    "python",
+                    "/app/.ci/run.py",
+                    "--name",
+                    "cfg.second",
+                    "--results-directory",
+                    str(workdir),
+                    str(self.benchmark_configs_dir / "cfg.yaml"),
+                ],
+                cwd=Path("/app"),
+            )
+            console.info.assert_any_call(
+                "Skipping config 'cfg.first' in config group 'group' for patch set "
+                "'changes': its existing results might be successful"
+            )
+            console.info.assert_any_call(
+                "Skipping config 'cfg2' in config group 'group' for patch set "
+                "'changes': its existing results might be successful"
+            )
+
+    def test_run_config_append_results_treats_fully_skipped_group_as_successful(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, console = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+                append_results=True,
+            )
+            config_dir = project_dir / "results" / "baseline" / "group" / "cfg"
+            config_dir.mkdir(parents=True)
+            (config_dir / "timings.json").touch()
+            (config_dir / "result.png").touch()
+
+            with patch("bulkbench.bulkbench.run_with_script") as run_process:
+                bulk_bench._runConfig("baseline", bulk_bench.configs["group"])
+
+            run_process.assert_not_called()
+            console.info.assert_any_call(
+                "Skipping config 'cfg' in config group 'group' for patch set "
+                "'baseline': its existing results might be successful"
+            )
+            console.info.assert_any_call(
+                "All configs in config group 'group' for patch set 'baseline' might "
+                "already have run successfully; treating the config group as successful"
             )
 
     def test_run_config_raises_with_captured_nonzero_result(self):

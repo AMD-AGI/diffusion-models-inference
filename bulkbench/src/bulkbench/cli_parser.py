@@ -107,6 +107,14 @@ def makeParser() -> argparse.ArgumentParser:
         "as generated images/videos and timings.json file used for statistics analysis.",
     )
     parser.add_argument(
+        "-a",
+        "--append_results",
+        action="store_true",
+        help="Keep existing config results that might be successful. A config is skipped when "
+        "its result directory directly contains timings.json and at least one .jpg, .mp4, or "
+        ".png file.",
+    )
+    parser.add_argument(
         "--report_dir",
         default=DEFAULT_REPORT_SUBDIR,
         help="Override a directory to store the report in. Relative paths are resolved "
