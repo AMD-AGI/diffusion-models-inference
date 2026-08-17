@@ -5,6 +5,7 @@ import unittest
 
 from bulkbench.script_runner import (
     _TERMINATION_TIMEOUT_SECONDS,
+    _read_output,
     _terminate,
     run_with_script,
 )
@@ -83,18 +84,121 @@ class TestScriptRunner(unittest.TestCase):
         self.assertEqual(result.returncode, 128 + signal.SIGTERM)
         self.assertEqual(result.output, "before signal\n")
 
+    def test_existing_empty_timing_data_means_empty_output(self):
+        result = run_with_script([sys.executable, "-c", ""])
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.output, "")
+
+    def test_rejects_malformed_timing_data(self):
+        malformed_values = (
+            "invalid\n",
+            "nan 1\n",
+            "0.1 -1\n",
+            "0.1 invalid\n",
+            "0.1 1 extra\n",
+        )
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcript = temp_path / "output.log"
+            timing = temp_path / "timing.log"
+            transcript.write_bytes(b"metadata\nx\ntrailer]\n")
+
+            for value in malformed_values:
+                with self.subTest(value=value):
+                    timing.write_text(value, encoding="ascii")
+                    with self.assertRaisesRegex(ValueError, "malformed script timing data"):
+                        _read_output(transcript, timing)
+            timing.write_bytes(b"\xff")
+            with self.assertRaisesRegex(ValueError, "malformed script timing data"):
+                _read_output(transcript, timing)
+
+    def test_rejects_malformed_transcript(self):
+        cases = (
+            (None, "doesn't exist or isn't a file"),
+            (b"metadata without newline", "missing its metadata header"),
+            (b"metadata\nx", "fewer than the recorded"),
+            (b"metadata\nxyzbad trailer", "malformed trailing metadata"),
+        )
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcript = temp_path / "output.log"
+            timing = temp_path / "timing.log"
+            timing.write_text("0.1 3\n", encoding="ascii")
+
+            for transcript_data, expected_message in cases:
+                with self.subTest(expected_message=expected_message):
+                    transcript.unlink(missing_ok=True)
+                    if transcript_data is not None:
+                        transcript.write_bytes(transcript_data)
+                    with self.assertRaisesRegex(ValueError, expected_message):
+                        _read_output(transcript, timing)
+
+    def test_removes_intermediate_files_after_success(self):
+        with TemporaryDirectory() as parent_dir:
+            created_paths = []
+
+            def tracked_temporary_directory(*args, **kwargs):
+                temporary_directory = TemporaryDirectory(
+                    *args,
+                    dir=parent_dir,
+                    **kwargs,
+                )
+                created_paths.append(Path(temporary_directory.name))
+                return temporary_directory
+
+            with patch(
+                "bulkbench.script_runner.TemporaryDirectory",
+                side_effect=tracked_temporary_directory,
+            ):
+                result = run_with_script([sys.executable, "-c", "print('output')"])
+
+            self.assertEqual(result.output, "output\n")
+            self.assertTrue(created_paths)
+            self.assertTrue(all(not path.exists() for path in created_paths))
+            self.assertEqual(list(Path(parent_dir).iterdir()), [])
+
     def test_terminates_script_when_parent_wait_is_interrupted(self):
         process = Mock()
         process.wait.side_effect = [KeyboardInterrupt, 0]
         process.poll.return_value = None
 
-        with (
-            patch("bulkbench.script_runner.subprocess.Popen", return_value=process),
-            self.assertRaises(KeyboardInterrupt),
-        ):
-            run_with_script(["command"])
+        with TemporaryDirectory() as parent_dir:
+            created_paths = []
+
+            def tracked_temporary_directory(*args, **kwargs):
+                temporary_directory = TemporaryDirectory(
+                    *args,
+                    dir=parent_dir,
+                    **kwargs,
+                )
+                created_paths.append(Path(temporary_directory.name))
+                return temporary_directory
+
+            with (
+                patch(
+                    "bulkbench.script_runner.subprocess.Popen",
+                    return_value=process,
+                ) as process_manager,
+                patch(
+                    "bulkbench.script_runner.TemporaryDirectory",
+                    side_effect=tracked_temporary_directory,
+                ),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                run_with_script(["command"])
+
+            self.assertTrue(created_paths)
+            self.assertTrue(all(not path.exists() for path in created_paths))
+            self.assertEqual(list(Path(parent_dir).iterdir()), [])
 
         process.terminate.assert_called_once_with()
+        script_args = process_manager.call_args.args[0]
+        self.assertIn("--logging-format", script_args)
+        self.assertEqual(
+            script_args[script_args.index("--logging-format") + 1],
+            "classic",
+        )
         self.assertEqual(
             process.wait.call_args_list[1].kwargs,
             {"timeout": _TERMINATION_TIMEOUT_SECONDS},

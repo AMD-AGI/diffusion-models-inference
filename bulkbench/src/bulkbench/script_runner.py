@@ -1,5 +1,6 @@
 """Run a command in a recorded pseudo-terminal."""
 
+import math
 import os
 import shlex
 import subprocess
@@ -39,20 +40,53 @@ def _terminate(process: subprocess.Popen[bytes]) -> None:
 
 def _read_output(transcript: Path, timing: Path) -> str:
     """Reads child output without `script`'s transcript metadata."""
+    if not timing.is_file():
+        raise ValueError(f"script timing '{timing}' doesn't exist or isn't a file")
     if not transcript.is_file():
-        return ""
+        raise ValueError(f"script transcript '{transcript}' doesn't exist or isn't a file")
+
+    try:
+        timing_lines = timing.read_text(encoding="ascii").splitlines()
+    except UnicodeDecodeError as exc:
+        raise ValueError("malformed script timing data: file is not ASCII") from exc
 
     output_size = 0
-    if timing.is_file():
-        for line in timing.read_text(encoding="utf-8", errors="replace").splitlines():
-            fields = line.split()
-            if len(fields) == 2 and fields[1].isdigit():
-                output_size += int(fields[1])
+    for line_number, line in enumerate(timing_lines, start=1):
+        fields = line.split()
+        if len(fields) != 2:
+            raise ValueError(f"malformed script timing data at line {line_number}: {line!r}")
+        try:
+            elapsed = float(fields[0])
+            byte_count = int(fields[1])
+        except ValueError as exc:
+            raise ValueError(
+                f"malformed script timing data at line {line_number}: {line!r}"
+            ) from exc
+        if (
+            not math.isfinite(elapsed)
+            or elapsed < 0
+            or not fields[1].isascii()
+            or not fields[1].isdigit()
+            or byte_count < 0
+        ):
+            raise ValueError(f"malformed script timing data at line {line_number}: {line!r}")
+        output_size += byte_count
 
     transcript_data = transcript.read_bytes()
     metadata_end = transcript_data.find(b"\n")
-    output_start = metadata_end + 1 if metadata_end >= 0 else 0
-    output_data = transcript_data[output_start : output_start + output_size]
+    if metadata_end < 0:
+        raise ValueError("script transcript is missing its metadata header")
+    output_start = metadata_end + 1
+    output_end = output_start + output_size
+    if output_end > len(transcript_data):
+        raise ValueError(
+            f"script transcript contains fewer than the recorded {output_size} output bytes"
+        )
+    trailer = transcript_data[output_end:]
+    if not trailer.startswith(b"\n") or not trailer.endswith(b"]\n"):
+        raise ValueError("script transcript is missing or has malformed trailing metadata")
+
+    output_data = transcript_data[output_start:output_end]
     return output_data.decode("utf-8", errors="replace").replace("\r\n", "\n")
 
 
@@ -76,6 +110,8 @@ def run_with_script(args: Sequence[str], *, cwd: StrPath | None = None) -> Scrip
             str(transcript),
             "--log-timing",
             str(timing),
+            "--logging-format",
+            "classic",
             "--command",
             f"exec {shlex.join(command)}",
         ]

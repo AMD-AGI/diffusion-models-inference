@@ -202,11 +202,11 @@ class BulkBench:
             assert isinstance(Con, LoggingConsole), "console must be a LoggingConsole"
         return Con
 
-    def _Con_begin(self, level: LoggingConsole.LogLevel) -> None:
+    def _Con_begin(self, level: LoggingConsole.LogLevel = LoggingConsole.LogLevel.Critical) -> None:
         if self.Con.will_log(level):
             self.Con.print("[bold bright_blue]==== BulkBench >>>>>>>>[/bold bright_blue]")
 
-    def _Con_end(self, level: LoggingConsole.LogLevel) -> None:
+    def _Con_end(self, level: LoggingConsole.LogLevel = LoggingConsole.LogLevel.Critical) -> None:
         if self.Con.will_log(level):
             self.Con.print("[bold bright_blue]<<<<<<<< BulkBench ====[/bold bright_blue]")
 
@@ -765,8 +765,10 @@ class BulkBench:
         self.Con.trace(f"Running command: {' '.join(args)}")
 
         try:
+            self._Con_end()
             completed = run_with_script(args, cwd=_APP_DIR)
         except KeyboardInterrupt as exc:
+            self._Con_begin()
             self.Con.warning(
                 "Caught KeyboardInterrupt. If you want to abort BulkBench too, hit Ctrl-C again."
             )
@@ -778,12 +780,15 @@ class BulkBench:
                 )
             ) from exc
         except OSError as exc:
+            self._Con_begin()
             result = ConfigRunResult(
                 config_name=cfg["name"],
                 output=str(exc),
                 returncode=None,
             )
             raise ConfigRunError(result) from exc
+        else:
+            self._Con_begin()
 
         if completed.returncode != 0:
             raise ConfigRunError(
