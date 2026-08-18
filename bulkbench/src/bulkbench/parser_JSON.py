@@ -192,10 +192,10 @@ class parser_JSON(ParserBase):
         (each set contains measured runtime durations of the same code) and tells if results are
         significantly different. Each such a set is called a "benchmark" in `benchstats` terminology
         and is identified by a name.
-        - `file1` and `--filter1` (or `--filter`) arguments of `benchstats` are passed verbatim to
+        - `file1` and `--filter1` arguments of `benchstats` are passed verbatim to
         `fpath` and `filter` parameters of a parser constructor respectively. When a two-source mode
-        is used, another parser instance is created with `file2` and `--filter2` (or `--filter`)
-        arguments passed to it.
+        is used, another parser instance is created with `file2` and `--filter2` arguments passed
+        to it.
         - `benchstats` has two modes to find benchmarks to compare one against the other among
         all benchmarks it sees:
             1. find same benchmark names in two different sources (two-source mode)
@@ -238,19 +238,19 @@ class parser_JSON(ParserBase):
         project: `results/<patch_name>/<bench_group_name>/<bench_config_name>/timings.json`, so
         assuming one pass `results` as `fpath`, the following filter value will make the following
         comparisons:
-        - --filter=0 is exactly the A.2 case: benchmarks will be named like
+        - --filter1=0 is exactly the A.2 case: benchmarks will be named like
         `<bench_config_name>|<patch_name>/<bench_group_name>` which will compare configs across all
         combinations of patches and groups. I.e. for a given model, it'll compare all combinations
         of groups and patches to each other.
-        - --filter=1 adds `<bench_group_name>` to the benchmark name (with `<bench_config_name>`
-        already being there by default, like it was --filter=0,1), naming benchmarks like
+        - --filter1=1 adds `<bench_group_name>` to the benchmark name (with `<bench_config_name>`
+        already being there by default, like it was --filter1=0,1), naming benchmarks like
         `<bench_config_name>/<bench_group_name>|<patch_name>` comparing the same model+group_name
         combination across patches.
-        - --filter=2 adds `<patch_name>` to the benchmark name (with `<bench_config_name>`
-        already being there by default, like it was --filter=0,2), naming benchmarks like
+        - --filter1=2 adds `<patch_name>` to the benchmark name (with `<bench_config_name>`
+        already being there by default, like it was --filter1=0,2), naming benchmarks like
         `<bench_config_name>/<patch_name>|<bench_group_name>` comparing the same models+patch
         combination across groups (not useful if a single config isn't a member of multiple groups).
-        - --filter=1,2 (or --filter=0,1,2) makes everything count as an entifier of an entity under
+        - --filter1=1,2 (or --filter1=0,1,2) makes everything count as an entifier of an entity under
         a benchmark, and that will break the name pooling, because a single benchmark won't have
         an alternative to compare against. However, if the `fpath` refers to a dir with the
         following structure:
@@ -278,6 +278,8 @@ class parser_JSON(ParserBase):
         )
 
         sources = get_benchmark_sources(fpath, filter, debug_log)
+        debug_log.debug(sources)
+        
         self.stats = {}
         for bmname, result_dir in sources:
             json_path = fpath if is_direct_file else os.path.join(result_dir, _TIMINGS_FILENAME)
