@@ -26,11 +26,6 @@ RUN git clone ${VLLM_OMNI_REPO} vllm-omni && \
     cd vllm-omni && \
     git reset --hard ${VLLM_OMNI_COMMIT}
 
-# Patch vLLM-Omni: return diffusion metrics from the image-edit endpoint.
-RUN --mount=type=bind,from=patches,source=/patches,target=/patches \
-    cd /app/vllm-omni && \
-    git apply /patches/vllm_omni_image_edit_metrics.patch
-
 # Install vllm-omni as an editable install
 RUN cd /app/vllm-omni && \
     uv pip install \
