@@ -10,11 +10,11 @@
 #
 # Based on https://github.com/vllm-project/vllm-omni/blob/main/docker/Dockerfile.cuda
 
-ARG BASE_IMAGE=vllm/vllm-openai:v0.26.0
+ARG BASE_IMAGE=vllm/vllm-openai:v0.27.0
 FROM ${BASE_IMAGE} AS base
 
 ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="4ab1b4f" # v0.26.0+ release
+ARG VLLM_OMNI_COMMIT="02069a5" # v0.27.0+ release
 
 WORKDIR /app
 
