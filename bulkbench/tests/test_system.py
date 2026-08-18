@@ -673,7 +673,7 @@ class TestSystem(unittest.TestCase):
             self.assertTrue(
                 any(
                     info_call.args[0].startswith(
-                        "Config 'group' (individual configs:cfg.second) succeeded in "
+                        "Config 'group' (run configs:cfg.second) succeeded in "
                     )
                     for info_call in console.info.call_args_list
                 )
@@ -910,15 +910,15 @@ class TestSystem(unittest.TestCase):
             self.assertIn("ValueError: invalid runtime state", unexpected_result.output)
             self.assertAlmostEqual(unexpected_duration, 0.1)
             console.info.assert_any_call(
-                "Config 'successful' (individual configs:cfg) succeeded in 00:00:01.3"
+                "Config 'successful' (run configs:cfg) succeeded in 00:00:01.3"
             )
             console.error.assert_any_call(
-                "Config group 'process_failure' (individual configs:cfg2) "
+                "Config group 'process_failure' (run configs:cfg2) "
                 "on patch set 'changes' failed in 49:02:03.4."
             )
             console.error.assert_any_call(
                 "[UNEXPECTED ERROR] Config group 'unexpected_failure' "
-                "(individual configs:cfg3) on patch set 'changes' failed in 00:00:00.1."
+                "(run configs:cfg3) on patch set 'changes' failed in 00:00:00.1."
             )
             self.assertEqual(bulk_bench._runConfig.call_count, 3)
 

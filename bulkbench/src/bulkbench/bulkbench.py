@@ -770,7 +770,7 @@ class BulkBench:
     ) -> None:
         self.Con.error(
             f"{err_pfx}Config group '{rr.config_name}' "
-            f"(individual configs:{', '.join(configs_to_run)}) "
+            f"(run configs:{', '.join(configs_to_run)}) "
             f"on patch set '{patch_set_name}' failed in {_formatDuration(duration)}."
         )
         self.Con.debug(f"Return code: {rr.returncode}")
@@ -836,7 +836,7 @@ class BulkBench:
             else:
                 successful.append((cfg_name, duration))
                 self.Con.info(
-                    f"Config '{cfg_name}' (individual configs:{', '.join(configs_to_run)}) "
+                    f"Config '{cfg_name}' (run configs:{', '.join(configs_to_run)}) "
                     f"succeeded in {_formatDuration(duration)}"
                 )
 
