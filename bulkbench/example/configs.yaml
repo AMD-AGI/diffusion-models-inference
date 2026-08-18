@@ -1,0 +1,25 @@
+- name: a
+  configs:
+    - flux.usp
+    #- flux.usp_2k
+    #- flux.usp.hopper
+    #- flux.usp.blackwell
+    #- flux2.default
+    #- flux2.default.hopper.h100
+    #- flux2.default.hopper.h200
+    #- flux2.default.blackwell
+    - flux2.quantgemm.gfx942
+    - flux2.quantgemm.gfx950
+  override_args:
+    num_iterations: 30
+
+- name: b
+  #enabled: false
+  configs:
+    - wan2_2.quantgemm_fp8attn.gfx950
+    - wan2_2.quantgemm_fp8attn.gfx942
+    #- wan2_1.default
+    #- wan2_1.default.hopper
+    #- wan2_1.default.blackwell
+  override_args:
+    num_iterations: 28

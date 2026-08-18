@@ -1,0 +1,15 @@
+# assumes run in a container with a clean pytorch=2.13
+# run with `bulkbench --patches_file ./patches_pyt213.yaml`
+
+- name: 00_pyt_baseline
+  patches: []
+
+- name: 01_pyt_new_flags
+  patches:
+    - patch: "../12_PR_new_flags_no_meta/base_model.patch"
+      target: "/app/xDiT/xfuser/model_executor/models/runner_models/base_model.py"
+
+- name: 02_pyt_legacy_flags
+  patches:
+    - patch: "../14_PR_legacy_flags/base_model.patch"
+      target: "/app/xDiT/xfuser/model_executor/models/runner_models/base_model.py"
