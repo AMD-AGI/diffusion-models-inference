@@ -5,7 +5,8 @@ optimizing diffusion model inference on AMD GPUs. It is the source for the publi
 [rocm/pytorch-xdit](https://hub.docker.com/r/rocm/pytorch-xdit) Docker image.
 
 We welcome contributions from the community. Please review the following guidance before
-submitting issues or pull requests.
+submitting issues or pull requests. Security vulnerabilities must be reported privately
+according to the [security policy](SECURITY.md), not through a public issue.
 
 ## Repository structure
 
@@ -63,15 +64,15 @@ pipeline for validation on supported GPU architectures before it can be included
 
 ## Code ownership
 
-Reviewers are automatically assigned via [CODEOWNERS](.github/CODEOWNERS). The main
-ownership areas are:
+Reviewers are automatically assigned via [CODEOWNERS](.github/CODEOWNERS). The ownership
+rules are:
 
 | Area | Scope |
 |---|---|
-| Default | All files |
-| Core | `benchmark_configs/`, `data/`, `src/`, `integrations/` |
-| CI | `.github/workflows/`, `.github/actions/`, `docker/` |
-| Admin | `.github/CODEOWNERS`, `.github/pull_request_template.md` |
+| Default | All files — `@AMD-AGI/siloai-diffusion-inference` |
+| Core | `benchmark_common/`, `benchmark_configs/`, `data/`, `integrations/`, `src/` — `@AMD-AGI/siloai-diffusion-inference-core` |
+| CI | `.github/workflows/`, `.github/actions/`, `docker/`, `Makefile` — `@AMD-AGI/siloai-diffusion-inference-ci` |
+| Admin | `.github/CODEOWNERS`, `.github/pull_request_template.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE` — `@AMD-AGI/siloai-diffusion-inference-admin` |
 
 ## Testing and quality
 
@@ -127,4 +128,20 @@ files and database entries for the relevant GPU architectures.
 ### Upstream patches
 
 Patches for upstream projects go in `patches/`. Name the patch file descriptively and
-ensure it applies cleanly against the upstream version pinned in the Dockerfiles.
+ensure it applies cleanly against the upstream version pinned in the Dockerfiles. These
+patches apply to upstream code governed by the upstream project's license; do not add
+SPDX headers to patch files.
+
+### Pre-commit hooks
+
+Install [pre-commit](https://pre-commit.com/) and run `pre-commit install` to enable the
+repository checks locally. First-party data files covered by the check must start with:
+
+```text
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+```
+
+The hook currently verifies these headers on the applicable data files and rejects SPDX
+headers in upstream patches. The checks will be expanded as the repository is prepared
+for public development.
