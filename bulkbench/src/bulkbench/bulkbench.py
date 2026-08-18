@@ -196,11 +196,13 @@ class BulkBench:
         self.results_dir: Path = self._validatedOutputDir(
             _get_arg("results_dir"), DEFAULT_RESULTS_SUBDIR, "results_dir"
         )
+        if not self.results_dir.exists():
+            self.results_dir.mkdir(parents=True, exist_ok=True)
 
         self.report_dir: Path = self._validatedOutputDir(
             _get_arg("report_dir"), DEFAULT_REPORT_SUBDIR, "report_dir"
-        )
-        if any(self.report_dir.iterdir()):
+        ) # create it on demand when needed
+        if self.report_dir.exists() and any(self.report_dir.iterdir()):
             raise ValueError(f"--report_dir directory '{self.report_dir}' isn't empty")
 
         self.backup_dir: Path = self._validatedOutputDir(
@@ -274,8 +276,6 @@ class BulkBench:
         if path.exists():
             if not path.is_dir():
                 raise ValueError(f"--{arg_name} '{path}' exists and isn't a directory")
-        else:
-            path.mkdir(parents=True, exist_ok=True)
         return path
 
     @staticmethod
