@@ -105,6 +105,13 @@ jobs:
             NO_CACHE_FLAG="--no-cache"
           fi
           
+          # The remote builder imports cache straight from the registry, so a
+          # missing tag must not fail the build.
+          CACHE_FROM_FLAG=""
+          if docker buildx imagetools inspect "${CACHE_IMAGE}" >/dev/null 2>&1; then
+            CACHE_FROM_FLAG="--cache-from ${CACHE_IMAGE}"
+          fi
+
           docker buildx build \
             -f docker/Dockerfile.ci \
             --target core \
@@ -112,7 +119,7 @@ jobs:
             --push \
             ${NO_CACHE_FLAG} \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from "${CACHE_IMAGE}" \
+            ${CACHE_FROM_FLAG} \
             -t "${CACHE_IMAGE}" \
             .
       
@@ -123,11 +130,16 @@ jobs:
           CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
           IMAGE_TAG: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
         run: |
+          CACHE_FROM_FLAG=""
+          if docker buildx imagetools inspect "${CACHE_IMAGE}" >/dev/null 2>&1; then
+            CACHE_FROM_FLAG="--cache-from ${CACHE_IMAGE}"
+          fi
+
           docker buildx build \
             -f docker/Dockerfile.ci \
             --push \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from "${CACHE_IMAGE}" \
+            ${CACHE_FROM_FLAG} \
             -t "${IMAGE_TAG}" \
             .
       

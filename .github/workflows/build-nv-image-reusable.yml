@@ -126,6 +126,13 @@ jobs:
             EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}"
           fi
           
+          # The remote builder imports cache straight from the registry, so a
+          # missing tag must not fail the build.
+          CACHE_FROM_FLAG=""
+          if docker buildx imagetools inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
+            CACHE_FROM_FLAG="--cache-from ${IMAGE_TAG}"
+          fi
+
           docker buildx build \
             -f docker/Dockerfile.cuda \
             --platform "${PLATFORM}" \
@@ -134,7 +141,7 @@ jobs:
             ${NO_CACHE_FLAG} \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             ${EXTRA_BUILD_ARGS} \
-            --cache-from "${IMAGE_TAG}" \
+            ${CACHE_FROM_FLAG} \
             -t "${IMAGE_TAG}" \
             .
       
