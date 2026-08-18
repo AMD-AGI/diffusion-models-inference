@@ -257,11 +257,7 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
     cmake --build /app/TheRock/build --target therock-artifacts && \
     echo "CCache stats:" && ccache -s -v && \
-    cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts || { \
-    echo "=== BUILD FAILED: dumping meson-log.txt files ==="; \
-    find /app/TheRock/build -name meson-log.txt -exec echo "--- {} ---" \; -exec cat {} \; ; \
-    exit 1; \
-    }
+    cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
 
 FROM base AS rocm_runtime
 COPY docker/rocm_runtime_artifacts.txt /tmp/
