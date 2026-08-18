@@ -97,7 +97,7 @@
     num_iterations: 25
 
 - name: flux2.default.blackwell
-  tags: [lucid, hopper, b200, b300]
+  tags: [lucid, blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
