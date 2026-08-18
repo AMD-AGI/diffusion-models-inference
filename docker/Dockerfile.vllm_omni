@@ -14,10 +14,10 @@ COPY ./patches /patches
 FROM ${BASE_IMAGE}
 
 ARG VLLM_REPO=https://github.com/vllm-project/vllm.git
-ARG VLLM_COMMIT="568afb3" # v0.26.0 release
+ARG VLLM_COMMIT="4bdc8a7" # v0.27.0 release
 
 ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="4ab1b4f" # v0.26.0+ release
+ARG VLLM_OMNI_COMMIT="02069a5" # v0.27.0+ release
 
 ARG FLASH_ATTENTION_REPO=https://github.com/Dao-AILab/flash-attention.git
 ARG FLASH_ATTENTION_COMMIT="0e60e394"
