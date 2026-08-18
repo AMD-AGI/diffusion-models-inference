@@ -377,6 +377,7 @@ jobs:
           IMAGE_TAG: ${{ steps.metadata.outputs.staging_image_with_tag }}
         run: |
           docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --cache-from "${UNTUNED_IMAGE}" \

@@ -113,6 +113,7 @@ jobs:
           fi
 
           docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --target core \
             --pull \
@@ -136,6 +137,7 @@ jobs:
           fi
 
           docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --push \
             --build-arg BUILDKIT_INLINE_CACHE=1 \

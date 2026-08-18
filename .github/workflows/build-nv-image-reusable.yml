@@ -134,6 +134,7 @@ jobs:
           fi
 
           docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.cuda \
             --platform "${PLATFORM}" \
             --pull \
