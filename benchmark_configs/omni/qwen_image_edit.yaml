@@ -37,7 +37,7 @@
     use_torch_compile: True
 
 - name: qwen_image_edit.default.blackwell
-  tags: [lucid, hopper, b200, b300]
+  tags: [lucid, blackwell, b200, b300]
   model: Qwen/Qwen-Image-Edit
   runner: python
   entrypoint: /app/.ci/online_runner.py
