@@ -26,7 +26,7 @@ docker run \
   -e MIOPEN_FIND_ENFORCE="$MIOPEN_FIND_ENFORCE" \
   -e HOST_UID=$(id -g) \
   "$DOCKER_IMAGE" \
-  bash -c 'bash "$ROOTDIR/data/miopen/tune.sh" && (amd-smi || rocm-smi || true)'
+  bash -c 'bash "$ROOTDIR/data/miopen/tune.sh"; (amd-smi || rocm-smi || true)'
 
 if [ ! -f .tuning_successful ]; then
   exit 1
