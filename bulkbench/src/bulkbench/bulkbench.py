@@ -37,9 +37,9 @@ _RESULT_MEDIA_SUFFIXES = {".jpg", ".mp4", ".png"}
 StrPath = str | os.PathLike[str]
 
 
-def _configMightHaveRunSuccessfully(workdir: Path, config_name: str) -> bool:
+def configMightHaveRunSuccessfully(workdir: Path, config_name: str | None = None) -> bool:
     """Checks whether a config's direct result files indicate a successful prior run."""
-    config_dir = workdir / config_name
+    config_dir = workdir if config_name is None else workdir / config_name
     return (config_dir / "timings.json").is_file() and any(
         child.is_file() and child.suffix in _RESULT_MEDIA_SUFFIXES for child in config_dir.iterdir()
     )
@@ -904,7 +904,7 @@ class BulkBench:
                 try:
                     workdir = self.results_dir / patch_set_name / cfg_name
                     for config_name in cfg["configs"]:
-                        if not self.regenerate_results and _configMightHaveRunSuccessfully(
+                        if not self.regenerate_results and configMightHaveRunSuccessfully(
                             workdir, config_name
                         ):
                             self.Con.info(

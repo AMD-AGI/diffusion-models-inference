@@ -1,10 +1,10 @@
 """Implementation of the `bbqa` tool."""
 
-import argparse
+from pathlib import Path
 from typing import Any
 
 from benchstats.common import LoggingConsole
-from bulkbench.bulkbench import _validatedConsole
+from bulkbench.bulkbench import StrPath, _validatedConsole, configMightHaveRunSuccessfully
 
 
 DEFAULT_CONSOLE_LOG_LEVEL = LoggingConsole.LogLevel.Info
@@ -29,6 +29,21 @@ class BBQA:
 
         self.Con = _validatedConsole(_get_arg("console"), _get_arg("console_log_level"))
         self.Con.trace(f"Console log level: {self.Con.log_level}")
+
+        self.results_dir: Path = self._validatedResultsDir(_get_arg("results_dir"))
+
+    @staticmethod
+    def _validatedResultsDir(value: StrPath) -> Path:
+        """Resolves `value` and makes sure it contains a successful benchmark run."""
+        path = Path(value).expanduser().resolve()
+        if not path.is_dir():
+            raise ValueError(f"results_dir '{path}' doesn't exist or isn't a directory")
+        for directory in path.rglob("*"):
+            if directory.is_dir() and configMightHaveRunSuccessfully(directory):
+                return path
+        raise ValueError(
+            f"results_dir '{path}' doesn't contain a subdirectory with a successful benchmark run"
+        )
 
 
     def run(self) -> int: ...

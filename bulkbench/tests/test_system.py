@@ -6,7 +6,7 @@ import sys
 import unittest
 
 from bulkbench import BulkBench, ConfigRunError, ConfigRunResult, makeParser
-from bulkbench.bulkbench import _configMightHaveRunSuccessfully
+from bulkbench.bulkbench import configMightHaveRunSuccessfully
 from bulkbench.script_runner import ScriptRunResult
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -278,9 +278,7 @@ class TestSystem(unittest.TestCase):
 """
             )
 
-        self.assertEqual(
-            bulk_bench.configs["group"]["only_in_patches"], frozenset({"baseline"})
-        )
+        self.assertEqual(bulk_bench.configs["group"]["only_in_patches"], frozenset({"baseline"}))
         eager_group = bulk_bench.configs["eager_group"]
         self.assertEqual(eager_group["configs"], ["cfg"])
         self.assertEqual(eager_group["only_in_patches"], frozenset({"baseline"}))
@@ -744,33 +742,33 @@ class TestSystem(unittest.TestCase):
                 config_dir.mkdir()
                 (config_dir / "timings.json").touch()
                 (config_dir / f"result{suffix}").touch()
-                self.assertTrue(_configMightHaveRunSuccessfully(workdir, config_dir.name))
+                self.assertTrue(configMightHaveRunSuccessfully(workdir, config_dir.name))
 
             uppercase_dir = workdir / "uppercase"
             uppercase_dir.mkdir()
             (uppercase_dir / "timings.json").touch()
             (uppercase_dir / "result.PNG").touch()
-            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "uppercase"))
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "uppercase"))
 
             nested_dir = workdir / "nested"
             (nested_dir / "output").mkdir(parents=True)
             (nested_dir / "timings.json").touch()
             (nested_dir / "output" / "result.png").touch()
-            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "nested"))
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "nested"))
 
             media_directory = workdir / "media-directory"
             media_directory.mkdir()
             (media_directory / "timings.json").touch()
             (media_directory / "result.jpg").mkdir()
-            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "media-directory"))
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "media-directory"))
 
             timings_directory = workdir / "timings-directory"
             timings_directory.mkdir()
             (timings_directory / "timings.json").mkdir()
             (timings_directory / "result.mp4").touch()
-            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "timings-directory"))
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "timings-directory"))
 
-            self.assertFalse(_configMightHaveRunSuccessfully(workdir, "missing"))
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "missing"))
 
     def test_run_config_builds_command_and_logs_output(self):
         with TemporaryDirectory() as project_dir_value:
