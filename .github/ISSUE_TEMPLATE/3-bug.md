@@ -1,26 +1,58 @@
 ---
 name: Bug issue
 about: Use this template for bug reports.
-title: "[Bug]"
+title: "[Bug] "
 labels: bug
 ---
 
-Some guidance...
+<!--
+Search existing issues before filing. Do not report security vulnerabilities here; follow
+SECURITY.md instead. Add an assignee and project stage when possible.
+-->
 
-_Please make sure to add assignee and project with a valid stage when possible. Use comments and/or threads to actively support your team leads and colleagues in understanding your work and enabling it._
+<!-- Summarize the failure and its impact in one or two sentences. -->
 
-Template starts here...
+#### Background
 
-Short description
+<!-- What were you trying to do? Name the affected model, workload, image, or tool. -->
 
-#### Description
+#### Steps to reproduce
 
-What is the bug about? How to reproduce the bug?
+<!-- Provide the smallest reproducible configuration and exact commands. Remove secrets from output. -->
 
-#### Fix
+1. Run `...`
+2. ...
 
-What is wanted behavior? How to achieve that?
+#### Expected behavior
+
+<!-- What should have happened? -->
+
+#### Actual behavior
+
+<!-- What happened instead? Include complete error messages or relevant logs below. -->
+
+```text
+Paste logs here
+```
+
+#### Environment
+
+- Image and tag or digest:
+- Git commit:
+- GPU model and architecture:
+- OS:
+- ROCm or CUDA version:
+- Driver version:
+- Relevant package versions:
+
+#### Regression
+
+<!-- Did this work before? If so, give the last known working image, version, or commit. -->
+
+#### Reproducibility
+
+<!-- State how often this occurs and whether it reproduces on another supported configuration. -->
 
 #### Other
 
-Whatever relevant
+<!-- Add screenshots, configuration files, benchmark data, or related issues. -->

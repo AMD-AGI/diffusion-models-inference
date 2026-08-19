@@ -1,30 +1,38 @@
 ---
 name: Feature issue
 about: Use this template for feature requests.
-title: "[Feature]"
+title: "[Feature] "
 labels: enhancement
 ---
 
-Some guidance...
+<!--
+Search existing issues before filing. Add an assignee and project stage when possible. Describe the
+need rather than only a preferred implementation; these Background and Goals sections are also used
+to prepare a linked pull request.
+-->
 
-_Please make sure to add assignee and project with a valid stage when possible. Use comments and/or threads to actively support your team leads and colleagues in understanding your work and enabling it._
-
-Template starts here...
-
-Short description
+<!-- Summarize the requested capability in one or two sentences. -->
 
 #### Background
 
-What is the wider context of work? How is it motivated?
+<!-- What problem or limitation does this address? How is it motivated? -->
+
+#### Proposed behavior
+
+<!-- Describe how the feature should work from a user's perspective. -->
 
 #### Goals
 
-What is the higher-level goal of the work? Goal list
+<!-- List concrete outcomes. The create-pr skill maps these goals to implementation tasks. -->
 
-- ...
+- Goal 1
 
-to cover.
+#### Tests
+
+<!-- Describe how the feature will be verified, including relevant workloads or hardware. -->
+
+- [ ] Test 1
 
 #### Other
 
-Whatever relevant
+<!-- Add affected configurations, alternative solutions, supporting links, benchmark data, mockups, or other useful context. -->

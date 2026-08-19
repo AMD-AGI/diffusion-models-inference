@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 # setup identities
 HOST_GID=${HOST_GID:-$(id -g)}

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Run commands used to get the results shared in here: 
 # This file should be removed as soon as we switch to proper yaml configs
 # To run the xDiT equivalent ones, just replace ".ci/integrations/sgld/runner.py" with "xdit"

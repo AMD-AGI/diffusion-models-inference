@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 # Resolve the MIOpen DB file prefix by matching rocminfo marketing names
 # against data/miopen/prefixes.txt. Prints the prefix or nothing.
 set -euo pipefail

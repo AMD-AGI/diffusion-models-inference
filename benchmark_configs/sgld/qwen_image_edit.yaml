@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: qwen_image_edit.default
   tags: [release, lucid, instinct, gfx942, gfx950]
   model: Qwen/Qwen-Image-Edit
@@ -8,7 +11,7 @@
     negative_prompt: ""
     height: 2048
     width: 2048
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     seed: 42
     num_inference_steps: 50
     guidance_scale: 4.0
@@ -27,7 +30,7 @@
     negative_prompt: ""
     height: 2048
     width: 2048
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     seed: 42
     num_inference_steps: 50
     guidance_scale: 4.0
@@ -46,7 +49,7 @@
     negative_prompt: ""
     height: 2048
     width: 2048
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     seed: 42
     num_inference_steps: 50
     guidance_scale: 4.0

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Compare two MIOpen user database text files (.udb.txt only).
 
 Use this script to diff exported MIOpen `.udb.txt` user DBs (one `key=value` record

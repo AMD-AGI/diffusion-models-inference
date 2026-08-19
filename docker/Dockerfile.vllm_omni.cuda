@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Build example (run from the diffusion-models-inference-staging repo root):
 #
 #   docker build \

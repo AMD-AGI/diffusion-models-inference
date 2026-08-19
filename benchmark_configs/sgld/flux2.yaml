@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: flux2.default
   tags: [release, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
@@ -13,7 +16,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -33,7 +36,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -53,7 +56,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -74,7 +77,7 @@
     use_fp8_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -95,7 +98,7 @@
     use_fp4_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -116,7 +119,7 @@
     use_fp8_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
 
@@ -136,6 +139,6 @@
     use_fp8_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25

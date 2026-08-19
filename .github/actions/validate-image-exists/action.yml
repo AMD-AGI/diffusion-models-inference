@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: 'Validate Image Exists'
 description: 'Checks if a Docker image exists in the registry'
 inputs:

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: ltx2_3.default
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: dg845/LTX-2.3-Diffusers

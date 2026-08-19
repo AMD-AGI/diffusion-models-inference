@@ -15,6 +15,9 @@ src/                         @AMD-AGI/siloai-diffusion-inference-core
 # Admin — ownership and governance files
 .github/CODEOWNERS           @AMD-AGI/siloai-diffusion-inference-admin
 .github/pull_request_template.md @AMD-AGI/siloai-diffusion-inference-admin
+CONTRIBUTING.md              @AMD-AGI/siloai-diffusion-inference-admin
+SECURITY.md                  @AMD-AGI/siloai-diffusion-inference-admin
+LICENSE                      @AMD-AGI/siloai-diffusion-inference-admin
 
 # CI — workflows, actions, and container/build infrastructure
 .github/workflows/           @AMD-AGI/siloai-diffusion-inference-ci

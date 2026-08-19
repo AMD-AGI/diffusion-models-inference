@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 

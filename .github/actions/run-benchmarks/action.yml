@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Run Benchmarks
 description: Run xDiT benchmarks for a specific architecture
 

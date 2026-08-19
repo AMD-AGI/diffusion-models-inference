@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Build example image with
 #
 # docker build -f docker/Dockerfile.ci \
@@ -258,6 +261,13 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     cmake --build /app/TheRock/build --target therock-artifacts && \
     echo "CCache stats:" && ccache -s -v && \
     cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /license-evidence \
+    --scan-root therock=/app/TheRock \
+    --git-root /app/TheRock \
+    --fail-on-missing-git-license \
+    --required-git-depth 0
 
 FROM base AS rocm_runtime
 COPY docker/rocm_runtime_artifacts.txt /tmp/
@@ -356,6 +366,13 @@ RUN pip install --no-cache-dir pybind11 pybind11[global] && \
     python -m build --wheel -vvv --no-isolation -o dist && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /install/license-evidence \
+    --scan-root torch-stack=/app/TheRock/external-builds/pytorch \
+    --git-root /app/TheRock/external-builds/pytorch \
+    --fail-on-missing-git-license \
+    --required-git-depth 1
 
 FROM base AS ffmpeg_builder
 # Reference: https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
@@ -417,6 +434,10 @@ RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-
     PATH="$FFMPEG_BIN_DIR:$PATH" make -j$(($(nproc)-1)) && \
     make install && \
     hash -r
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /ffmpeg/license-evidence \
+    --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
 FROM rocm_runtime AS core_runtime
 ARG AITER_COMMIT
@@ -561,6 +582,10 @@ FROM core AS final
 # by copying from the deps stage we leave behind all cache and temporary files created during installation
 COPY --from=deps /venv /venv
 COPY --from=deps /app /app
+COPY --from=build_rocm /license-evidence /tmp/image-license-inputs/rocm-build-sources
+COPY --from=build_torch_stack /install/license-evidence /tmp/image-license-inputs/torch-build-sources
+COPY --from=ffmpeg_builder /ffmpeg/license-evidence /tmp/image-license-inputs/ffmpeg-build-sources
+COPY LICENSE /tmp/project-license/LICENSE
 
 # install basic terminal utilities
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
@@ -581,3 +606,24 @@ COPY .ci/quality_check.py /app/.ci/quality_check.py
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
 ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
+
+# Generate third-party license evidence from the final filesystem instead of
+# maintaining a dependency list separately from the image build.
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /usr/share/licenses/diffusion-models-inference \
+    --scan-root app=/app \
+    --scan-root project=/tmp/project-license \
+    --scan-root python=/venv \
+    --scan-root rocm=/opt/rocm \
+    --scan-root local=/usr/local \
+    --evidence-root rocm-build-sources=/tmp/image-license-inputs/rocm-build-sources \
+    --evidence-root torch-build-sources=/tmp/image-license-inputs/torch-build-sources \
+    --evidence-root ffmpeg-build-sources=/tmp/image-license-inputs/ffmpeg-build-sources \
+    --git-root /app \
+    --python-root /venv \
+    --debian \
+    --fail-on-missing-git-license \
+    --required-git-depth 2 && \
+    rm -rf /tmp/image-license-inputs /tmp/project-license \
+        /usr/local/libexec/collect_image_licenses.py
