@@ -12,6 +12,8 @@ import os
 import numpy as np
 from benchstats.common import ParserBase
 
+from .bulkbench import EAGER_GROUP_PREFIX
+
 
 _TIMINGS_FILENAME = "timings.json"
 _ALT_DELIMITER = "|"
@@ -79,8 +81,17 @@ def _walk_directories_following_symlinks(fpath: str):
     yield from reversed(entries)
 
 
-def get_benchmark_sources(fpath: str, filter: str | None, debug_log=None) -> set[tuple[str, str]]:
-    """Return ``(benchmark name, result directory)`` pairs selected by the inputs."""
+def get_benchmark_sources(
+    fpath: str,
+    filter: str | None,
+    debug_log=None,
+    ignore_eager: bool = True,
+) -> set[tuple[str, str]]:
+    """Return ``(benchmark name, result directory)`` pairs selected by the inputs.
+
+    When ``ignore_eager`` is true, omit nested result directories whose immediate
+    parent name starts with ``EAGER_GROUP_PREFIX``.
+    """
     filter_indices = _parse_filter(filter)
     fpath = os.fspath(fpath)
 
@@ -99,16 +110,30 @@ def get_benchmark_sources(fpath: str, filter: str | None, debug_log=None) -> set
     directories_without_timings: list[str] = []
     directories_rejected_by_filter: list[str] = []
     subtree_timings: dict[str, list[str]] = {}
+    subtrees_with_ignored_timings: set[str] = set()
 
     selected_indices = filter_indices if filter_indices is not None else {0}
 
     for current_dir, child_dirs, files in _walk_directories_following_symlinks(fpath):
+        relative_dir = os.path.relpath(current_dir, fpath)
+        path_parts = [] if relative_dir == os.curdir else relative_dir.split(os.sep)
         current_timings = os.path.join(current_dir, _TIMINGS_FILENAME)
         has_immediate_timings = _TIMINGS_FILENAME in files and os.path.isfile(current_timings)
+        ignored_immediate_timings = (
+            has_immediate_timings
+            and ignore_eager
+            and len(path_parts) >= 2
+            and path_parts[-2].startswith(EAGER_GROUP_PREFIX)
+        )
+        has_immediate_timings = has_immediate_timings and not ignored_immediate_timings
         nested_timings = sorted(
             timing
             for child_dir in child_dirs
             for timing in subtree_timings.get(os.path.join(current_dir, child_dir), [])
+        )
+        has_ignored_nested_timings = any(
+            os.path.join(current_dir, child_dir) in subtrees_with_ignored_timings
+            for child_dir in child_dirs
         )
 
         if has_immediate_timings and nested_timings:
@@ -125,15 +150,17 @@ def get_benchmark_sources(fpath: str, filter: str | None, debug_log=None) -> set
         subtree_timings[current_dir] = (
             ([current_timings] if has_immediate_timings else []) + nested_timings
         )
+        if ignored_immediate_timings or has_ignored_nested_timings:
+            subtrees_with_ignored_timings.add(current_dir)
 
-        if not subtree_timings[current_dir]:
+        if (
+            not subtree_timings[current_dir]
+            and current_dir not in subtrees_with_ignored_timings
+        ):
             directories_without_timings.append(current_dir)
 
         if not has_immediate_timings:
             continue
-
-        relative_dir = os.path.relpath(current_dir, fpath)
-        path_parts = [] if relative_dir == os.curdir else relative_dir.split(os.sep)
 
         if not path_parts:
             if filter_indices is not None:
@@ -257,6 +284,9 @@ class parser_JSON(ParserBase):
         `<platform_name>/<patch_name>/<bench_group_name>/<bench_config_name>/timings.json`, this
         filter value will allow to compare results of the same combinations of
         <patch_name>/<bench_group_name>/<bench_config_name> across platforms.
+
+        Since, bulkbench runner produce eager mode results in a separate group directory starting
+        with "eager_", such results are ignored by the statistical analysis.
 
         Note that directory symlinks are supported, so you can narrow the scope of comparisons by
         crafting a top-level directory with symlinks to the actually interesting results directories
