@@ -153,6 +153,20 @@ def get_amd_gpu_arch_rocminfo():
     return _gArch
 
 
+def _validatedConsole(Con: Any | None, console_log_level: int | None) -> LoggingConsole:
+    if Con is None:
+        Con = LoggingConsole(
+            log_level=LoggingConsole.LogLevel(
+                console_log_level
+                if isinstance(console_log_level, int) and (0 <= console_log_level <= 5)
+                else DEFAULT_CONSOLE_LOG_LEVEL.value
+            )
+        )
+    else:
+        assert isinstance(Con, LoggingConsole), "console must be a LoggingConsole"
+    return Con
+
+
 class BulkBench:
     """Runs a set of benchmarks of a project and analyzes their results statistically.
 
@@ -175,7 +189,7 @@ class BulkBench:
         def _get_arg(name: str, default: Any = None) -> Any:
             return kwargs.get(name, getattr(args, name, default))
 
-        self.Con = self._validatedConsole(_get_arg("console"), _get_arg("console_log_level"))
+        self.Con = _validatedConsole(_get_arg("console"), _get_arg("console_log_level"))
         self.Con.trace(f"Console log level: {self.Con.log_level}")
 
         self.regenerate_results = _get_arg("regenerate_results", False)
@@ -217,20 +231,6 @@ class BulkBench:
         if any(self.backup_dir.iterdir()):
             raise ValueError(f"--backup_dir directory '{self.backup_dir}' isn't empty")
         self._validateBackupDirIsDisjoint()
-
-    @staticmethod
-    def _validatedConsole(Con: Any | None, console_log_level: int | None) -> LoggingConsole:
-        if Con is None:
-            Con = LoggingConsole(
-                log_level=LoggingConsole.LogLevel(
-                    console_log_level
-                    if isinstance(console_log_level, int) and (0 <= console_log_level <= 5)
-                    else DEFAULT_CONSOLE_LOG_LEVEL.value
-                )
-            )
-        else:
-            assert isinstance(Con, LoggingConsole), "console must be a LoggingConsole"
-        return Con
 
     def _Con_begin(self, level: LoggingConsole.LogLevel = LoggingConsole.LogLevel.Critical) -> None:
         if self.Con.will_log(level):
