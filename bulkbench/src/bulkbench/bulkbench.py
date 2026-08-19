@@ -406,7 +406,7 @@ class BulkBench:
         patch_set_names: set[str],
     ) -> frozenset[str]:
         """Validates, deduplicates, and resolves a config group's patch-set references."""
-        if value is None or (isinstance(value, list) and not value):
+        if value is None:
             raise ValueError(f"{attribute_name} field is set but empty")
         if not isinstance(value, list):
             raise ValueError(  # noqa: TRY004 - public API reports invalid config values
@@ -430,8 +430,6 @@ class BulkBench:
                 continue
             referenced_names.add(patch_name)
 
-        if not referenced_names:
-            raise ValueError(f"{attribute_name} field is set but empty after stripping and deduplicating patch names.")
         return frozenset(referenced_names)
 
     def _readConfigs(
@@ -461,6 +459,7 @@ class BulkBench:
         }
         benchmark_configs_cache: dict[Path, list[Any]] = {}
         enabled_group_names: set[str] = set()
+        applicable_group_names: set[str] = set()
         groups: dict[str, ConfigGroup] = {}
         for group_index, raw_group in enumerate(raw_groups, start=1):
             group_context = f"{error_prefix}, group {group_index}"
@@ -547,6 +546,14 @@ class BulkBench:
                 if "only_in_patches" in raw_group
                 else None
             )
+            if only_in_patches is not None and not only_in_patches:
+                self.Con.warning(
+                    f"Group '{name}' was fully omitted; attribute 'only_in_patches' "
+                    "contains no defined patch set names"
+                )
+                continue
+            applicable_group_names.add(name)
+
             eager_in_patches = (
                 self._validatedConfigPatchNames(
                     raw_group["eager_in_patches"],
@@ -558,16 +565,18 @@ class BulkBench:
                 else None
             )
             eager_only_in_patches: frozenset[str] | None = None
-            if eager_in_patches is not None:
+            if eager_in_patches:
                 if only_in_patches is None:
                     eager_only_in_patches = eager_in_patches
                 else:
                     eager_only_in_patches = only_in_patches & eager_in_patches
                     if not eager_only_in_patches:
-                        raise ValueError(
+                        self.Con.warning(
+                            f"Eager group '{EAGER_GROUP_PREFIX + name}' was fully omitted; "
                             f"{group_context} attributes 'only_in_patches' and "
                             "'eager_in_patches' have an empty intersection"
                         )
+                        eager_only_in_patches = None
 
             if not supported_configs:
                 self.Con.warning(
@@ -596,7 +605,7 @@ class BulkBench:
                     "only_in_patches": eager_only_in_patches,
                 }
 
-        if not enabled_group_names:
+        if not applicable_group_names:
             raise ValueError(f"{error_prefix} must contain at least one enabled config group")
 
         self.Con.debug(f"Read {len(groups)} config groups from {configs_file}: ", groups)
@@ -885,7 +894,9 @@ class BulkBench:
             cfg_name = cfg["name"]
             only_in_patches = cfg["only_in_patches"]
             if only_in_patches is not None and patch_set_name not in only_in_patches:
-                self.Con.info(f"Config group '{cfg_name}' is disabled for patch set '{patch_set_name}'. Ignoring it.")
+                self.Con.info(
+                    f"Config group '{cfg_name}' is disabled for patch set '{patch_set_name}'. Ignoring it."
+                )
                 continue
             configs_to_run: list[str] = []
             started = monotonic()

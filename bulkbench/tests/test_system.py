@@ -207,20 +207,16 @@ class TestSystem(unittest.TestCase):
             with self.subTest(expected_message=expected_message):
                 self.assertInvalidConfigs(contents, expected_message)
 
-    def test_config_patch_fields_reject_empty_and_invalid_values(self):
+    def test_config_patch_fields_reject_invalid_values(self):
         cases = (
             ("only_in_patches: null", "only_in_patches field is set but empty"),
-            ("only_in_patches: []", "only_in_patches field is set but empty"),
             ("only_in_patches: baseline", "'only_in_patches' must be a list"),
             ("only_in_patches: ['  ']", "item 1 must be a non-empty string"),
             ("only_in_patches: [1]", "item 1 must be a non-empty string"),
-            ("only_in_patches: [missing]", "only_in_patches field is set but empty"),
             ("eager_in_patches: null", "eager_in_patches field is set but empty"),
-            ("eager_in_patches: []", "eager_in_patches field is set but empty"),
             ("eager_in_patches: baseline", "'eager_in_patches' must be a list"),
             ("eager_in_patches: ['  ']", "item 1 must be a non-empty string"),
             ("eager_in_patches: [1]", "item 1 must be a non-empty string"),
-            ("eager_in_patches: [missing]", "eager_in_patches field is set but empty"),
         )
         for field, expected_message in cases:
             with self.subTest(field=field):
@@ -228,6 +224,48 @@ class TestSystem(unittest.TestCase):
                     f"- name: group\n  configs: [cfg]\n  {field}",
                     expected_message,
                 )
+
+    def test_empty_only_in_patches_omits_group(self):
+        for restriction in ("[]", "[missing]"):
+            with self.subTest(restriction=restriction):
+                with patch("bulkbench.bulkbench.LoggingConsole.warning") as warning:
+                    bulk_bench = self._read_configs(
+                        f"""
+- name: omitted
+  configs: [cfg]
+  only_in_patches: {restriction}
+  eager_in_patches: invalid-but-not-validated
+- name: retained
+  configs: [cfg]
+"""
+                    )
+
+                self.assertEqual(set(bulk_bench.configs), {"retained"})
+                self.assertTrue(
+                    any(
+                        "Group 'omitted' was fully omitted" in warning_call.args[0]
+                        for warning_call in warning.call_args_list
+                    )
+                )
+
+    def test_all_groups_omitted_by_only_in_patches_are_rejected(self):
+        self.assertInvalidConfigs(
+            "- name: group\n  configs: [cfg]\n  only_in_patches: []",
+            "must contain at least one enabled config group",
+        )
+
+    def test_empty_eager_in_patches_does_not_create_eager_group(self):
+        for restriction in ("[]", "[missing]"):
+            with self.subTest(restriction=restriction):
+                bulk_bench = self._read_configs(
+                    f"""
+- name: group
+  configs: [cfg]
+  eager_in_patches: {restriction}
+"""
+                )
+
+                self.assertEqual(set(bulk_bench.configs), {"group"})
 
     def test_config_patch_fields_deduplicate_and_ignore_unknown_patch_sets(self):
         with patch("bulkbench.bulkbench.LoggingConsole.warning") as warning:
@@ -323,7 +361,7 @@ class TestSystem(unittest.TestCase):
             },
         )
 
-    def test_eager_group_rejects_empty_restriction_intersection(self):
+    def test_eager_group_with_empty_restriction_intersection_is_omitted(self):
         with TemporaryDirectory() as project_dir_value:
             project_dir = Path(project_dir_value)
             (project_dir / "changes").mkdir()
@@ -351,11 +389,18 @@ class TestSystem(unittest.TestCase):
             )
             with (
                 patch.object(BulkBench, "_dryRunPatches"),
-                self.assertRaises(ValueError) as context,
+                patch("bulkbench.bulkbench.LoggingConsole.warning") as warning,
             ):
-                BulkBench(project_dir=project_dir, arch="")
+                bulk_bench = BulkBench(project_dir=project_dir, arch="")
 
-        self.assertIn("have an empty intersection", str(context.exception))
+        self.assertEqual(set(bulk_bench.configs), {"group"})
+        self.assertTrue(
+            any(
+                "Eager group 'eager_group' was fully omitted" in warning_call.args[0]
+                and "have an empty intersection" in warning_call.args[0]
+                for warning_call in warning.call_args_list
+            )
+        )
 
     def test_config_group_name_cannot_use_reserved_eager_prefix(self):
         self.assertInvalidConfigs(
