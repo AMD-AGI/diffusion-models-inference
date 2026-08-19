@@ -16,7 +16,7 @@ ARG SAGEATTENTION_COMMIT="d1a57a5"
 ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
 ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
 
-ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.06-py3
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.07-py3
 FROM ${BASE_IMAGE} AS core
 ARG FLASHATTENTION_COMMIT
 ARG FLEX_BLOCK_ATTENTION_COMMIT
@@ -139,6 +139,5 @@ COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 # apex causes rms_forward_affine crash in SD3.5
-# numpy>2 causes a runtime error in Hunyuanvideo
 # opencv-python is required by xDiT export_to_video
-RUN pip uninstall -y apex && pip install --no-cache-dir "numpy<2" "opencv-python"
+RUN pip uninstall -y apex && pip install --no-cache-dir "opencv-python"
