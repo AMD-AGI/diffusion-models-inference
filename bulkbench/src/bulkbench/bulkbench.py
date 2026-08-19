@@ -25,6 +25,7 @@ DEFAULT_REPORT_SUBDIR = "report"
 DEFAULT_BACKUP_SUBDIR = "_backups"
 DEFAULT_CONFIGS_FILE = "configs.yaml"
 DEFAULT_PATCHES_FILE = "patches.yaml"
+EAGER_GROUP_PREFIX = "eager_"
 VALID_NAME_PATTERN = r"[-a-zA-Z0-9_+={}., ~!()\[\]]+"
 
 _VALID_NAME_RE = re.compile(VALID_NAME_PATTERN)
@@ -50,6 +51,7 @@ class ConfigGroup(TypedDict):
     name: str
     configs: list[str]
     override_args: str | None
+    only_in_patches: frozenset[str] | None
 
 
 class PatchData(TypedDict):
@@ -191,8 +193,10 @@ class BulkBench:
         self.unsuccessful_runs: dict[str, dict[str, tuple[ConfigRunResult, float]]] = {}
 
         self.project_dir: Path = self._validatedProjectDir(_get_arg("project_dir"))
-        self.configs: dict[str, ConfigGroup] = self._readConfigs(_get_arg("configs_file"))
         self.patches: list[PatchSet] = self._readPatches(_get_arg("patches_file"))
+        self.configs: dict[str, ConfigGroup] = self._readConfigs(
+            _get_arg("configs_file"), {patch_set["name"] for patch_set in self.patches}
+        )
         self.results_dir: Path = self._validatedOutputDir(
             _get_arg("results_dir"), DEFAULT_RESULTS_SUBDIR, "results_dir"
         )
@@ -201,7 +205,7 @@ class BulkBench:
 
         self.report_dir: Path = self._validatedOutputDir(
             _get_arg("report_dir"), DEFAULT_REPORT_SUBDIR, "report_dir"
-        ) # create it on demand when needed
+        )  # create it on demand when needed
         if self.report_dir.exists() and any(self.report_dir.iterdir()):
             raise ValueError(f"--report_dir directory '{self.report_dir}' isn't empty")
 
@@ -394,7 +398,45 @@ class BulkBench:
 
         raise ValueError(f"{config_context} config {config_name!r} wasn't found in '{path}'")
 
-    def _readConfigs(self, configs_file_value: StrPath | None) -> dict[str, ConfigGroup]:
+    def _validatedConfigPatchNames(
+        self,
+        value: Any,
+        attribute_name: str,
+        group_context: str,
+        patch_set_names: set[str],
+    ) -> frozenset[str]:
+        """Validates, deduplicates, and resolves a config group's patch-set references."""
+        if value is None or (isinstance(value, list) and not value):
+            raise ValueError(f"{attribute_name} field is set but empty")
+        if not isinstance(value, list):
+            raise ValueError(  # noqa: TRY004 - public API reports invalid config values
+                f"{group_context} attribute '{attribute_name}' must be a list"
+            )
+
+        referenced_names: set[str] = set()
+        seen_names: set[str] = set()
+        for patch_index, patch_name in enumerate(value, start=1):
+            patch_context = f"{group_context} attribute '{attribute_name}', item {patch_index}"
+            if not isinstance(patch_name, str) or not (patch_name := patch_name.strip()):
+                raise ValueError(f"{patch_context} must be a non-empty string")
+            if patch_name in seen_names:
+                continue
+            seen_names.add(patch_name)
+            if patch_name not in patch_set_names:
+                self.Con.warning(
+                    f"Patch set referenced in {group_context} attribute "
+                    f"'{attribute_name}' isn't defined: {patch_name!r}. Ignoring it."
+                )
+                continue
+            referenced_names.add(patch_name)
+
+        if not referenced_names:
+            raise ValueError(f"{attribute_name} field is set but empty after stripping and deduplicating patch names.")
+        return frozenset(referenced_names)
+
+    def _readConfigs(
+        self, configs_file_value: StrPath | None, patch_set_names: set[str]
+    ) -> dict[str, ConfigGroup]:
         """Reads and validates benchmark config groups from a YAML file."""
         configs_file = self._validatedConfigsFile(configs_file_value)
         try:
@@ -409,7 +451,14 @@ class BulkBench:
                 f"{error_prefix} must contain a YAML list"
             )
 
-        allowed_attributes = {"configs", "enabled", "name", "override_args"}
+        allowed_attributes = {
+            "configs",
+            "eager_in_patches",
+            "enabled",
+            "name",
+            "only_in_patches",
+            "override_args",
+        }
         benchmark_configs_cache: dict[Path, list[Any]] = {}
         enabled_group_names: set[str] = set()
         groups: dict[str, ConfigGroup] = {}
@@ -437,6 +486,10 @@ class BulkBench:
             if "name" not in raw_group:
                 raise ValueError(f"{group_context} is missing required attribute 'name'")
             name = self._validatedName(raw_group["name"], group_context)
+            if name.startswith(EAGER_GROUP_PREFIX):
+                raise ValueError(
+                    f"{group_context} attribute 'name' must not start with reserved prefix '{EAGER_GROUP_PREFIX}'"
+                )
             if name in enabled_group_names:
                 raise ValueError(f"{error_prefix} contains duplicate group name {name!r}")
             enabled_group_names.add(name)
@@ -484,6 +537,38 @@ class BulkBench:
                         f"{group_context} attribute 'override_args' isn't valid JSON: {exc}"
                     ) from exc
 
+            only_in_patches = (
+                self._validatedConfigPatchNames(
+                    raw_group["only_in_patches"],
+                    "only_in_patches",
+                    group_context,
+                    patch_set_names,
+                )
+                if "only_in_patches" in raw_group
+                else None
+            )
+            eager_in_patches = (
+                self._validatedConfigPatchNames(
+                    raw_group["eager_in_patches"],
+                    "eager_in_patches",
+                    group_context,
+                    patch_set_names,
+                )
+                if "eager_in_patches" in raw_group
+                else None
+            )
+            eager_only_in_patches: frozenset[str] | None = None
+            if eager_in_patches is not None:
+                if only_in_patches is None:
+                    eager_only_in_patches = eager_in_patches
+                else:
+                    eager_only_in_patches = only_in_patches & eager_in_patches
+                    if not eager_only_in_patches:
+                        raise ValueError(
+                            f"{group_context} attributes 'only_in_patches' and "
+                            "'eager_in_patches' have an empty intersection"
+                        )
+
             if not supported_configs:
                 self.Con.warning(
                     f"Group '{name}' was fully omitted; "
@@ -495,7 +580,21 @@ class BulkBench:
                 "name": name,
                 "configs": supported_configs,
                 "override_args": serialized_override_args,
+                "only_in_patches": only_in_patches,
             }
+            if eager_only_in_patches is not None:
+                eager_override_args = dict(override_args or {})
+                eager_override_args["num_iterations"] = 1
+                eager_override_args["use_torch_compile"] = False
+                eager_name = EAGER_GROUP_PREFIX + name
+                groups[eager_name] = {
+                    "name": eager_name,
+                    "configs": supported_configs.copy(),
+                    "override_args": json.dumps(
+                        eager_override_args, allow_nan=False, separators=(",", ":")
+                    ),
+                    "only_in_patches": eager_only_in_patches,
+                }
 
         if not enabled_group_names:
             raise ValueError(f"{error_prefix} must contain at least one enabled config group")
@@ -784,6 +883,10 @@ class BulkBench:
         unsuccessful: dict[str, tuple[ConfigRunResult, float]] = {}
         for cfg in self.configs.values():
             cfg_name = cfg["name"]
+            only_in_patches = cfg["only_in_patches"]
+            if only_in_patches is not None and patch_set_name not in only_in_patches:
+                self.Con.info(f"Config group '{cfg_name}' is disabled for patch set '{patch_set_name}'. Ignoring it.")
+                continue
             configs_to_run: list[str] = []
             started = monotonic()
             try:

@@ -68,16 +68,19 @@ class TestSystem(unittest.TestCase):
                     "override_args": (
                         '{"num_iterations":5,"use_cfg_parallel":true,"nested":{"values":[1,null]}}'
                     ),
+                    "only_in_patches": None,
                 },
                 "group2": {
                     "name": "group2",
                     "configs": ["cfg3"],
                     "override_args": None,
+                    "only_in_patches": None,
                 },
                 "group3": {
                     "name": "group3",
                     "configs": ["cfg4"],
                     "override_args": None,
+                    "only_in_patches": None,
                 },
             },
         )
@@ -204,6 +207,162 @@ class TestSystem(unittest.TestCase):
             with self.subTest(expected_message=expected_message):
                 self.assertInvalidConfigs(contents, expected_message)
 
+    def test_config_patch_fields_reject_empty_and_invalid_values(self):
+        cases = (
+            ("only_in_patches: null", "only_in_patches field is set but empty"),
+            ("only_in_patches: []", "only_in_patches field is set but empty"),
+            ("only_in_patches: baseline", "'only_in_patches' must be a list"),
+            ("only_in_patches: ['  ']", "item 1 must be a non-empty string"),
+            ("only_in_patches: [1]", "item 1 must be a non-empty string"),
+            ("only_in_patches: [missing]", "only_in_patches field is set but empty"),
+            ("eager_in_patches: null", "eager_in_patches field is set but empty"),
+            ("eager_in_patches: []", "eager_in_patches field is set but empty"),
+            ("eager_in_patches: baseline", "'eager_in_patches' must be a list"),
+            ("eager_in_patches: ['  ']", "item 1 must be a non-empty string"),
+            ("eager_in_patches: [1]", "item 1 must be a non-empty string"),
+            ("eager_in_patches: [missing]", "eager_in_patches field is set but empty"),
+        )
+        for field, expected_message in cases:
+            with self.subTest(field=field):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [cfg]\n  {field}",
+                    expected_message,
+                )
+
+    def test_config_patch_fields_deduplicate_and_ignore_unknown_patch_sets(self):
+        with patch("bulkbench.bulkbench.LoggingConsole.warning") as warning:
+            bulk_bench = self._read_configs(
+                """
+- name: group
+  configs: [cfg]
+  only_in_patches: [baseline, " baseline ", missing, missing]
+  eager_in_patches: [baseline, " baseline ", missing, missing]
+"""
+            )
+
+        self.assertEqual(
+            bulk_bench.configs["group"]["only_in_patches"], frozenset({"baseline"})
+        )
+        eager_group = bulk_bench.configs["eager_group"]
+        self.assertEqual(eager_group["configs"], ["cfg"])
+        self.assertEqual(eager_group["only_in_patches"], frozenset({"baseline"}))
+        self.assertEqual(
+            eager_group["override_args"],
+            '{"num_iterations":1,"use_torch_compile":false}',
+        )
+        self.assertEqual(warning.call_count, 2)
+        for warning_call, attribute_name in zip(
+            warning.call_args_list,
+            ("only_in_patches", "eager_in_patches"),
+            strict=True,
+        ):
+            message = warning_call.args[0]
+            self.assertIn(f"attribute '{attribute_name}' isn't defined", message)
+            self.assertIn("'missing'", message)
+
+    def test_eager_group_intersects_restrictions_and_overrides_eager_arguments(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            for name in ("changes", "quality"):
+                patch_path = project_dir / name / f"{name}.patch"
+                patch_path.parent.mkdir()
+                patch_path.touch()
+                (project_dir / f"{name}.py").touch()
+            (project_dir / "patches.yaml").write_text(
+                f"""
+- name: baseline
+  patches: []
+- name: changes
+  patches:
+    - patch: changes.patch
+      target: {project_dir / "changes.py"}
+- name: quality
+  patches:
+    - patch: quality.patch
+      target: {project_dir / "quality.py"}
+""",
+                encoding="utf-8",
+            )
+            (project_dir / "configs.yaml").write_text(
+                """
+- name: group
+  configs: [cfg]
+  only_in_patches: [baseline, changes]
+  eager_in_patches: [quality, changes]
+  override_args:
+    num_iterations: 17
+    use_torch_compile: true
+    nested: {value: original}
+""",
+                encoding="utf-8",
+            )
+            with patch.object(BulkBench, "_dryRunPatches"):
+                bulk_bench = BulkBench(project_dir=project_dir, arch="")
+
+        self.assertEqual(
+            bulk_bench.configs,
+            {
+                "group": {
+                    "name": "group",
+                    "configs": ["cfg"],
+                    "override_args": (
+                        '{"num_iterations":17,"use_torch_compile":true,'
+                        '"nested":{"value":"original"}}'
+                    ),
+                    "only_in_patches": frozenset({"baseline", "changes"}),
+                },
+                "eager_group": {
+                    "name": "eager_group",
+                    "configs": ["cfg"],
+                    "override_args": (
+                        '{"num_iterations":1,"use_torch_compile":false,'
+                        '"nested":{"value":"original"}}'
+                    ),
+                    "only_in_patches": frozenset({"changes"}),
+                },
+            },
+        )
+
+    def test_eager_group_rejects_empty_restriction_intersection(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "changes").mkdir()
+            (project_dir / "changes" / "change.patch").touch()
+            (project_dir / "target.py").touch()
+            (project_dir / "patches.yaml").write_text(
+                f"""
+- name: baseline
+  patches: []
+- name: changes
+  patches:
+    - patch: change.patch
+      target: {project_dir / "target.py"}
+""",
+                encoding="utf-8",
+            )
+            (project_dir / "configs.yaml").write_text(
+                """
+- name: group
+  configs: [cfg]
+  only_in_patches: [baseline]
+  eager_in_patches: [changes]
+""",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(BulkBench, "_dryRunPatches"),
+                self.assertRaises(ValueError) as context,
+            ):
+                BulkBench(project_dir=project_dir, arch="")
+
+        self.assertIn("have an empty intersection", str(context.exception))
+
+    def test_config_group_name_cannot_use_reserved_eager_prefix(self):
+        self.assertInvalidConfigs(
+            "- name: eager_group\n  configs: [cfg]",
+            "attribute 'name' must not start with reserved prefix 'eager_'",
+        )
+
     def test_duplicate_yaml_keys_are_rejected(self):
         self.assertInvalidConfigs(
             "- enabled: false\n  name: group\n  name: other\n"
@@ -246,6 +405,7 @@ class TestSystem(unittest.TestCase):
                     "name": "partly_supported",
                     "configs": ["cfg", "cfg.first", "cfg.second"],
                     "override_args": None,
+                    "only_in_patches": None,
                 }
             },
         )
@@ -846,6 +1006,37 @@ class TestSystem(unittest.TestCase):
             self.assertEqual(
                 bulk_bench.unsuccessful_runs,
                 {"changes": {}},
+            )
+
+    def test_run_all_configs_skips_groups_not_enabled_for_patch_set(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                """
+- name: restricted
+  configs: [cfg]
+  only_in_patches: [baseline]
+- name: eager
+  configs: [cfg2]
+  only_in_patches: [baseline]
+  eager_in_patches: [baseline]
+""",
+            )
+            bulk_bench._runConfig = Mock()
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
+
+            bulk_bench._runAllConfigs("changes")
+
+            bulk_bench._runConfig.assert_not_called()
+            self.assertEqual(bulk_bench.successful_runs, {"changes": []})
+            self.assertEqual(bulk_bench.unsuccessful_runs, {"changes": {}})
+
+            bulk_bench._runAllConfigs("baseline")
+
+            self.assertEqual(
+                [config_call.args[2] for config_call in bulk_bench._runConfig.call_args_list],
+                ["restricted", "eager", "eager_eager"],
             )
 
     def test_run_all_configs_records_expected_and_unexpected_failures(self):

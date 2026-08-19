@@ -18,7 +18,7 @@ _ALT_DELIMITER = "|"
 
 
 def _warn(message, debug_log=None) -> None:
-    if debug_log is not None:
+    if debug_log:
         debug_log.warning(message)
     else:
         print(message)
@@ -278,7 +278,8 @@ class parser_JSON(ParserBase):
         )
 
         sources = get_benchmark_sources(fpath, filter, debug_log)
-        debug_log.debug(sources)
+        if debug_log:
+            debug_log.debug(sources)
         
         self.stats = {}
         for bmname, result_dir in sources:

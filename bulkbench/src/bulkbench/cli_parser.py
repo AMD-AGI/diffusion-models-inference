@@ -45,7 +45,10 @@ def makeParser() -> argparse.ArgumentParser:
         "The file must be a valid YAML file containing a list of objects describing benchmark "
         "configs with attributes:\n"
         "- name (required) - name of the benchmark config group (must be unique within the file, "
-        f"match `{VALID_NAME_PATTERN}` after stripping, and not be `.` or `..`),\n"
+        f"match `{VALID_NAME_PATTERN}` after stripping, and not be `.` `..`, or starting with an "
+        "`eager_` literal). "
+        "It's recommended to keep the name short whenever the group contain only unique configs "
+        "not used in other groups.\n"
         "- configs (required) - a non empty list of strings naming benchmark configs to execute "
         "(these are passed as `--name` argument to the /app/ci/run.py script),\n"
         "- override_args (optional) - an optional key-value object to override specific settings "
@@ -54,7 +57,21 @@ def makeParser() -> argparse.ArgumentParser:
         "Valid values are unquoted YAML `true`/`false`, standard aliases "
         "(`yes`/`no` and `on`/`off`), integers 1/0, quoted values "
         '"true", "false", "1", and "0". Defaults to `true`. Disabled groups are omitted; '
-        "their other attributes aren't validated.\n",
+        "their other attributes aren't validated.\n"
+        "- only_in_patches (optional) - an optional non-empty list of patch names, that when "
+        "present, enables execution of the group configs only for these patch sets. "
+        "As long as the list has at least one known patch set name, it can also contain other "
+        "patch set names not present in the --patches_file (these are ignored with a warning). "
+        "Absence of the field is equivalent to 'run on all patch sets'.\n"
+        "- eager_in_patches (optional) - an optional list of patch names, that when present, "
+        "additionally enables execution of the group configs in eager mode for these patch sets. "
+        "Internally (which affects --results_dir layout) it creates an additional config group "
+        "named `eager_<group_name>` inheriting `configs` from this group. "
+        "Eager group's `only_in_patches` is set to an intersection of the parent's `only_in_patches` "
+        "and `eager_in_patches` lists (it's an error if the intersection is empty). "
+        "Parent group's `override_args` are copied and their `num_iterations` "
+        "are set to 1, and `use_torch_compile` is set to `false`.\nEager groups performance results "
+        "are ignored by the statistical analysis, but they are used for quality evaluation.",
     )
     parser.add_argument(
         "--patches_file",
