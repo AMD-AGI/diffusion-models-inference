@@ -219,6 +219,7 @@ index 000000000..3491e675d
 --- /dev/null
 +++ b/csrc/cpp_itfs/mha_fwd_sparse.cu
 @@ -0,0 +1,172 @@
++// SPDX-License-Identifier: MIT
 +// Copyright (C) 2024-2026, Advanced Micro Devices, Inc. All rights reserved.
 +//
 +// Block-sparse FMHA forward (fp8, hd=128, gfx950) C++ dispatcher.
@@ -397,6 +398,7 @@ index 000000000..7f20e2386
 +++ b/csrc/include/mha_fwd_sparse.h
 @@ -0,0 +1,78 @@
 +#pragma once
++// SPDX-License-Identifier: MIT
 +// Copyright (C) 2024-2026, Advanced Micro Devices, Inc. All rights reserved.
 +//
 +// Block-sparse FMHA forward (fp8, hd=128, gfx950).
@@ -507,6 +509,7 @@ index 000000000..173b633e0
 +++ b/csrc/include/torch/mha_v3_fwd_sparse.h
 @@ -0,0 +1,32 @@
 +#pragma once
++// SPDX-License-Identifier: MIT
 +// Copyright (C) 2024-2026, Advanced Micro Devices, Inc. All rights reserved.
 +#include <torch/extension.h>
 +
@@ -543,6 +546,7 @@ index 000000000..a10a8c749
 --- /dev/null
 +++ b/csrc/py_itfs_cu/asm_mha_fwd_sparse.cu
 @@ -0,0 +1,225 @@
++// SPDX-License-Identifier: MIT
 +// Copyright (C) 2024-2026, Advanced Micro Devices, Inc. All rights reserved.
 +//
 +// Block-sparse fp8 FMHA forward (hd=128, gfx950).
@@ -772,6 +776,7 @@ index 298e61dbc..f2e0a1478 100644
 --- a/csrc/pybind/mha_fwd_asm_pybind.cu
 +++ b/csrc/pybind/mha_fwd_asm_pybind.cu
 @@ -1,7 +1,8 @@
+ // SPDX-License-Identifier: MIT
 -// Copyright (C) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 +// Copyright (C) 2024-2026, Advanced Micro Devices, Inc. All rights reserved.
  #include "rocm_ops.hpp"
