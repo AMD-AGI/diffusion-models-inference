@@ -33,7 +33,7 @@ def _warn(message, debug_log=None) -> None:
         print(message)
 
 
-def _parse_filter(filter) -> set[int] | None:
+def parse_filter(filter) -> set[int] | None:
     if filter is None:
         return None
     if not isinstance(filter, str):
@@ -90,7 +90,7 @@ def _walk_directories_following_symlinks(fpath: str):
 
 def get_benchmark_sources(
     fpath: str,
-    filter: str | None,
+    filter_indices: set[int] | None,
     debug_log=None,
     ignore_eager: bool = True,
 ) -> set[tuple[str, str]]:
@@ -99,7 +99,6 @@ def get_benchmark_sources(
     When ``ignore_eager`` is true, omit nested result directories whose immediate
     parent name starts with ``eager_``  (``bulkbench.EAGER_GROUP_PREFIX``).
     """
-    filter_indices = _parse_filter(filter)
     fpath = os.fspath(fpath)
 
     if os.path.isfile(fpath):
@@ -304,7 +303,7 @@ class parser_JSON(ParserBase):
             "Only default metrics are supported for xDiT SingleModel parser"
         )
 
-        filter_indices = _parse_filter(filter)
+        filter_indices = parse_filter(filter)
         fpath = os.fspath(fpath)
         is_direct_file = os.path.isfile(fpath)
         has_immediate_timings = os.path.isfile(os.path.join(fpath, _TIMINGS_FILENAME))
@@ -314,7 +313,7 @@ class parser_JSON(ParserBase):
             else _ALT_DELIMITER
         )
 
-        sources = get_benchmark_sources(fpath, filter, debug_log)
+        sources = get_benchmark_sources(fpath, filter_indices, debug_log)
         if debug_log:
             debug_log.debug(sources)
         

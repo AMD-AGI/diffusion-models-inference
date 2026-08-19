@@ -1,0 +1,98 @@
+"""PSNR metric implementation."""
+
+import os
+from pathlib import Path, PurePath
+from benchstats.compare import poolBenchmarks
+from typing import Any
+
+from ..parser_JSON import get_benchmark_sources, _ALT_DELIMITER, parse_filter
+from ..bulkbench import EAGER_GROUP_PREFIX
+
+
+def _is_eager_alternative(alt: str) -> bool:
+    """Determines if a benchmark alternative was made in an eager mode.
+
+    By construction, get_benchmark_sources() makes benchmark alternative
+    names from directory names and benchmark group name (if not requested by a user
+    to be in a benchmark entity id with a `filter=1`/--args=1 argument) is going to always be
+    the last part of the alternative name. We just need to split it correctly and check if it
+    starts with the eager group prefix.
+    """
+    parts = PurePath(alt).parts
+    return parts[-1].startswith(EAGER_GROUP_PREFIX)
+
+
+def _split_references_and_runs(
+    pool: dict[str, dict[str, str]],
+    logger,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    references = {}
+    runs = {}
+    for k, v in pool.items():
+        dref = {}
+        drun = {}
+        for a, d in v.items():
+            if _is_eager_alternative(a):
+                dref[a] = d
+            else:
+                drun[a] = d
+        if dref:
+            references[k] = dref
+        if drun:
+            runs[k] = drun
+    logger.debug("references:", references)
+    logger.debug("runs:", runs)
+    return references, runs
+
+
+def metric_psnr(logger, results_dir: Path, args: list[str] | None = None) -> int:
+    """Compute PSNR between images and videos in the results directory using eager mode resuls "
+    "as reference."""
+    if args:
+        assert len(args) == 1, "PSNR metric supports only one argument"
+        filter = args[0]
+    else:
+        filter = None
+
+    filter_indices = parse_filter(filter)
+    if filter_indices is not None and 1 in filter_indices:
+        logger.warning(
+            "By letting --args to have 1, you're requesting a benchmark group name "
+            "(second closest parent of a `timings.json` file in a model config run results) to be "
+            "a part of benchmarking entity id, instead of an alternative id. This will break "
+            "this tool assumptions and will most likely fail later."
+        )
+
+    # there should be no duplicate by construction.
+    src = dict(
+        get_benchmark_sources(results_dir, filter_indices, debug_log=logger, ignore_eager=False)
+    )
+    pool, _ = poolBenchmarks(_ALT_DELIMITER, src, None, logger)
+
+    references, runs = _split_references_and_runs(pool, logger)
+    if not references:
+        logger.error(
+            "No reference data found. You can generate it with `eager_in_patches` field "
+            "set correctly in a configs file of a `bulkbench` project for a group you're interested "
+            "in, or you can make such "
+            "references manually and store them under respective `eager_*` groups result directories."
+        )
+        return 2
+    if not runs:
+        logger.error("No run data found. Did you run a `bulkbench` project?")
+        return 3
+
+    unmatched_refs = references.keys() - runs.keys()
+    if unmatched_refs:
+        logger.warning(
+            "These references don't have corresponding run data to be compared with and will be ignored:",
+            {k: references[k] for k in unmatched_refs},
+        )
+    unmatched_runs = runs.keys() - references.keys()
+    if unmatched_runs:
+        logger.warning(
+            "These runs don't have corresponding reference data to be compared with and will be ignored:",
+            {k: runs[k] for k in unmatched_runs},
+        )
+
+    return 0

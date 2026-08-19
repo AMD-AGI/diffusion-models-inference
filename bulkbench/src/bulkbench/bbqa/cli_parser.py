@@ -3,7 +3,7 @@
 import argparse
 from benchstats.common import LoggingConsole
 
-from .bbqa import DEFAULT_CONSOLE_LOG_LEVEL
+from .bbqa import DEFAULT_CONSOLE_LOG_LEVEL, SUPPORTED_METRICS
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -24,11 +24,31 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "results_dir",
+        "--results_dir",
         help="Directory with xDiT outputs, typically created by a `bulkbench` tool under its "
         "--results_dir argument (i.e. at "
         "least 2 levels deep with the deepest directories containing the results of benchmark "
-        "runs).",
+        "runs). Defaults to the current working directory.",
+        default=None,
+    )
+    parser.add_argument(
+        "--metric",
+        default=next(iter(SUPPORTED_METRICS.keys())),
+        choices=SUPPORTED_METRICS.keys(),
+        metavar="metric",
+        help="Metric to calculate. Options are: "
+        + ", ".join(SUPPORTED_METRICS.keys())
+        + "\nDescription of each metric:\n"
+        + "\n".join([f"{metric}: {description}" for metric, description in SUPPORTED_METRICS.items()])
+        + "\nDefaults to `%(default)s`.",
+    )
+
+    parser.add_argument(
+        "--args",
+        help="Arguments for the metric if needed.",
+        nargs="*",
+        metavar="arg",
+        default=[],
     )
 
     return parser
