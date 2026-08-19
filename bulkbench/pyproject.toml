@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bulkbench"
-description = "Bulk xDiT benchmarking driver with statistical analysis of the results"
+description = "Bulk benchmarking driver for xDiT with QA & statistical analysis of the results"
 requires-python = ">=3.11"
 dynamic = ["version", "readme"]
 dependencies = [
@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 bulkbench = "bulkbench.__main__:main"
+bbqa = "bulkbench.bbqa.__main__:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "bulkbench.__version__"}
