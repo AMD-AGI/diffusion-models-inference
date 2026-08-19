@@ -6,7 +6,7 @@
 #     .
 #
 
-ARG BASE_IMAGE="amdsiloai/pytorch-private:xdit-v26.6-torch2.11"
+ARG BASE_IMAGE="amdsiloai/pytorch-private:xdit-2.13-20260803"
 
 FROM scratch AS patches
 COPY ./patches /patches
@@ -25,8 +25,10 @@ ARG FLASH_ATTENTION_COMMIT="0e60e394"
 # Builds FA with Triton backend (https://github.com/ROCm/flash-attention#triton-backend)
 ENV FLASH_ATTENTION_TRITON_AMD_ENABLE="TRUE"
 
-WORKDIR /app/external
+ENV VLLM_TARGET_DEVICE=rocm
+ENV VLLM_OMNI_TARGET_DEVICE=rocm
 
+WORKDIR /app/external
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -34,12 +36,6 @@ RUN apt-get update && \
         libdrm-dev \
         libopenmpi3 \
     && rm -rf /var/lib/apt/lists/*
-
-# Temporary PyTorch patch to avoid log spam: https://github.com/pytorch/pytorch/issues/182298, https://github.com/pytorch/pytorch/pull/178506
-RUN --mount=type=bind,from=patches,source=/patches,target=/patches \
-    SITE_PACKAGES=$(python3 -c 'import torch, os; print(os.path.dirname(os.path.dirname(torch.__file__)))') && \
-    cd "${SITE_PACKAGES}" && \
-    patch -p1 < /patches/dynamo_fix_ignore_logging_functions.patch
 
 # Install flash-attention.
 RUN git clone ${FLASH_ATTENTION_REPO} && \
