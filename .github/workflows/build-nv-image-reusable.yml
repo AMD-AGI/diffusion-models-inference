@@ -111,16 +111,11 @@ jobs:
       - name: Build NV image
         env:
           BUILDKIT_PROGRESS: plain
-          DOCKER_BUILDKIT: 1
-          BUILDKIT_STEP_LOG_MAX_SIZE: '104857600'
           PLATFORM: ${{ inputs.platform }}
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
           FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
         run: |
-          # Pull previous image for cache (may not exist for first build)
-          docker pull "${IMAGE_TAG}" || true
-          
           NO_CACHE_FLAG=""
           if [ "${DISABLE_CACHE}" = "true" ]; then
             NO_CACHE_FLAG="--no-cache"
@@ -131,17 +126,25 @@ jobs:
             EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}"
           fi
           
-          docker build \
+          # The remote builder imports cache straight from the registry, so a
+          # missing tag must not fail the build.
+          CACHE_FROM_FLAG=""
+          if docker buildx imagetools inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
+            CACHE_FROM_FLAG="--cache-from ${IMAGE_TAG}"
+          fi
+
+          docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.cuda \
             --platform "${PLATFORM}" \
             --pull \
+            --push \
             ${NO_CACHE_FLAG} \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             ${EXTRA_BUILD_ARGS} \
-            --cache-from "${IMAGE_TAG}" \
+            ${CACHE_FROM_FLAG} \
             -t "${IMAGE_TAG}" \
             .
-          docker push "${IMAGE_TAG}"
       
       - name: Set outputs
         id: set_outputs

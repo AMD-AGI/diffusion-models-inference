@@ -31,5 +31,11 @@ runs:
       env:
         WORKSPACE: ${{ github.workspace }}
       run: |
-        docker run --rm -v "${WORKSPACE}:/workspace" ubuntu:24.04 sh -c 'rm -rf /workspace/* /workspace/.??*' || true
+        RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
+        [[ "$WORKSPACE" == "$RUNNER_WORK_ROOT/"* ]] ||
+          { echo "Workspace is outside $RUNNER_WORK_ROOT" >&2; exit 1; }
+        docker run --rm \
+          --mount type=bind,src="$RUNNER_WORK_ROOT",dst="$RUNNER_WORK_ROOT" \
+          -e WORKSPACE \
+          ubuntu:24.04 sh -c 'rm -rf "$WORKSPACE"/* "$WORKSPACE"/.??*' || true
 

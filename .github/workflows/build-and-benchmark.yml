@@ -373,17 +373,17 @@ jobs:
       - name: Build final tuned image
         env:
           BUILDKIT_PROGRESS: plain
-          DOCKER_BUILDKIT: 1
           UNTUNED_IMAGE: ${{ steps.metadata.outputs.untuned_image }}
           IMAGE_TAG: ${{ steps.metadata.outputs.staging_image_with_tag }}
         run: |
-          docker build \
+          docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --cache-from "${UNTUNED_IMAGE}" \
             -t "${IMAGE_TAG}" \
+            --push \
             .
-          docker push "${IMAGE_TAG}"
       
       - name: Cleanup
         if: always()
