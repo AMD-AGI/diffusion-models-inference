@@ -90,7 +90,7 @@ def get_benchmark_sources(
     """Return ``(benchmark name, result directory)`` pairs selected by the inputs.
 
     When ``ignore_eager`` is true, omit nested result directories whose immediate
-    parent name starts with ``EAGER_GROUP_PREFIX``.
+    parent name starts with ``eager_``  (``bulkbench.EAGER_GROUP_PREFIX``).
     """
     filter_indices = _parse_filter(filter)
     fpath = os.fspath(fpath)
