@@ -492,6 +492,12 @@ def command(e: Experiment, override_args: dict, override_runner: Optional[str] =
             if value:
                 cmd.extend([flag] + [str(v) for v in value])
             continue
+        # Nested mappings (e.g. `config:`) are forwarded as a single JSON
+        # string; the benchmark script is expected to parse it.
+        if isinstance(value, dict):
+            if value:
+                cmd.extend([flag, json.dumps(value)])
+            continue
 
         cmd.append(flag)
         cmd.append(str(value))

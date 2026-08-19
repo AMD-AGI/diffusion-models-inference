@@ -121,7 +121,7 @@ def parse_args() -> argparse.Namespace:
         "--num_iterations",
         type=int,
         default=1,
-        help="The input videos to run",
+        help="Number of times to run the prompt (sequential, for timing averages)",
     )
     parser.add_argument(
         "--use_torch_compile",
@@ -154,6 +154,13 @@ def parse_args() -> argparse.Namespace:
         required=False,
         default=0,
         help="The number of warmup calls to run",
+    )
+    parser.add_argument(
+        "--warmup_steps",
+        type=int,
+        required=False,
+        default=2,
+        help="The number of steps in warmup to run",
     )
     parser.add_argument(
         "--max_sequence_length",
@@ -206,6 +213,16 @@ def parse_args() -> argparse.Namespace:
         help="Whether to use MXFP4 quantized GEMMs"
     )
     parser.add_argument(
+        "--config",
+        type=str,
+        required=False,
+        default=None,
+        help=(
+            "Extra generation config as a JSON object (e.g. task, conditions, target). "
+            "Written to <output-directory>/config.json and passed to sglang as --config."
+        ),
+    )
+    parser.add_argument(
         "--quantization_ignored_layers",
         nargs="+",
         required=False,
@@ -238,6 +255,28 @@ def _parallel_degree(ulysses_degree: int, ring_degree: int, use_cfg_parallel: bo
     return (int(use_cfg_parallel) + 1) * ulysses_degree * ring_degree
 
 
+def _write_config_file(config_json: str, output_directory: str) -> str:
+    """
+    Dump the --config JSON payload into the output directory and return its path.
+
+    sglang takes the extra generation config (task, conditions, target, ...) as a
+    path to a JSON file, while the benchmark YAMLs carry it inline, so the values
+    are materialised here. Writing it next to the other run artifacts keeps it
+    around for debugging.
+    """
+    config = json.loads(config_json)
+    if not isinstance(config, dict):
+        raise ValueError(f"--config must be a JSON object, got {type(config).__name__}")
+
+    os.makedirs(output_directory, exist_ok=True)
+    config_path = os.path.join(output_directory, "config.json")
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+    print(f"Wrote generation config to {config_path}: {json.dumps(config)}")
+    return config_path
+
+
 def run_cli(args):
     cmd = ["sglang", "generate"]
 
@@ -255,21 +294,28 @@ def run_cli(args):
         "num-gpus": num_gpus,
         "num-inference-steps": args.num_inference_steps,
         "guidance-scale": args.guidance_scale,
-        "prompt": f'"{args.prompt}"',
         "dit-cpu-offload": "False",
         "dit-layerwise-offload": "False",
         "text-encoder-cpu-offload": "False",
         "image-encoder-cpu-offload": "False",
+        "offload-during-compile": "False",
         "vae-cpu-offload": "False",
-        "warmup": "True",
-        "warmup-steps": 2,
+        "warmup-mode": "request",
+        "warmup-steps": args.warmup_steps,
         "vae-precision": "bf16",
         "image-encoder-precision": "bf16",
         "output-path": args.output_directory,
     }
 
+    values = {key:value for key, value in values.items() if value != None}
+
     for key, value in values.items():
         cmd.extend([f"--{key}", str(value)])
+
+    # Repeat the prompt num_iterations times so sglang runs it sequentially.
+    # Each prompt must be its own argv entry (nargs="+"); no shell quoting since
+    # subprocess is invoked with a list (shell=False).
+    cmd.extend(["--prompt", *([args.prompt] * args.num_iterations)])
 
     if args.num_frames is not None:
         cmd.extend(["--num-frames", str(args.num_frames)])
@@ -278,7 +324,7 @@ def run_cli(args):
         cmd.extend(["--seed", str(args.seed)])
 
     if args.negative_prompt is not None:
-        cmd.extend(["--negative-prompt", f'"{args.negative_prompt}"'])
+        cmd.extend(["--negative-prompt", args.negative_prompt])
 
     if args.input_images is not None:
         cmd.extend(["--image-path"] + args.input_images)
@@ -309,6 +355,9 @@ def run_cli(args):
     if args.quantization_ignored_layers:
         cmd.extend(["--quantization-ignored-layers"] + args.quantization_ignored_layers)
 
+    if args.config is not None:
+        cmd.extend(["--config", _write_config_file(args.config, args.output_directory)])
+
     print(f"Running command: {' '.join(cmd)}")
 
     result = subprocess.run(
@@ -321,17 +370,20 @@ def run_cli(args):
     command_output = result.stdout + result.stderr
     print(f"Command output: {command_output}")
 
-    timing = None
     ansi_escape = r'\x1b\[[0-9;]*m'
-    match = re.search(rf'Warmed-up request processed in {ansi_escape}?([\d.]+){ansi_escape}? seconds', command_output)
-    if match:
-        timing = float(match.group(1))
-        print(f"Extracted post-warmup time: {timing} seconds")
-    else:
+    timings = [
+        float(m)
+        for m in re.findall(
+            rf'Warmed-up request processed in {ansi_escape}?([\d.]+){ansi_escape}? seconds',
+            command_output,
+        )
+    ]
+    if not timings:
         raise ValueError("Could not find post-warmup time in command output")
+    print(f"Extracted post-warmup times: {timings} seconds")
 
     with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
-        json.dump([timing], f)
+        json.dump(timings, f)
 
 def run_api(args):
 
