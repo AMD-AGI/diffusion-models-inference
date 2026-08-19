@@ -208,6 +208,8 @@ class BulkBench:
         self.backup_dir: Path = self._validatedOutputDir(
             _get_arg("backup_dir"), DEFAULT_BACKUP_SUBDIR, "backup_dir"
         )
+        if not self.backup_dir.exists():
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
         if any(self.backup_dir.iterdir()):
             raise ValueError(f"--backup_dir directory '{self.backup_dir}' isn't empty")
         self._validateBackupDirIsDisjoint()
