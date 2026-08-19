@@ -15,7 +15,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
 
@@ -34,6 +34,6 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_hsdp: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25

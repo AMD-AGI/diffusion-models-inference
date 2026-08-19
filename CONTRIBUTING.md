@@ -129,8 +129,8 @@ files and database entries for the relevant GPU architectures.
 
 Patches for upstream projects go in `patches/`. Name the patch file descriptively and
 ensure it applies cleanly against the upstream version pinned in the Dockerfiles. These
-patches apply to upstream code governed by the upstream project's license; do not add
-SPDX headers to patch files.
+patches apply to upstream code governed by the upstream project's license. Preserve
+license headers from upstream; patch files are excluded from first-party SPDX checks.
 
 ### Pre-commit hooks
 
@@ -142,6 +142,6 @@ repository checks locally. First-party data files covered by the check must star
 # SPDX-License-Identifier: MIT
 ```
 
-The hook currently verifies these headers on the applicable data files and rejects SPDX
-headers in upstream patches. The checks will be expanded as the repository is prepared
-for public development.
+The hook currently verifies these headers on the applicable first-party data files.
+Patch files are excluded because they may contain legitimate upstream license headers.
+The checks will be expanded as the repository is prepared for public development.

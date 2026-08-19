@@ -27,9 +27,4 @@ done < <(find "$repository_root/data/hipblaslt" -type f -name '*.yaml' -print | 
 
 check_header 'data/miopen/resolve_prefix.sh'
 
-if grep -R -n -E 'SPDX-License-Identifier:' "$repository_root/patches" --include='*.patch' 2>/dev/null; then
-    printf 'SPDX headers are not allowed in upstream patches under patches/.\n' >&2
-    status=1
-fi
-
 exit "$status"
