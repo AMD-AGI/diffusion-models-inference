@@ -2,7 +2,7 @@
 
 This repository contains benchmark configurations, profiling tools, tuning data, and
 container build infrastructure for optimized diffusion model inference. The xDiT workloads
-cover image and video generation on AMD and NVIDIA GPU architectures.
+cover image and video generation on AMD GPU architectures.
 
 ## Container images
 
