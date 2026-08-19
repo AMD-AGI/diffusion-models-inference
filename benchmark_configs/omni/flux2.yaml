@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: flux2.default
-  tags: [release, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -18,25 +18,7 @@
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
-
-- name: flux2.default.hopper.h100
-  tags: [lucid, hopper, h100]
-  model: black-forest-labs/FLUX.2-dev
-  runner: python
-  entrypoint: /app/.ci/online_runner.py
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: True
-    use_hsdp: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
-    guidance_scale: 4.0
-    num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: flux2.default.hopper.h200
   tags: [lucid, hopper, h200]
@@ -55,6 +37,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: CUDNN_ATTN
 
 - name: flux2.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -73,9 +56,10 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: CUDNN_ATTN
 
 - name: flux2.quantgemm.gfx942
-  tags: [gfx942]
+  tags: [release, mad, lucid, instinct, gfx942]
   model: black-forest-labs/FLUX.2-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -93,9 +77,10 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: flux2.quantgemm.gfx950
-  tags: [gfx950]
+  tags: [release, mad, lucid, instinct, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -113,26 +98,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-
-- name: flux2.quantgemm.hopper.h100
-  tags: [lucid, hopper, h100]
-  model: black-forest-labs/FLUX.2-dev
-  runner: python
-  entrypoint: /app/.ci/online_runner.py
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: True
-    use_hsdp: True
-    use_fp8_gemms: True
-    input_images: /app/data/flux_cat.png
-    guidance_scale: 4.0
-    num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: flux2.quantgemm.hopper.h200
   tags: [lucid, hopper, h200]
@@ -152,22 +118,4 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-
-- name: flux2.quantgemm.blackwell
-  tags: [lucid, blackwell, b200, b300]
-  model: black-forest-labs/FLUX.2-dev
-  runner: python
-  entrypoint: /app/.ci/runner.py
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    warmup_calls: 5
-    use_fp8_gemms: True
-    ulysses_degree: 8
-    use_torch_compile: True
-    input_images: /app/data/flux_cat.png
-    guidance_scale: 4.0
-    num_iterations: 25
+    attention_backend: CUDNN_ATTN

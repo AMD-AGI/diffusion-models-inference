@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: qwen_image.default
-  tags: [release, lucid, instinct, gfx942, gfx950]
+  tags: [release, lucid, mad, instinct, gfx942, gfx950]
   model: Qwen/Qwen-Image-2512
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -17,6 +17,7 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+    attention_backend: FLASH_ATTN
 
 - name: qwen_image.default.hopper
   tags: [lucid, hopper, h100, h200]
@@ -34,6 +35,7 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+    attention_backend: CUDNN_ATTN
 
 - name: qwen_image.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -51,3 +53,4 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+    attention_backend: CUDNN_ATTN

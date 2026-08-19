@@ -79,14 +79,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Quantize the diffusion transformer with native online FP8 W8A8.",
     )
-    quantization.add_argument(
-        "--use_fp8_gemms_torchao",
-        action="store_true",
-        help="Quantize the diffusion transformer with TorchAO online FP8 W8A8.",
-    )
     server.add_argument(
         "--transformer_2_quantization_method",
-        choices=("fp8", "mxfp4", "torchao_fp8"),
+        choices=("fp8", "mxfp4"),
         help="Optional quantization method for a second diffusion transformer.",
     )
     server.add_argument(
@@ -123,16 +118,6 @@ def parse_args() -> argparse.Namespace:
 # ── Server management ─────────────────────────────────────────────────────────
 
 
-def _quantization_method_config(method: str) -> dict:
-    if method == "torchao_fp8":
-        return {
-            "method": "torchao_fp8",
-            "granularity": "per_tensor",
-            "set_inductor_config": False,
-        }
-    return {"method": method}
-
-
 def build_serve_cmd(args: argparse.Namespace) -> list[str]:
     cfg_parallel = 2 if args.use_cfg_parallel else 1
     vae_parallel = (
@@ -161,11 +146,9 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
     if args.use_fp4_gemms:
-        transformer_quantization_config = _quantization_method_config("mxfp4")
+        transformer_quantization_config = {"method": "mxfp4"}
     elif args.use_fp8_gemms:
-        transformer_quantization_config = _quantization_method_config("fp8")
-    elif args.use_fp8_gemms_torchao:
-        transformer_quantization_config = _quantization_method_config("torchao_fp8")
+        transformer_quantization_config = {"method": "fp8"}
     else:
         transformer_quantization_config = None
     transformer_2_quantization_method = args.transformer_2_quantization_method
@@ -174,9 +157,7 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
         if transformer_quantization_config is not None:
             quantization_config["transformer"] = transformer_quantization_config
         if transformer_2_quantization_method is not None:
-            quantization_config["transformer_2"] = _quantization_method_config(
-                transformer_2_quantization_method
-            )
+            quantization_config["transformer_2"] = {"method": transformer_2_quantization_method}
         cmd += [
             "--diffusion-quantization-config",
             json.dumps(quantization_config, separators=(",", ":")),
