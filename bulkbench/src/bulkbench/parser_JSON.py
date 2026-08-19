@@ -2,7 +2,14 @@
 This is a module to feed the results of xDiT benchmarking to `benchstats` CLI utility
 for statistical analysis of the results.
 
+Typical use on a bulkbench --results_dir directory is:
 
+```bash
+benchstats . --files_parser=bulkbench.parser_JSON --sample_stats 0 100 --always_show_pvalues --filter1=1
+```
+
+But there's much more. For the usage details see the documentation in the parser_JSON class
+docstring.
 
 """
 
