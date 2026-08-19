@@ -32,7 +32,9 @@ _VALID_NAME_RE = re.compile(VALID_NAME_PATTERN)
 _APP_DIR = Path("/app")
 _BENCHMARK_CONFIGS_DIR = _APP_DIR / ".ci" / "benchmark_configs"
 _BENCHMARK_RUNNER = _APP_DIR / ".ci" / "run.py"
-_RESULT_MEDIA_SUFFIXES = {".jpg", ".mp4", ".png"}
+_RESULT_IMAGE_SUFFIXES = {".jpg", ".png"}
+_RESULT_VIDEO_SUFFIXES = {".mp4"}
+_RESULT_MEDIA_SUFFIXES = _RESULT_IMAGE_SUFFIXES | _RESULT_VIDEO_SUFFIXES
 
 StrPath = str | os.PathLike[str]
 

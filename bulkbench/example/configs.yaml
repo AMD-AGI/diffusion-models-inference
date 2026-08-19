@@ -10,6 +10,7 @@
     #- flux2.default.blackwell
     - flux2.quantgemm.gfx942
     - flux2.quantgemm.gfx950
+  eager_in_patches: [00_pyt_baseline, 10_PR_baseline, 11_PR_only_meta]
   override_args:
     num_iterations: 30
 
@@ -21,5 +22,6 @@
     #- wan2_1.default
     #- wan2_1.default.hopper
     #- wan2_1.default.blackwell
+  eager_in_patches: [00_pyt_baseline, 10_PR_baseline, 11_PR_only_meta]
   override_args:
     num_iterations: 28
