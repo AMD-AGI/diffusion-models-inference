@@ -11,6 +11,9 @@ dependencies = [
     "benchstats==3.5.1",
     "PyYAML",
     "rich",
+    # below packages are needed for psnr
+    "scikit-image",
+    "ffmpeg-python",
 ]
 
 [project.scripts]
