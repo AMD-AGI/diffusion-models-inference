@@ -16,7 +16,6 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     guidance_scale: 0.0
     num_iterations: 50
 
@@ -35,7 +34,6 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     guidance_scale: 0.0
     num_iterations: 50
 
@@ -54,7 +52,6 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     guidance_scale: 0.0
     num_iterations: 25
 
@@ -73,6 +70,5 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     guidance_scale: 0.0
     num_iterations: 25

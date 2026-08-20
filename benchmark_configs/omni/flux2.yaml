@@ -15,11 +15,9 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: FLASH_ATTN
 
 - name: flux2.default.hopper.h200
   tags: [lucid, hopper, h200]
@@ -35,11 +33,9 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: CUDNN_ATTN
 
 - name: flux2.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -55,11 +51,9 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: CUDNN_ATTN
 
 - name: flux2.quantgemm.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -77,11 +71,9 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp8_gemms: True
-    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: FLASH_ATTN
 
 - name: flux2.quantgemm.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -99,11 +91,9 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp4_gemms: True
-    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: FLASH_ATTN
 
 - name: flux2.quantgemm.hopper.h200
   tags: [lucid, hopper, h200]
@@ -120,8 +110,6 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp8_gemms: True
-    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: CUDNN_ATTN

@@ -84,13 +84,6 @@ def parse_args() -> argparse.Namespace:
         choices=("fp8", "mxfp4"),
         help="Optional quantization method for a second diffusion transformer.",
     )
-    server.add_argument(
-        "--diffusion_compile_reorder_comm_overlap",
-        "--diffusion-compile-reorder-comm-overlap",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable Inductor compute/communication overlap reordering.",
-    )
     server.add_argument("--use_hsdp", action="store_true")
     server.add_argument("--enable_slicing", action="store_true")
     server.add_argument("--enable_tiling", action="store_true")
@@ -146,6 +139,8 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
+    else:
+        cmd += ["--diffusion-compile-reorder-comm-overlap"]
     if args.use_fp4_gemms:
         transformer_quantization_config = {"method": "mxfp4"}
     elif args.use_fp8_gemms:
@@ -163,8 +158,6 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
             "--diffusion-quantization-config",
             json.dumps(quantization_config, separators=(",", ":")),
         ]
-    if args.diffusion_compile_reorder_comm_overlap:
-        cmd += ["--diffusion-compile-reorder-comm-overlap"]
     if args.use_hsdp:
         cmd += ["--use-hsdp"]
     if args.enable_slicing:
