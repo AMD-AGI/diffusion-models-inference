@@ -8,7 +8,7 @@
   entrypoint: /app/.ci/runner.py
   args:
     prompt: Add a cool hat to the cat.
-    negative_prompt: ""
+    negative_prompt: " "
     height: 2048
     width: 2048
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
@@ -27,7 +27,7 @@
   entrypoint: /app/.ci/runner.py
   args:
     prompt: Add a cool hat to the cat.
-    negative_prompt: ""
+    negative_prompt: " "
     height: 2048
     width: 2048
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
@@ -46,7 +46,7 @@
   entrypoint: /app/.ci/runner.py
   args:
     prompt: Add a cool hat to the cat.
-    negative_prompt: ""
+    negative_prompt: " "
     height: 2048
     width: 2048
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
