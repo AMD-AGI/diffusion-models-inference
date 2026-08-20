@@ -25,9 +25,11 @@ docker run \
   -e ARCH="$ARCH" \
   -e FORCE_RETUNING="$FORCE_RETUNING" \
   -e ROOTDIR="$GITHUB_WORKSPACE" \
+  -e MIOPEN_USER_DB_PATH="$GITHUB_WORKSPACE/data/miopen/userdb" \
   -e MIOPEN_FIND_MODE="$MIOPEN_FIND_MODE" \
   -e MIOPEN_FIND_ENFORCE="$MIOPEN_FIND_ENFORCE" \
-  -e HOST_UID=$(id -g) \
+  -e HOST_UID="$(id -u)" \
+  -e HOST_GID="$(id -g)" \
   "$DOCKER_IMAGE" \
   bash -c 'bash "$ROOTDIR/data/miopen/tune.sh"; (amd-smi || rocm-smi || true)'
 
