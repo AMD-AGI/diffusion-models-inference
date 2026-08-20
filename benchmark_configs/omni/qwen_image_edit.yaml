@@ -45,13 +45,13 @@
   tags: [lucid, blackwell, b200, b300]
   model: Qwen/Qwen-Image-Edit
   runner: python
-  entrypoint: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+  entrypoint: /app/.ci/online_runner.py
   args:
     prompt: Add a cool hat to the cat.
     negative_prompt: " "
     height: 2048
     width: 2048
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     seed: 42
     num_inference_steps: 50
     true_cfg_scale: 4.0
