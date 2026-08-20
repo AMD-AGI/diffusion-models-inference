@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: flux2.default
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
@@ -12,7 +15,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: FLASH_ATTN
@@ -31,7 +34,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: CUDNN_ATTN
@@ -50,7 +53,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: CUDNN_ATTN
@@ -71,7 +74,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp8_gemms: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: FLASH_ATTN
@@ -92,7 +95,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp4_gemms: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: FLASH_ATTN
@@ -112,7 +115,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp8_gemms: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: CUDNN_ATTN

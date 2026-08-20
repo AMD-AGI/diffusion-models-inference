@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-spdx-headers
+        name: Check SPDX headers
+        entry: .ci/check_spdx_headers.sh
+        language: script
+        pass_filenames: false

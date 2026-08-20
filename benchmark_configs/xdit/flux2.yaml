@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: flux2.default
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
@@ -12,7 +15,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -31,7 +34,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     fully_shard_degree: 8
@@ -51,7 +54,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -70,7 +73,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -90,7 +93,7 @@
     use_fp8_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -110,7 +113,7 @@
     use_fp4_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -131,7 +134,7 @@
     ulysses_degree: 8
     fully_shard_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -151,7 +154,7 @@
     use_fp8_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -171,7 +174,7 @@
     use_fp4_gemms: True
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -190,7 +193,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter_sage
@@ -210,7 +213,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter_sage
@@ -231,7 +234,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -250,7 +253,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     fully_shard_degree: 8
@@ -270,7 +273,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -289,7 +292,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
@@ -458,7 +461,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -479,7 +482,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -501,7 +504,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -522,7 +525,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -544,7 +547,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -565,7 +568,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -587,7 +590,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -608,7 +611,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     num_iterations: 25
@@ -627,7 +630,7 @@
     max_sequence_length: 512
     warmup_calls: 2
     num_iterations: 5
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
     ulysses_degree: 1
@@ -648,7 +651,7 @@
     max_sequence_length: 256
     warmup_calls: 2
     num_iterations: 5
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
     ulysses_degree: 2
@@ -672,7 +675,7 @@
     max_sequence_length: 512
     warmup_calls: 2
     num_iterations: 5
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
     ulysses_degree: 4
@@ -764,7 +767,7 @@
     warmup_calls: 2
     num_iterations: 5
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
@@ -787,7 +790,7 @@
     warmup_calls: 2
     num_iterations: 5
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
@@ -813,7 +816,7 @@
     warmup_calls: 2
     num_iterations: 5
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
@@ -838,7 +841,7 @@
     max_sequence_length: 512
     warmup_calls: 2
     num_iterations: 5
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
     ulysses_degree: 1
@@ -860,7 +863,7 @@
     max_sequence_length: 512
     warmup_calls: 2
     num_iterations: 5
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
     ulysses_degree: 2
@@ -884,7 +887,7 @@
     max_sequence_length: 512
     warmup_calls: 2
     num_iterations: 5
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
     ulysses_degree: 4
@@ -977,7 +980,7 @@
     warmup_calls: 2
     num_iterations: 5
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
@@ -1001,7 +1004,7 @@
     warmup_calls: 2
     num_iterations: 5
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     attention_backend: aiter_flydsl
@@ -1031,7 +1034,7 @@
     fully_shard_degree: 4
     memory_efficient_sharding: true
     input_images:
-      - /app/data/flux_cat.png
+      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
       - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
     guidance_scale: 4.0
     attention_backend: aiter_flydsl

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: 'Create MIOpen Database branch'
 description: 'Creates a branch with MIOpen database changes and pushes it'
 

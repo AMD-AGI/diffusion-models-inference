@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Generate a GitHub Actions step summary with tables and code blocks.

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: z_image_turbo.1gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Tongyi-MAI/Z-Image-Turbo

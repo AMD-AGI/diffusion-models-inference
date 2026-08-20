@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Parse build metadata JSON and output values for GitHub Actions.

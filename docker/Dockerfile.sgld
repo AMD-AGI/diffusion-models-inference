@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.6"
 FROM ${BASE_IMAGE}
 

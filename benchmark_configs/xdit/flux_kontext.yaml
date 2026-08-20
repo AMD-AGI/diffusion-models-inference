@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: flux_kontext.default
   tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-Kontext-dev
@@ -12,7 +15,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 2.5
     num_iterations: 25
     attention_backend: aiter
@@ -31,7 +34,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 2.5
     num_iterations: 25
     attention_backend: cudnn
@@ -50,7 +53,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 2.5
     num_iterations: 25
     attention_backend: cudnn
@@ -72,7 +75,7 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 1
     ring_degree: 1
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     resize_input_images: true
     use_torch_compile: true
     use_fp8_gemms: true
@@ -94,7 +97,7 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 2
     ring_degree: 1
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     resize_input_images: true
     use_torch_compile: true
     enable_tiling: true
@@ -118,7 +121,7 @@
     attention_backend: aiter_flydsl
     ulysses_degree: 4
     ring_degree: 1
-    input_images: /app/data/flux_cat.png
+    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     resize_input_images: true
     use_torch_compile: true
     use_fp8_gemms: true
