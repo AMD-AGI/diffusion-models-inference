@@ -16,6 +16,7 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+    diffusion_compile_reorder_comm_overlap: True
     attention_backend: FLASH_ATTN
 
 - name: qwen_image_edit.default.hopper
@@ -36,6 +37,7 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+    diffusion_compile_reorder_comm_overlap: True
     attention_backend: CUDNN_ATTN
 
 - name: qwen_image_edit.default.blackwell
@@ -56,4 +58,5 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
+    diffusion_compile_reorder_comm_overlap: True
     attention_backend: CUDNN_ATTN

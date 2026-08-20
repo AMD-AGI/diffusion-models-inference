@@ -83,6 +83,7 @@ def parse_args() -> argparse.Namespace:
     )
     server.add_argument(
         "--diffusion_compile_reorder_comm_overlap",
+        "--diffusion-compile-reorder-comm-overlap",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable Inductor compute/communication overlap reordering.",

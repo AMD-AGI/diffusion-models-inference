@@ -12,6 +12,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
+    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -31,6 +32,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
+    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -50,6 +52,7 @@
     warmup_calls: 5
     ulysses_degree: 8
     use_torch_compile: True
+    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -71,6 +74,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp8_gemms: True
+    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -92,6 +96,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp4_gemms: True
+    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -112,6 +117,7 @@
     ulysses_degree: 8
     use_torch_compile: True
     use_fp8_gemms: True
+    diffusion_compile_reorder_comm_overlap: True
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
