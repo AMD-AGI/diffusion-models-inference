@@ -13,8 +13,8 @@
 ARG BASE_IMAGE=vllm/vllm-openai:v0.27.0
 FROM ${BASE_IMAGE} AS base
 
-ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="02069a5" # v0.27.0+ release
+ARG VLLM_OMNI_REPO=https://github.com/kTorp/vllm-omni.git
+ARG VLLM_OMNI_BRANCH="performance-v26.7_custom" # Based on v0.27.0+ release
 
 WORKDIR /app
 
@@ -24,10 +24,9 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Clone vllm-omni and pin to the requested commit
-RUN git clone ${VLLM_OMNI_REPO} vllm-omni && \
-    cd vllm-omni && \
-    git reset --hard ${VLLM_OMNI_COMMIT}
+# Clone the requested vllm-omni branch
+RUN git clone --branch ${VLLM_OMNI_BRANCH} --single-branch \
+        ${VLLM_OMNI_REPO} vllm-omni
 
 # Install vllm-omni as an editable install
 RUN cd /app/vllm-omni && \
