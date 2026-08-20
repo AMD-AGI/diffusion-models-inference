@@ -18,6 +18,7 @@
     use_torch_compile: True
     guidance_scale: 0.0
     num_iterations: 50
+    attention_backend: FLASH_ATTN
 
 - name: flux.usp.hopper
   tags: [hopper, h100, h200]
@@ -36,6 +37,7 @@
     use_torch_compile: True
     guidance_scale: 0.0
     num_iterations: 50
+    attention_backend: CUDNN_ATTN
 
 - name: flux.usp_2k
   tags: [instinct, gfx942, gfx950]
@@ -54,6 +56,7 @@
     use_torch_compile: True
     guidance_scale: 0.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: flux.usp_2k.hopper
   tags: [hopper, h100, h200]
@@ -72,3 +75,4 @@
     use_torch_compile: True
     guidance_scale: 0.0
     num_iterations: 25
+    attention_backend: CUDNN_ATTN

@@ -17,6 +17,7 @@
     use_torch_compile: True
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: z_image.default.hopper
   tags: [hopper, h100, h200]
@@ -34,6 +35,7 @@
     use_torch_compile: True
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: z_image.default.blackwell
   tags: [blackwell, b200, b300]
@@ -51,3 +53,4 @@
     use_torch_compile: True
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: CUDNN_ATTN
