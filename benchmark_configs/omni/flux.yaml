@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: flux.usp
-  tags: [release, lucid, instinct, gfx942, gfx950]
+  tags: [release, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -20,7 +20,7 @@
     num_iterations: 50
 
 - name: flux.usp.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [hopper, h100, h200]
   model: black-forest-labs/FLUX.1-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -38,7 +38,7 @@
     num_iterations: 50
 
 - name: flux.usp_2k
-  tags: [lucid, instinct, gfx942, gfx950]
+  tags: [instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -56,7 +56,7 @@
     num_iterations: 25
 
 - name: flux.usp_2k.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [hopper, h100, h200]
   model: black-forest-labs/FLUX.1-dev
   runner: python
   entrypoint: /app/.ci/online_runner.py
