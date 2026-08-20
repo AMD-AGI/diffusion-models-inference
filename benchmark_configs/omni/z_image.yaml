@@ -12,7 +12,6 @@
     ulysses_degree: 8
     ulysses_mode: advanced_uaa
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     guidance_scale: 4.0
     num_iterations: 25
 
@@ -30,7 +29,6 @@
     ulysses_degree: 8
     ulysses_mode: advanced_uaa
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     guidance_scale: 4.0
     num_iterations: 25
 
@@ -48,6 +46,5 @@
     ulysses_degree: 8
     ulysses_mode: advanced_uaa
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
     guidance_scale: 4.0
     num_iterations: 25

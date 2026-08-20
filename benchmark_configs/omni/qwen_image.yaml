@@ -14,8 +14,6 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
-    attention_backend: FLASH_ATTN
 
 - name: qwen_image.default.hopper
   tags: [lucid, hopper, h100, h200]
@@ -33,8 +31,6 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
-    attention_backend: CUDNN_ATTN
 
 - name: qwen_image.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -52,5 +48,3 @@
     num_iterations: 25
     ulysses_degree: 8
     use_torch_compile: True
-    diffusion_compile_reorder_comm_overlap: True
-    attention_backend: CUDNN_ATTN
