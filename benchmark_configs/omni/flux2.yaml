@@ -15,6 +15,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: flux2.default.hopper.h200
   tags: [lucid, hopper, h200]
@@ -33,6 +34,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: CUDNN_ATTN
 
 - name: flux2.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -51,6 +53,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: CUDNN_ATTN
 
 - name: flux2.quantgemm.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -71,6 +74,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: flux2.quantgemm.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -91,6 +95,7 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: flux2.quantgemm.hopper.h200
   tags: [lucid, hopper, h200]
@@ -110,3 +115,4 @@
     input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: CUDNN_ATTN

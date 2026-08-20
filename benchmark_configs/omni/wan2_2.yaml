@@ -14,6 +14,7 @@
     ulysses_degree: 8
     use_parallel_vae: True
     use_torch_compile: True
+    attention_backend: FLASH_ATTN
     seed: 42
     warmup_calls: 1
     num_iterations: 1
@@ -38,6 +39,7 @@
     use_torch_compile: True
     use_fp8_gemms: True
     transformer_2_quantization_method: fp8
+    attention_backend: FLASH_ATTN
     seed: 42
     warmup_calls: 1
     num_iterations: 1
@@ -62,6 +64,7 @@
     use_torch_compile: True
     use_fp4_gemms: True
     transformer_2_quantization_method: fp8
+    attention_backend: FLASH_ATTN
     seed: 42
     warmup_calls: 1
     num_iterations: 1
@@ -84,6 +87,7 @@
     ulysses_degree: 8
     use_parallel_vae: True
     use_torch_compile: True
+    attention_backend: FLASH_ATTN
     seed: 42
     warmup_calls: 1
     num_iterations: 1
@@ -106,6 +110,7 @@
     ulysses_degree: 8
     use_parallel_vae: True
     use_torch_compile: True
+    attention_backend: CUDNN_ATTN
     seed: 42
     warmup_calls: 1
     num_iterations: 1
