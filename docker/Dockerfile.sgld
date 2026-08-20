@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.7"
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.8"
 FROM ${BASE_IMAGE}
 
 ARG VLLM_COMMIT="ad7125a" # v0.21.0
