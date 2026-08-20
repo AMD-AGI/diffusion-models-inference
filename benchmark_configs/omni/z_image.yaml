@@ -33,7 +33,7 @@
     num_iterations: 25
 
 - name: z_image.default.blackwell
-  tags: [lucid, blackwell, b200, b300]
+  tags: [blackwell, b200, b300]
   model: Tongyi-MAI/Z-Image
   runner: python
   entrypoint: /app/.ci/online_runner.py
