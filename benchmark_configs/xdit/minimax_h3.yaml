@@ -1,0 +1,47 @@
+- name: minimax_h3.default
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  model: MiniMaxAI/MiniMax-H3
+  runner: xdit
+  args:
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    height: 768
+    width: 1366
+    seed: 42
+    num_frames: 124
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    use_torch_compile: True
+    attention_backend: aiter
+
+- name: minimax_h3.default.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: MiniMaxAI/MiniMax-H3
+  runner: xdit
+  args:
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    height: 768
+    width: 1366
+    seed: 42
+    num_frames: 124
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    use_torch_compile: True
+    attention_backend: flash_3
+
+- name: minimax_h3.default.blackwell
+  tags: [lucid, blackwell, b200, b300]
+  model: MiniMaxAI/MiniMax-H3
+  runner: xdit
+  args:
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    height: 768
+    width: 1366
+    seed: 42
+    num_frames: 124
+    num_inference_steps: 50
+    num_iterations: 1
+    ulysses_degree: 8
+    use_torch_compile: True
+    attention_backend: cudnn
