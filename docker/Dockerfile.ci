@@ -216,6 +216,12 @@ ARG AMDGPU_FAMILIES
 ARG AMDGPU_BUNDLE_NAME
 COPY --from=setup_therock /app/TheRock /app/TheRock
 WORKDIR /app/TheRock
+# Pre-pin meson<1.12.0 before requirements.txt (floor: meson>=1.7.0), mirroring
+# TheRock's manylinux Dockerfile. meson 1.12.0 duplicates env-derived link args
+# (e.g. LDFLAGS=-Wl,--version-script=...) in its compiler sanity check, which
+# `ld` rejects as a duplicate version tag and breaks the libdrm/libpciaccess
+# sysdeps builds. See https://github.com/ROCm/TheRock/issues/7286.
+RUN pip install --no-cache-dir "meson==1.7.0"
 # if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
 # Mirroring TheRock's manylinux Dockerfile pin of aiobotocore so dvc[s3]'s
 # botocore window stays aligned with the boto3 range pinned in
