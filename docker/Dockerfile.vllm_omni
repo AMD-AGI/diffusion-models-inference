@@ -9,7 +9,7 @@
 #     .
 #
 
-ARG BASE_IMAGE="amdsiloai/pytorch-private:xdit-v26.6-torch2.11"
+ARG BASE_IMAGE="amdsiloai/pytorch-private:xdit-2.13-20260803"
 
 FROM scratch AS patches
 COPY ./patches /patches
@@ -17,10 +17,10 @@ COPY ./patches /patches
 FROM ${BASE_IMAGE}
 
 ARG VLLM_REPO=https://github.com/vllm-project/vllm.git
-ARG VLLM_COMMIT="0fc695f" # v0.23.0 release
+ARG VLLM_COMMIT="4bdc8a7" # v0.27.0 release
 
-ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="724f5d1"
+ARG VLLM_OMNI_REPO=https://github.com/kTorp/vllm-omni.git
+ARG VLLM_OMNI_BRANCH="performance-v26.7_custom" # Based on v0.27.0+ release
 
 ARG FLASH_ATTENTION_REPO=https://github.com/Dao-AILab/flash-attention.git
 ARG FLASH_ATTENTION_COMMIT="0e60e394"
@@ -28,21 +28,18 @@ ARG FLASH_ATTENTION_COMMIT="0e60e394"
 # Builds FA with Triton backend (https://github.com/ROCm/flash-attention#triton-backend)
 ENV FLASH_ATTENTION_TRITON_AMD_ENABLE="TRUE"
 
-WORKDIR /app/external
+ENV VLLM_TARGET_DEVICE=rocm
+ENV VLLM_OMNI_TARGET_DEVICE=rocm
 
+WORKDIR /app/external
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        curl \
         pkg-config \
         libdrm-dev \
         libopenmpi3 \
     && rm -rf /var/lib/apt/lists/*
-
-# Temporary PyTorch patch to avoid log spam: https://github.com/pytorch/pytorch/issues/182298, https://github.com/pytorch/pytorch/pull/178506
-RUN --mount=type=bind,from=patches,source=/patches,target=/patches \
-    SITE_PACKAGES=$(python3 -c 'import torch, os; print(os.path.dirname(os.path.dirname(torch.__file__)))') && \
-    cd "${SITE_PACKAGES}" && \
-    patch -p1 < /patches/dynamo_fix_ignore_logging_functions.patch
 
 # Install flash-attention.
 RUN git clone ${FLASH_ATTENTION_REPO} && \
@@ -59,15 +56,8 @@ RUN git clone ${VLLM_REPO} && \
     PYTORCH_ROCM_ARCH="gfx942;gfx950" python3 setup.py develop
 
 # Install vLLM-Omni
-RUN git clone ${VLLM_OMNI_REPO} /app/vllm-omni && \
-    cd /app/vllm-omni && \
-    git reset --hard ${VLLM_OMNI_COMMIT}
-
-# Patch vllm-omni: add X-Stage-Durations/X-Peak-Memory-MB headers to image endpoints
-# TODO: remove once upstreamed to vllm-omni
-RUN --mount=type=bind,from=patches,source=/patches,target=/patches \
-    cd /app/vllm-omni && \
-    git apply /patches/vllm_omni_image_timing_headers.patch
+RUN git clone --branch ${VLLM_OMNI_BRANCH} --single-branch \
+        ${VLLM_OMNI_REPO} /app/vllm-omni
 
 RUN cd /app/vllm-omni && \
     VLLM_OMNI_TARGET_DEVICE=rocm pip install -e .
@@ -75,6 +65,9 @@ RUN cd /app/vllm-omni && \
 WORKDIR /app
 # Copy assets
 COPY assets/data /app/data
+RUN curl --fail --location --retry 3 \
+    --output /app/data/cat.png \
+    https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
 # Include CI
 RUN rm -fr /app/.ci/*
 COPY .ci/run.py /app/.ci/run.py
