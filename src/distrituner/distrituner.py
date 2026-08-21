@@ -106,8 +106,11 @@ def distritune(
     Returns:
     --------
     list[Result]
-        List of Result objects, one for each task.
+        List of Result objects in the same order as ``tasks`` (not completion order).
     """
+    if not tasks:
+        return []
+
     max_workers = len(worker_envs)
 
     with Manager() as manager:
@@ -121,8 +124,13 @@ def distritune(
             initargs=(env_queue,),
         ) as executor:
             logger.debug("Process pool starting work tasks")
-            future_to_task = {executor.submit(do_work, task): task for task in tasks}
-            results = []
+            future_to_task: dict = {}
+            future_to_index: dict = {}
+            for idx, task in enumerate(tasks):
+                future = executor.submit(do_work, task)
+                future_to_task[future] = task
+                future_to_index[future] = idx
+            results: list[Result | None] = [None] * len(tasks)
             for future in tqdm(
                 as_completed(future_to_task), total=len(tasks), desc="DistriTune"
             ):
@@ -136,7 +144,7 @@ def distritune(
                             f.cancel()
                     raise
 
-                results.append(result)
+                results[future_to_index[future]] = result
                 if result.returncode != 0:
                     logger.error(f"{task=} exited with non-zero code: {result.returncode}")
                     if stop_on_failure:
@@ -145,6 +153,12 @@ def distritune(
                                 f.cancel()
                         raise RuntimeError(f"Task {task} failed with exit code {result.returncode}")
 
+    results = [result for result in results if result is not None]
+    if len(results) != len(tasks):
+        raise RuntimeError(
+            f"Expected {len(tasks)} task results, got {len(results)} "
+            "(likely cancelled after a failure with stop_on_failure=True)"
+        )
     failed_count = sum(1 for r in results if r.returncode != 0)
     if not stop_on_failure and failed_count > 0:
         logger.error(f"Completed with {failed_count} failed tasks (non-zero return codes)")
