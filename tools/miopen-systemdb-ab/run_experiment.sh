@@ -5,6 +5,30 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
+# Load config.env defaults for variables not already set in the environment.
+# Command-line overrides (e.g. HIP_VISIBLE_DEVICES=0 bash run_experiment.sh) win.
+_load_config_env() {
+  local config_file="$1"
+  [[ -f "$config_file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" || "$line" != *=* ]] && continue
+    local key="${line%%=*}"
+    key="${key%"${key##*[![:space:]]}"}"
+    local value="${line#*=}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    value="${value#\"}"; value="${value%\"}"
+    value="${value#\'}"; value="${value%\'}"
+    if [[ -z "${!key+x}" ]]; then
+      export "$key=$value"
+    fi
+  done < "$config_file"
+}
+_load_config_env "${SCRIPT_DIR}/config.env"
+
 DOCKER_IMAGE="${DOCKER_IMAGE:-amdsiloai/pytorch-xdit-staging:1cdf53a-temp}"
 HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES:-0}"
 THRESHOLD_PCT="${THRESHOLD_PCT:-2.0}"

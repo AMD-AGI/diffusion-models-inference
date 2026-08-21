@@ -8,12 +8,16 @@ suboptimal solver compared to **exhaustive tuning** (system DB overridden).
 From the repository root, on a machine with AMD GPUs and Docker:
 
 ```bash
-# Copy and edit config if needed
+# Copy and edit config if needed (GPU list, repeats, skips, etc.)
 cp tools/miopen-systemdb-ab/config.example.env tools/miopen-systemdb-ab/config.env
 
-# Full run (all workload files, default settings)
+# Full run (all workload files; GPUs and other settings from config.env)
 bash tools/miopen-systemdb-ab/run_experiment.sh
 ```
+
+`run_experiment.sh` reads `tools/miopen-systemdb-ab/config.env` when present. Each
+`KEY=value` line sets a default only if that variable is **not** already exported, so
+one-off overrides on the command line still work.
 
 Validate on a small subset first:
 
@@ -22,6 +26,24 @@ WORKLOADS_GLOB='data/miopen/workloads/flux.single_gpu.txt' \
 HIP_VISIBLE_DEVICES=0 \
 bash tools/miopen-systemdb-ab/run_experiment.sh
 ```
+
+### Configuration (`config.env`)
+
+| Variable | Default (if unset) | Description |
+|----------|-------------------|-------------|
+| `HIP_VISIBLE_DEVICES` | `0` | Comma-separated GPU indices passed into the container |
+| `DOCKER_IMAGE` | staging image tag | Container image for ROCm / MIOpen |
+| `WORKLOADS_GLOB` | `data/miopen/workloads/*.txt` | Workload command files |
+| `THRESHOLD_PCT` | `2.0` | Report classification threshold |
+| `BENCHMARK_REPEATS` | `3` | Timed repetitions per command |
+| `OUTPUT_DIR` | `tools/miopen-systemdb-ab/runs/<timestamp>` | Run output directory (must be inside repo) |
+| `SKIP_BENCHMARK_A` | `false` | Skip Arm A benchmarks |
+| `SKIP_TUNE` | `false` | Skip Arm B exhaustive tuning |
+| `SKIP_BENCHMARK_B` | `false` | Skip Arm B post-tune benchmarks |
+| `DRY_RUN` | `false` | Print planned phases and exit |
+
+Without `config.env`, only **GPU 0** is used (`HIP_VISIBLE_DEVICES` defaults to `0`).
+Copy `config.example.env` to use all eight GPUs listed there.
 
 ## Inside the container
 
@@ -83,9 +105,14 @@ run directory for a full list of persisted files including user DB paths.
 Benchmark and tuning tasks are distributed across GPUs using
 [`src/distrituner`](../../src/distrituner/) (same mechanism as `miopen_tuner.py`):
 
-1. Each GPU worker gets its own `HIP_VISIBLE_DEVICES` value.
-2. Tasks (MIOpenDriver commands) are queued and assigned to idle workers.
-3. Per-task stdout/stderr is saved under `arm_*/logs/` or `arm_b/tune_logs/`.
+1. `run_experiment.sh` passes `HIP_VISIBLE_DEVICES` into the container (`-e`).
+2. `run_experiment.py` reads that value (or `--gpus`) and splits it into one device
+   ID per worker via `get_device_ids()`.
+3. Each worker process sets `HIP_VISIBLE_DEVICES` to a **single** index from that
+   list (e.g. container env `0,1,2,3` → workers pinned to `0`, `1`, `2`, `3`).
+4. Tasks (MIOpenDriver commands) are queued and assigned to idle workers; up to
+   one command runs per GPU at a time.
+5. Per-task stdout/stderr is saved under `arm_*/logs/` or `arm_b/tune_logs/`.
 
 **Arm A (production path):** all workers share one user DB directory
 (`arm_a/user_db/`). Shapes missing from the system DB may be tuned inline and
