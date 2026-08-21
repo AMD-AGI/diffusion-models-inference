@@ -20,7 +20,7 @@ WORKDIR /app
 
 # Install system dependencies missing from the base image
 RUN apt-get update && \
-    apt-get install -y git jq && \
+    apt-get install -y curl git jq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -47,6 +47,9 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python
 WORKDIR /app
 # Copy assets
 COPY assets/data /app/data
+RUN curl --fail --location --retry 3 \
+    --output /app/data/cat.png \
+    https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
 # Copy CI scripts and benchmark configs
 COPY .ci/run.py /app/.ci/run.py
 COPY .ci/integrations/vllm_omni/runner.py /app/.ci/runner.py
