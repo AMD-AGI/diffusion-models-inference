@@ -44,7 +44,9 @@ The log file contains a JSON object with:
 - `stderr`: Standard error from the command
 - `returncode`: Exit code of the command
 
-### Example Usage
+`distritune()` returns one `Result` per task **in the same order as the input
+`tasks` list**, even though tasks may finish in a different order when run in
+parallel.
 
 ```python
 from distrituner import Task, distritune
