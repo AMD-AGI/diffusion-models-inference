@@ -93,8 +93,13 @@ class MediaFiles(TypedDict):
 
 
 def _get_media_files(
-    references: dict[str, dict[str, str]], runs: dict[str, dict[str, str]], logger: LoggingConsole
-) -> tuple[dict[str, dict[str, MediaFiles]], dict[str, dict[str, MediaFiles]]]:
+    logger: LoggingConsole,
+    references: dict[str, dict[str, str]],
+    runs: dict[str, dict[str, str]] | None = None,
+) -> (
+    dict[str, dict[str, MediaFiles]]
+    | tuple[dict[str, dict[str, MediaFiles]], dict[str, dict[str, MediaFiles]]]
+):
     """Replaces a path to a directory in inner dict values with a description of available
     media files in it according to _RESULT_IMAGE_SUFFIXES and _RESULT_VIDEO_SUFFIXES.
     If not a single media file is found, the corresponding key is removed and a warning
@@ -152,6 +157,8 @@ def _get_media_files(
 
         return media_sources
 
+    if runs is None:
+        return collect(references, "runs")
     return collect(references, "eager_"), collect(runs, "run")
 
 
@@ -273,7 +280,7 @@ def _compute_psnr_all(
     distorted_media: MediaFiles,
     top_dir: Path,
     logger: LoggingConsole,
-) -> dict[str, list[PSNRResult]]:
+) -> dict[str, PSNRResult]:
     """Compute PSNR for the given reference and distorted media files."""
     logger.trace(
         f"Computing PSNR for '{cmp_prefix}'. Reference: {ref_media}. Distorted: {distorted_media}."
@@ -284,7 +291,7 @@ def _compute_psnr_all(
         "videos": _compute_psnr_videos,
     }
 
-    results: dict[str, list[PSNRResult]] = {}
+    results: dict[str, PSNRResult] = {}
 
     def _do(what: str):
         ref, dist = ref_media[what], distorted_media[what]
@@ -353,13 +360,13 @@ def _process_files(
         new_r = _compute_psnr_all(cmp_prefix, Ref_media, distorted_media, top_dir, logger)
         for r in new_r:
             if r in results:
-                results[r].extend(new_r[r])
+                results[r].append(new_r[r])
             else:
-                results[r] = new_r[r]
+                results[r] = [new_r[r]]
 
     def _make_cmp_prefix(model_name: str, ref_name: str, run_name: str) -> str:
-        # return f"{model_name} {_ALT_DELIMITER} {ref_name} vs {run_name}:"
-        return model_name
+        return f"{model_name} {_ALT_DELIMITER} {ref_name} vs {run_name}:"
+        # return model_name
 
     for model_name in sorted(references.keys()):
         ref_alternatives = references[model_name]
@@ -381,21 +388,22 @@ def _process_files(
                 cmp_prefix = _make_cmp_prefix(model_name, B_name, A_name)
                 _do_compute(cmp_prefix, B_media, A_media)
 
-        # next use the ref for all its runs
-        if model_name not in runs:
-            logger.warning(
-                f"Benchmark '{model_name}' has no runs to compare references to. Skipping it."
-            )
-            continue
+        if runs is not None:
+            # next use the ref for all its runs
+            if model_name not in runs:
+                logger.warning(
+                    f"Benchmark '{model_name}' has no runs to compare references to. Skipping it."
+                )
+                continue
 
-        run_alternatives = runs[model_name]
-        for ref_name in sorted(ref_alternatives.keys()):
-            ref_media = ref_alternatives[ref_name]
-            for run_name in sorted(run_alternatives.keys()):
-                run_media = run_alternatives[run_name]
+            run_alternatives = runs[model_name]
+            for ref_name in sorted(ref_alternatives.keys()):
+                ref_media = ref_alternatives[ref_name]
+                for run_name in sorted(run_alternatives.keys()):
+                    run_media = run_alternatives[run_name]
 
-                cmp_prefix = _make_cmp_prefix(model_name, ref_name, run_name)
-                _do_compute(cmp_prefix, ref_media, run_media)
+                    cmp_prefix = _make_cmp_prefix(model_name, ref_name, run_name)
+                    _do_compute(cmp_prefix, ref_media, run_media)
     return results
 
 
@@ -423,15 +431,27 @@ def metric_psnr(logger: LoggingConsole, results_dir: Path, args: list[str] | Non
     )
     pool, _ = poolBenchmarks(_ALT_DELIMITER, src, None, logger)
 
-    references, runs = _split_references_and_runs(pool, logger)
-    if (ret := _check_refs_runs(references, runs, logger)) != 0:
-        return ret
+    only_eager = False
 
-    references, runs = _get_media_files(references, runs, logger)
-    logger.debug("_get_media_files references:", references)
-    logger.debug("_get_media_files runs:", runs)
+    if only_eager:
+        references, runs = _split_references_and_runs(pool, logger)
+        if (ret := _check_refs_runs(references, runs, logger)) != 0:
+            return ret
+
+        references, runs = _get_media_files(logger, references, runs)
+        logger.debug("_get_media_files references:", references)
+        logger.debug("_get_media_files runs:", runs)
+    else:
+        # TODO proper validation here
+        logger.trace("Getting media files for pool:", pool)
+        references = _get_media_files(logger, pool)
+        runs = None
 
     coll = _process_files(references, runs, results_dir, logger)
-    logger.info("Computed PSNR collection:", coll)
+    # logger.info("Computed PSNR collection:", coll)
+    for file,res in coll.items():
+        logger.trace(f"{file}:")
+        for r in res:
+            logger.trace(f"  {r['psnr']:5.2f} db : {r['comparison_pfx']}")
 
     return 0
