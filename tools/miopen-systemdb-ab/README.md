@@ -29,6 +29,7 @@ bash tools/miopen-systemdb-ab/run_experiment.sh
 cd /app/diffusion-models-inference
 export HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export DOCKER_IMAGE=amdsiloai/pytorch-xdit-staging:1cdf53a-temp
+export PYTHONPATH=src:tools/miopen-systemdb-ab
 
 python tools/miopen-systemdb-ab/run_experiment.py \
   --output-dir tools/miopen-systemdb-ab/runs/manual_run \
