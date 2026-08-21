@@ -5,7 +5,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.ownership import restore_host_ownership
+from miopen_ab.ownership import restore_host_ownership
 
 
 def test_restore_host_ownership_skips_without_env(tmp_path, monkeypatch):
@@ -20,7 +20,7 @@ def test_restore_host_ownership_runs_chown(tmp_path, monkeypatch):
     target = tmp_path / "run"
     target.mkdir()
 
-    with patch("lib.ownership.subprocess.run") as mock_run:
+    with patch("miopen_ab.ownership.subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         assert restore_host_ownership(target) is True
         mock_run.assert_called_once_with(

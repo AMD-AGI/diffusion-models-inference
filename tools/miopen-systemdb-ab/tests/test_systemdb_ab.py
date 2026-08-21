@@ -7,10 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parents[1] / "src"))
 
-from lib.compare import classify_entry, Outcome
-from lib.benchmark import CommandResult
-from lib.driver_output import parse_driver_output
-from lib.workloads import normalize_command, collect_workloads
+from miopen_ab.compare import classify_entry, Outcome
+from miopen_ab.benchmark import CommandResult
+from miopen_ab.driver_output import parse_driver_output
+from miopen_ab.workloads import normalize_command, collect_workloads
 
 
 SAMPLE_STDOUT = """

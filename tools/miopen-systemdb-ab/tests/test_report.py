@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.report import render_report_md, write_reports
+from miopen_ab.report import render_report_md, write_reports
 
 
 def test_render_report_md_includes_improvements():
