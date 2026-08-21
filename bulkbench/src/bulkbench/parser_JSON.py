@@ -5,7 +5,8 @@ for statistical analysis of the results.
 Typical use on a bulkbench --results_dir directory is:
 
 ```bash
-benchstats . --files_parser=bulkbench.parser_JSON --sample_stats 0 100 --always_show_pvalues --filter1=1
+benchstats . --files_parser=bulkbench.parser_JSON \
+    --sample_stats 0 100 --always_show_pvalues --filter1=1
 ```
 
 But there's much more. For the usage details see the documentation in the parser_JSON class
@@ -154,15 +155,12 @@ def get_benchmark_sources(
             )
 
         subtree_timings[current_dir] = (
-            ([current_timings] if has_immediate_timings else []) + nested_timings
-        )
+            [current_timings] if has_immediate_timings else []
+        ) + nested_timings
         if ignored_immediate_timings or has_ignored_nested_timings:
             subtrees_with_ignored_timings.add(current_dir)
 
-        if (
-            not subtree_timings[current_dir]
-            and current_dir not in subtrees_with_ignored_timings
-        ):
+        if not subtree_timings[current_dir] and current_dir not in subtrees_with_ignored_timings:
             directories_without_timings.append(current_dir)
 
         if not has_immediate_timings:
@@ -220,17 +218,17 @@ class parser_JSON(ParserBase):
 
         A short recap of use context first:
         - xDiT's /app/.ci/run.py script produces an outputs directory with subdirectories for each
-        model, each containing a `timings.json` file with the results of the benchmarking.
+            model, each containing a `timings.json` file with the results of the benchmarking.
         - `benchstats` is a wrapper around a statistical test that compares two sets of numbers
-        (each set contains measured runtime durations of the same code) and tells if results are
-        significantly different. Each such a set is called a "benchmark" in `benchstats` terminology
-        and is identified by a name.
+            (each set contains measured runtime durations of the same code) and tells if results are
+            significantly different. Each such a set is called a "benchmark" in `benchstats`
+            terminology and is identified by a name.
         - `file1` and `--filter1` arguments of `benchstats` are passed verbatim to
-        `fpath` and `filter` parameters of a parser constructor respectively. When a two-source mode
-        is used, another parser instance is created with `file2` and `--filter2` arguments passed
-        to it.
+            `fpath` and `filter` parameters of a parser constructor respectively. When a two-source
+            mode is used, another parser instance is created with `file2` and `--filter2` arguments
+            passed to it.
         - `benchstats` has two modes to find benchmarks to compare one against the other among
-        all benchmarks it sees:
+            all benchmarks it sees:
             1. find same benchmark names in two different sources (two-source mode)
             2. pool all benchmarks into several disjoint sets, find matching benchmarks in each set
             and compare them pairwise (single-source mode). This enables N-way comparisons, but
@@ -250,8 +248,16 @@ class parser_JSON(ParserBase):
                 - bm2|opt2 vs bm2|opt3 (shown as bm2 | opt2 vs opt3)
             So by choosing how you name the benchmarks the parser returns, you control what
             `benchstats` will compare against what.
+        - `bulkbench` runner structures model results in a directory hierarchy inside --results_dir
+            directory like this:
+            `<patch_name>/<bench_group_name>/<bench_config_name>/timings.json`.
+        - This parser accepts an arbitrary directory as `fpath` (not necessary produced by a
+            `bulkbench` runner) assuming it contains `<bench_config_name>/timings.json` files nested
+            somewhere deep inside. Then it constructs benchmark names based on the directory
+            structure and the value of the `filter` argument, enabling different kinds of N-way
+            comparisons.
 
-        This parser enables the following comparisons depending on user's inputs:
+        Comparison modes:
         A. when `filter` argument isn't set or empty:
         A.1. When `fpath` is a single `.json` file, or it's a directory having an immediate child
         `timings.json`, the parser enables in a two-source mode, i.e. user has to supply two such
@@ -265,31 +271,38 @@ class parser_JSON(ParserBase):
 
         B. when `filter` argument is set, it must be a comma separated set of numbers each of which
         denoting an index of a nested subdirectory to include in the identifier of the entity under
-        benchmark name (`fpath` must be a directory having subdirectories). Index counts from the most
-        nested directory (in xDiT it's a benchmark config name) upwards.
+        benchmark name (`fpath` must be a directory having subdirectories). Index counts from the
+        most nested directory (in xDiT it's a benchmark config name) upwards.
         For example, bulkbench runner typically produces the following directory structure for a
         project: `results/<patch_name>/<bench_group_name>/<bench_config_name>/timings.json`, so
         assuming one pass `results` as `fpath`, the following filter value will make the following
         comparisons:
         - --filter1=0 is exactly the A.2 case: benchmarks will be named like
-        `<bench_config_name>|<patch_name>/<bench_group_name>` which will compare configs across all
-        combinations of patches and groups. I.e. for a given model, it'll compare all combinations
-        of groups and patches to each other.
+            `<bench_config_name>|<patch_name>/<bench_group_name>` which will compare
+            configs across all combinations of patches and groups. I.e. for a given model,
+            it'll compare all combinations of groups and patches to each other.
         - --filter1=1 adds `<bench_group_name>` to the benchmark name (with `<bench_config_name>`
-        already being there by default, like it was --filter1=0,1), naming benchmarks like
-        `<bench_config_name>/<bench_group_name>|<patch_name>` comparing the same model+group_name
-        combination across patches.
+            already being there by default, like it was --filter1=0,1), naming benchmarks like
+            `<bench_config_name>/<bench_group_name>|<patch_name>` comparing the same
+            model+group_name combination across patches.
         - --filter1=2 adds `<patch_name>` to the benchmark name (with `<bench_config_name>`
-        already being there by default, like it was --filter1=0,2), naming benchmarks like
-        `<bench_config_name>/<patch_name>|<bench_group_name>` comparing the same models+patch
-        combination across groups (not useful if a single config isn't a member of multiple groups).
-        - --filter1=1,2 (or --filter1=0,1,2) makes everything count as an entifier of an entity under
-        a benchmark, and that will break the name pooling, because a single benchmark won't have
-        an alternative to compare against. However, if the `fpath` refers to a dir with the
-        following structure:
-        `<platform_name>/<patch_name>/<bench_group_name>/<bench_config_name>/timings.json`, this
-        filter value will allow to compare results of the same combinations of
-        <patch_name>/<bench_group_name>/<bench_config_name> across platforms.
+            already being there by default, like it was --filter1=0,2), naming benchmarks like
+            `<bench_config_name>/<patch_name>|<bench_group_name>` comparing the same models+patch
+            combination across groups (not useful if a single config isn't a member of
+            multiple groups).
+        - --filter1=1,2 (or --filter1=0,1,2) makes everything count as an entifier of an
+            entity under a benchmark, and that will break the name pooling, because a single
+            benchmark won't have an alternative to compare against. However, if the `fpath`
+            refers to a dir with the following structure:
+            `<platform_name>/<patch_name>/<bench_group_name>/<bench_config_name>/timings.json`, this
+            filter value will allow to compare results of the same combinations of
+            <patch_name>/<bench_group_name>/<bench_config_name> across platforms. (Remember that
+            `benchstats` supports independent modification of read benchmark names using regular
+            expressions in --from, --to arguments. This could be handy if one wants to
+            compare results of different configs: for example, `flux2.quantgemm.gfx942` vs
+            `flux2.quantgemm.gfx950` can't be compared directly since names differ, but we
+            can simply strip `gfx..` suffixes with `--from \\.gfx\\d+ --to ""` arguments to enable
+            the comparison.)
 
         Since, bulkbench runner produce eager mode results in a separate group directory starting
         with "eager_", such results are ignored by the statistical analysis.
@@ -316,7 +329,7 @@ class parser_JSON(ParserBase):
         sources = get_benchmark_sources(fpath, filter_indices, debug_log)
         if debug_log:
             debug_log.debug(sources)
-        
+
         self.stats = {}
         for bmname, result_dir in sources:
             json_path = fpath if is_direct_file else os.path.join(result_dir, _TIMINGS_FILENAME)

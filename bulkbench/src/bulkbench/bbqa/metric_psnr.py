@@ -81,8 +81,8 @@ class MediaFiles(TypedDict):
     """Describe paths to available media files in a directory."""
 
     dir: Path
-    images: list[str]
-    videos: list[str]
+    images: frozenset[str]
+    videos: frozenset[str]
 
 
 def _get_media_files(
@@ -108,8 +108,8 @@ def _get_media_files(
                     if not path.is_dir():
                         raise ValueError("path is not a directory")
 
-                    images: list[str] = []
-                    videos: list[str] = []
+                    images: set[str] = set()
+                    videos: set[str] = set()
                     with os.scandir(path) as entries:
                         for entry in entries:
                             if not entry.is_file():
@@ -117,9 +117,9 @@ def _get_media_files(
 
                             suffix = Path(entry.name).suffix
                             if suffix in _RESULT_IMAGE_SUFFIXES:
-                                images.append(entry.name)
+                                images = images.add(entry.name)
                             elif suffix in _RESULT_VIDEO_SUFFIXES:
-                                videos.append(entry.name)
+                                videos = videos.add(entry.name)
                 except (OSError, TypeError, ValueError) as error:
                     logger.error(
                         f"Invalid {source_name} media directory for "
@@ -136,8 +136,8 @@ def _get_media_files(
 
                 media_alternatives[alternative] = {
                     "dir": path,
-                    "images": sorted(images),
-                    "videos": sorted(videos),
+                    "images": frozenset(images),
+                    "videos": frozenset(videos),
                 }
 
             if media_alternatives:
