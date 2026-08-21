@@ -41,6 +41,7 @@ from miopen_ab.env_profiles import (  # noqa: E402
     ARM_B_TUNE_METHODOLOGY,
     arm_a_worker_envs,
     arm_b_benchmark_worker_envs,
+    resolve_production_user_db,
 )
 from miopen_ab.metadata import collect_metadata, write_metadata  # noqa: E402
 from miopen_ab.ownership import restore_host_ownership  # noqa: E402
@@ -101,6 +102,12 @@ def parse_args() -> argparse.Namespace:
         help="Skip Arm B post-tune benchmarks",
     )
     parser.add_argument(
+        "--arm-a-user-db",
+        type=Path,
+        default=None,
+        help="Prebuilt production user DB for Arm A (default: /miopen_userdb or data/miopen/userdb)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print planned phases and exit",
@@ -137,11 +144,13 @@ def main() -> int:
         return 0
 
     device_ids = get_device_ids(args.gpus)
+    arm_a_production_db = resolve_production_user_db(REPO_ROOT, args.arm_a_user_db)
     experiment_config = {
         "workloads_glob": args.workloads_glob,
         "threshold_pct": args.threshold_pct,
         "benchmark_repeats": args.benchmark_repeats,
         "command_count": len(commands),
+        "arm_a_production_user_db": str(arm_a_production_db),
         "methodology": {
             "arm_a": ARM_A_METHODOLOGY,
             "arm_b_tune": ARM_B_TUNE_METHODOLOGY,
@@ -155,15 +164,15 @@ def main() -> int:
 
         arm_a_dir = output_dir / "arm_a"
         arm_b_dir = output_dir / "arm_b"
-        arm_a_user_db = arm_a_dir / "user_db"
         arm_b_tuning = arm_b_dir / "tuning"
         arm_b_merged = arm_b_dir / "tuning_merged"
 
         if not args.skip_benchmark_a:
-            logger.info("Phase: Arm A inline benchmarks")
+            logger.info("Phase: Arm A production heuristics benchmarks")
+            logger.info("Using production user DB: %s", arm_a_production_db)
             run_benchmarks(
                 commands=commands,
-                worker_envs=arm_a_worker_envs(device_ids, arm_a_user_db),
+                worker_envs=arm_a_worker_envs(device_ids, arm_a_production_db),
                 log_dir=arm_a_dir / "logs",
                 results_path=arm_a_dir / "results.jsonl",
                 benchmark_repeats=args.benchmark_repeats,
@@ -202,15 +211,17 @@ def main() -> int:
             db_prefix=metadata.get("db_prefix", ""),
             threshold_pct=args.threshold_pct,
             benchmark_repeats=args.benchmark_repeats,
-            arm_a_user_db=arm_a_user_db,
+            arm_a_user_db=arm_a_production_db,
             arm_b_user_db=arm_b_merged,
             source_files_by_command=source_files_by_command,
         )
         write_comparison(output_dir / "comparison.json", comparison)
         md_path, json_path = write_reports(output_dir, metadata, comparison)
 
-        artifacts = collect_artifacts(output_dir)
-        manifest_path = write_artifacts_manifest(output_dir)
+        artifacts = collect_artifacts(output_dir, arm_a_production_db=arm_a_production_db)
+        manifest_path = write_artifacts_manifest(
+            output_dir, arm_a_production_db=arm_a_production_db
+        )
         metadata["artifacts"] = artifacts
         write_metadata(output_dir / "metadata.json", metadata)
 

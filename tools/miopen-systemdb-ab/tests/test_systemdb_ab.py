@@ -39,7 +39,7 @@ def test_parse_driver_output_forward():
     assert parsed.direction == "F"
 
 
-def test_classify_improvement():
+def test_classify_improvement_without_system_db():
     arm_a = CommandResult(command=COMMAND, times_ms=[10.0, 10.0, 10.0], returncodes=[0, 0, 0])
     arm_b = CommandResult(command=COMMAND, times_ms=[8.0, 8.0, 8.0], returncodes=[0, 0, 0])
     entry = classify_entry(
@@ -52,8 +52,9 @@ def test_classify_improvement():
         threshold_pct=2.0,
         benchmark_repeats=3,
     )
-    # Without system db map this is a miss, not improvement
-    assert entry.outcome == Outcome.SYSTEM_DB_MISS.value
+    assert entry.outcome == Outcome.IMPROVEMENT.value
+    assert entry.in_system_db is False
+    assert entry.speedup_pct == pytest.approx(20.0)
 
 
 def test_classify_improvement_in_system_db():
