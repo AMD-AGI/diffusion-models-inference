@@ -43,6 +43,9 @@ if [[ "${DRY_RUN:-false}" == "true" ]]; then
   EXTRA_ARGS+=(--dry-run)
 fi
 
+CONTAINER_REPO="/app/diffusion-models-inference"
+CONTAINER_PYTHONPATH="${CONTAINER_REPO}/src:${CONTAINER_REPO}/tools/miopen-systemdb-ab"
+
 mkdir -p "${OUTPUT_DIR_ABS}"
 
 docker run \
@@ -57,19 +60,20 @@ docker run \
   --user root \
   --shm-size 128G \
   --rm \
-  --mount "type=bind,src=${REPO_ROOT},dst=/app/diffusion-models-inference" \
+  --mount "type=bind,src=${REPO_ROOT_ABS},dst=${CONTAINER_REPO}" \
   -e HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES}" \
   -e OMP_NUM_THREADS="${OMP_NUM_THREADS:-16}" \
   -e DOCKER_IMAGE="${DOCKER_IMAGE}" \
   -e HOST_UID="${HOST_UID}" \
   -e HOST_GID="${HOST_GID}" \
+  -e PYTHONPATH="${CONTAINER_PYTHONPATH}" \
   "${DOCKER_IMAGE}" \
-  python /app/diffusion-models-inference/tools/miopen-systemdb-ab/run_experiment.py \
-    --output-dir "${CONTAINER_OUTPUT}" \
-    --workloads-glob "${WORKLOADS_GLOB}" \
-    --threshold-pct "${THRESHOLD_PCT}" \
-    --benchmark-repeats "${BENCHMARK_REPEATS}" \
-    "${EXTRA_ARGS[@]}"
+  bash -c "cd '${CONTAINER_REPO}' && python tools/miopen-systemdb-ab/run_experiment.py \
+    --output-dir '${CONTAINER_OUTPUT}' \
+    --workloads-glob '${WORKLOADS_GLOB}' \
+    --threshold-pct '${THRESHOLD_PCT}' \
+    --benchmark-repeats '${BENCHMARK_REPEATS}' \
+    ${EXTRA_ARGS[*]}"
 
 echo "Run artifacts on host: ${OUTPUT_DIR_ABS}"
 echo "  report.md          -> ${OUTPUT_DIR_ABS}/report.md"
