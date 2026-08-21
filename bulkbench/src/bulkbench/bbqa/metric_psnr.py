@@ -1,16 +1,21 @@
 """PSNR metric implementation."""
 
-import os
 import itertools
+import json
+import os
+import re
+import subprocess
+from collections.abc import Callable
 from pathlib import Path, PurePath
+from typing import TypedDict
+
 from benchstats.common import LoggingConsole
 from benchstats.compare import poolBenchmarks
-from typing import Any, TypedDict
-from collections.abc import Callable
-import re
+from skimage.io import imread
+from skimage.metrics import peak_signal_noise_ratio
 
-from ..parser_JSON import get_benchmark_sources, _ALT_DELIMITER, parse_filter
 from ..bulkbench import EAGER_GROUP_PREFIX, _RESULT_IMAGE_SUFFIXES, _RESULT_VIDEO_SUFFIXES
+from ..parser_JSON import _ALT_DELIMITER, get_benchmark_sources, parse_filter
 
 
 def _is_eager_alternative(alt: str) -> bool:
@@ -161,13 +166,96 @@ class PSNRResult(TypedDict):
 def _compute_psnr_images(ref_img: Path, distorted_img: Path, logger: LoggingConsole) -> float:
     """Compute PSNR for a given reference and distorted image."""
     logger.trace(f"Computing PSNR for image '{ref_img}' and '{distorted_img}'")
-    return 0.0
+    try:
+        reference = imread(ref_img)
+        distorted = imread(distorted_img)
+        if reference.shape != distorted.shape:
+            logger.error(
+                f"Cannot compute PSNR for images '{ref_img}' and '{distorted_img}': "
+                f"image shapes differ ({reference.shape} != {distorted.shape})"
+            )
+            return float("nan")
+
+        return float(peak_signal_noise_ratio(reference, distorted))
+    except Exception as error:  # noqa: BLE001 - metric failures are reported as NaN
+        logger.error(
+            f"Failed to compute PSNR for images '{ref_img}' and '{distorted_img}': {error}"
+        )
+        return float("nan")
+
+
+_RE_FFMPEG_PARSER = re.compile(
+    r"\baverage:(inf|nan|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\b", re.IGNORECASE
+)
 
 
 def _compute_psnr_videos(ref_vid: Path, distorted_vid: Path, logger: LoggingConsole) -> float:
     """Compute PSNR for a given reference and distorted video."""
     logger.trace(f"Computing PSNR for video '{ref_vid}' and '{distorted_vid}'")
-    return 1.0
+
+    def probe(video: Path) -> tuple[int, int, int]:
+        command = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_frames",
+            "-show_entries",
+            "stream=width,height,nb_read_frames",
+            "-of",
+            "json",
+            str(video),
+        ]
+        completed = subprocess.run(command, capture_output=True, check=True, text=True)
+        streams = json.loads(completed.stdout).get("streams", [])
+        if len(streams) != 1:
+            raise ValueError(f"expected one primary video stream, found {len(streams)}")
+
+        stream = streams[0]
+        try:
+            return int(stream["width"]), int(stream["height"]), int(stream["nb_read_frames"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(f"incomplete video stream information: {stream!r}") from error
+
+    try:
+        ref_info = probe(ref_vid)
+        distorted_info = probe(distorted_vid)
+        if ref_info != distorted_info:
+            logger.error(
+                f"Cannot compute PSNR for videos '{ref_vid}' and '{distorted_vid}': "
+                "video dimensions or decoded frame counts differ "
+                f"({ref_info} != {distorted_info})"
+            )
+            return float("nan")
+
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-v",
+            "info",
+            "-i",
+            str(ref_vid),
+            "-i",
+            str(distorted_vid),
+            "-lavfi",
+            "[0:v:0][1:v:0]psnr",
+            "-f",
+            "null",
+            "-",
+        ]
+        completed = subprocess.run(command, capture_output=True, check=True, text=True)
+        matches = _RE_FFMPEG_PARSER.findall(completed.stderr)
+        if not matches:
+            raise ValueError("FFmpeg output did not contain an overall average PSNR")
+
+        return float(matches[-1])
+    except Exception as error:  # noqa: BLE001 - metric failures are reported as NaN
+        logger.error(
+            f"Failed to compute PSNR for videos '{ref_vid}' and '{distorted_vid}': {error}"
+        )
+        return float("nan")
 
 
 _RE_COMPILE_FLAG = re.compile(r"_tc_(True|False)_")
