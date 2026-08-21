@@ -6,6 +6,8 @@ from pathlib import Path, PurePath
 from benchstats.common import LoggingConsole
 from benchstats.compare import poolBenchmarks
 from typing import Any, TypedDict
+from collections.abc import Callable
+import re
 
 from ..parser_JSON import get_benchmark_sources, _ALT_DELIMITER, parse_filter
 from ..bulkbench import EAGER_GROUP_PREFIX, _RESULT_IMAGE_SUFFIXES, _RESULT_VIDEO_SUFFIXES
@@ -117,9 +119,9 @@ def _get_media_files(
 
                             suffix = Path(entry.name).suffix
                             if suffix in _RESULT_IMAGE_SUFFIXES:
-                                images = images.add(entry.name)
+                                images.add(entry.name)
                             elif suffix in _RESULT_VIDEO_SUFFIXES:
-                                videos = videos.add(entry.name)
+                                videos.add(entry.name)
                 except (OSError, TypeError, ValueError) as error:
                     logger.error(
                         f"Invalid {source_name} media directory for "
@@ -151,14 +153,104 @@ def _get_media_files(
 class PSNRResult(TypedDict):
     """Describe a PSNR for a given "distorted" file using some reference file"""
 
-    distorted_file: Path
+    distorted_file: str  # relative to the top_dir
     psnr: float
-    comparison_name: str
+    comparison_pfx: str
+
+
+def _compute_psnr_images(ref_img: Path, distorted_img: Path, logger: LoggingConsole) -> float:
+    """Compute PSNR for a given reference and distorted image."""
+    logger.trace(f"Computing PSNR for image '{ref_img}' and '{distorted_img}'")
+    return 0.0
+
+
+def _compute_psnr_videos(ref_vid: Path, distorted_vid: Path, logger: LoggingConsole) -> float:
+    """Compute PSNR for a given reference and distorted video."""
+    logger.trace(f"Computing PSNR for video '{ref_vid}' and '{distorted_vid}'")
+    return 1.0
+
+
+_RE_COMPILE_FLAG = re.compile(r"_tc_(True|False)_")
+
+
+def _strip_compile_flag(fname: str) -> str:
+    """Strip the compile flag from a file name.
+    Not verifying if it's there since this would narrow possible comparison modes"""
+    return _RE_COMPILE_FLAG.sub(r"", fname)
+
+
+def _compute_psnr_all(
+    cmp_prefix: str,
+    ref_media: MediaFiles,
+    distorted_media: MediaFiles,
+    top_dir: Path,
+    logger: LoggingConsole,
+) -> dict[str, list[PSNRResult]]:
+    """Compute PSNR for the given reference and distorted media files."""
+    logger.trace(
+        f"Computing PSNR for '{cmp_prefix}'. Reference: {ref_media}. Distorted: {distorted_media}."
+    )
+
+    _impl: dict[str, Callable[[Path, Path, LoggingConsole], float]] = {
+        "images": _compute_psnr_images,
+        "videos": _compute_psnr_videos,
+    }
+
+    results: dict[str, list[PSNRResult]] = {}
+
+    def _do(what: str):
+        ref, dist = ref_media[what], distorted_media[what]
+        if len(ref) == 0 and len(dist) == 0:
+            return
+
+        psnr_func = _impl[what]
+
+        # the core runner adds a compile flag to the file name, so we have to strip it
+        stripped_ref = {_strip_compile_flag(file): file for file in ref}
+        assert len(stripped_ref) == len(ref), (
+            "Stripping the compile flag should not change the number of files"
+        )
+        stripped_dist = {_strip_compile_flag(file): file for file in dist}
+        assert len(stripped_dist) == len(dist), (
+            "Stripping the compile flag should not change the number of files"
+        )
+
+        cmn = stripped_ref.keys() & stripped_dist.keys()
+        if len(cmn) < len(stripped_ref):
+            logger.warning(
+                f"Reference {what} '{stripped_ref.keys() - stripped_dist.keys()}' not found in distorted media. "
+                "(note that the compile flag `_tc_(True|False)_` was stripped from names)"
+            )
+        if len(cmn) < len(stripped_dist):
+            logger.warning(
+                f"Distorted {what} '{stripped_dist.keys() - stripped_ref.keys()}' not found in reference media."
+                "(note that the compile flag `_tc_(True|False)_` was stripped from names)"
+            )
+        for file in cmn:
+            ref_file = ref_media["dir"] / stripped_ref[file]
+            dist_file = distorted_media["dir"] / stripped_dist[file]
+            psnr = psnr_func(ref_file, dist_file, logger)
+
+            res_rel = ref_file.relative_to(top_dir)
+            dist_rel = dist_file.relative_to(top_dir)
+            assert res_rel not in results
+            results[str(res_rel)] = PSNRResult(
+                distorted_file=str(dist_rel), psnr=psnr, comparison_pfx=cmp_prefix
+            )
+
+    _do("images")
+    _do("videos")
+
+    if not results:
+        logger.warning(f"No PSNR results computed for '{cmp_prefix}', no matching files found")
+
+    return results
 
 
 def _process_files(
     references: dict[str, dict[str, MediaFiles]],
     runs: dict[str, dict[str, MediaFiles]],
+    top_dir: Path,
     logger: LoggingConsole,
 ) -> dict[str, list[PSNRResult]]:
     """Compute PSNR for all media files in a collection.
@@ -166,31 +258,57 @@ def _process_files(
     """
     results: dict[str, list[PSNRResult]] = {}
 
-    def compute_psnr_all(cmp_prefix:str, Ref_media: MediaFiles, distorted_media: MediaFiles) -> dict[str, list[PSNRResult]]:
-        return {}
+    def _do_compute(
+        cmp_prefix: str, Ref_media: MediaFiles, distorted_media: MediaFiles
+    ) -> dict[str, list[PSNRResult]]:
+        nonlocal results  # not necessary, but documents the intention to modify it
+        new_r = _compute_psnr_all(cmp_prefix, Ref_media, distorted_media, top_dir, logger)
+        for r in new_r:
+            if r in results:
+                results[r].extend(new_r[r])
+            else:
+                results[r] = new_r[r]
+
+    def _make_cmp_prefix(model_name: str, ref_name: str, run_name: str) -> str:
+        # return f"{model_name} {_ALT_DELIMITER} {ref_name} vs {run_name}:"
+        return model_name
 
     for model_name in sorted(references.keys()):
-        alternatives = references[model_name]
-        if len(alternatives) <= 1:
+        ref_alternatives = references[model_name]
+        if len(ref_alternatives) == 0:
+            logger.warning("Benchmark '", model_name, "' has no references! Skipping it.")
+            continue
+
+        if len(ref_alternatives) > 1:
+            # first do mutual PSNR for all references
+            for A_name, B_name in itertools.combinations(sorted(ref_alternatives.keys()), 2):
+                assert isinstance(A_name, str) and isinstance(B_name, str)
+                assert A_name != B_name
+                A_media = ref_alternatives[A_name]
+                B_media = ref_alternatives[B_name]
+
+                cmp_prefix = _make_cmp_prefix(model_name, A_name, B_name)
+                _do_compute(cmp_prefix, A_media, B_media)
+
+                cmp_prefix = _make_cmp_prefix(model_name, B_name, A_name)
+                _do_compute(cmp_prefix, B_media, A_media)
+
+        # next use the ref for all its runs
+        if model_name not in runs:
             logger.warning(
-                "Benchmark '%s%s' has no alternatives. Skipping it.",
-                model_name,
-                next(iter(alternatives.keys())) if len(alternatives) == 1 else "???",
+                f"Benchmark '{model_name}' has no runs to compare references to. Skipping it."
             )
             continue
 
-        # first do mutual PSNR for all references
-        for A_name, B_name in itertools.combinations(sorted(alternatives.keys()), 2):
-            assert isinstance(A_name, str) and isinstance(B_name, str)
-            assert A_name != B_name
-            A_media = alternatives[A_name]
-            B_media = alternatives[B_name]
+        run_alternatives = runs[model_name]
+        for ref_name in sorted(ref_alternatives.keys()):
+            ref_media = ref_alternatives[ref_name]
+            for run_name in sorted(run_alternatives.keys()):
+                run_media = run_alternatives[run_name]
 
-            cmp_prefix = f"{model_name} {_ALT_DELIMITER} {A_name} vs {B_name}"
-            results.update(compute_psnr_all(cmp_prefix, A_media, B_media))
-
-            cmp_prefix = f"{model_name} {_ALT_DELIMITER} {B_name} vs {A_name}"
-            results.update(compute_psnr_all(cmp_prefix, B_media, A_media))
+                cmp_prefix = _make_cmp_prefix(model_name, ref_name, run_name)
+                _do_compute(cmp_prefix, ref_media, run_media)
+    return results
 
 
 def metric_psnr(logger: LoggingConsole, results_dir: Path, args: list[str] | None = None) -> int:
@@ -225,7 +343,7 @@ def metric_psnr(logger: LoggingConsole, results_dir: Path, args: list[str] | Non
     logger.debug("_get_media_files references:", references)
     logger.debug("_get_media_files runs:", runs)
 
-    coll = _process_files(references, runs, logger)
-    logger.info("PSNR collection:", coll)
+    coll = _process_files(references, runs, results_dir, logger)
+    logger.info("Computed PSNR collection:", coll)
 
     return 0

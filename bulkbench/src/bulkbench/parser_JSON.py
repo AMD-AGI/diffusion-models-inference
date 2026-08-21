@@ -10,7 +10,7 @@ benchstats . --files_parser=bulkbench.parser_JSON \
 ```
 
 But there's much more. For the usage details see the documentation in the parser_JSON class
-docstring.
+docstring below.
 
 """
 
