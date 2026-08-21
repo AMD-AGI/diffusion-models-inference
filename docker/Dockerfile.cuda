@@ -144,3 +144,8 @@ COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_c
 # apex causes rms_forward_affine crash in SD3.5
 # opencv-python is required by xDiT export_to_video
 RUN pip uninstall -y apex && pip install --no-cache-dir "opencv-python"
+# Temporary workaround for a PyTorch/Transformer Engine interaction where
+# int(fused_attention_backend) triggers TorchDynamo RecursionError under torch.compile.
+# Realizes with NVTE_FP8 attention backend
+RUN sed -i 's/int(fused_attention_backend)/str(fused_attention_backend)/g' \
+    /usr/local/lib/python3.12/dist-packages/transformer_engine/pytorch/attention/dot_product_attention/utils.py
