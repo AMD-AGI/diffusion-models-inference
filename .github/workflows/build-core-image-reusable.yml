@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Build Core Images (Reusable)
 
 on:
@@ -97,50 +100,53 @@ jobs:
         if: ${{ steps.images.outputs.skip_core_build == 'false' }}
         env:
           BUILDKIT_PROGRESS: plain
-          DOCKER_BUILDKIT: 1
-          BUILDKIT_STEP_LOG_MAX_SIZE: '104857600'
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
         run: |
-          # Pull previous image for cache (may not exist for first build)
-          docker pull "${CACHE_IMAGE}" || true
-          
           NO_CACHE_FLAG=""
           if [ "${DISABLE_CACHE}" = "true" ]; then
             NO_CACHE_FLAG="--no-cache"
           fi
           
-          docker build \
+          # The remote builder imports cache straight from the registry, so a
+          # missing tag must not fail the build.
+          CACHE_FROM_FLAG=""
+          if docker buildx imagetools inspect "${CACHE_IMAGE}" >/dev/null 2>&1; then
+            CACHE_FROM_FLAG="--cache-from ${CACHE_IMAGE}"
+          fi
+
+          docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --target core \
             --pull \
+            --push \
             ${NO_CACHE_FLAG} \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from "${CACHE_IMAGE}" \
+            ${CACHE_FROM_FLAG} \
             -t "${CACHE_IMAGE}" \
             .
-          docker push "${CACHE_IMAGE}"
-      
-      - name: Pull prebuilt core image
-        if: ${{ steps.images.outputs.skip_core_build == 'true' }}
-        run: |
-          docker pull ${{ steps.images.outputs.cache_source }}
       
       - name: Build untuned image
         if: ${{ inputs.build_untuned_image }}
         env:
           BUILDKIT_PROGRESS: plain
-          DOCKER_BUILDKIT: 1
           CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
           IMAGE_TAG: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
         run: |
-          docker build \
+          CACHE_FROM_FLAG=""
+          if docker buildx imagetools inspect "${CACHE_IMAGE}" >/dev/null 2>&1; then
+            CACHE_FROM_FLAG="--cache-from ${CACHE_IMAGE}"
+          fi
+
+          docker buildx build \
+            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
+            --push \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from "${CACHE_IMAGE}" \
+            ${CACHE_FROM_FLAG} \
             -t "${IMAGE_TAG}" \
             .
-          docker push "${IMAGE_TAG}"
       
       - name: Set outputs
         id: set_outputs
