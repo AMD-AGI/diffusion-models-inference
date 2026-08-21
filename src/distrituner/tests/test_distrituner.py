@@ -133,6 +133,22 @@ class TestDistritune(unittest.TestCase):
             with open(output_dir / "task2.json") as f:
                 self.assertEqual(json.load(f)["returncode"], 2)
 
+    def test_results_returned_in_submission_order(self):
+        """Results align with task order even when shorter tasks finish first."""
+        tasks = [
+            Task(command="sleep 0.2 && echo slow"),
+            Task(command="echo fast"),
+        ]
+        worker_envs = [
+            {"WORKER_ID": "0"},
+            {"WORKER_ID": "1"},
+        ]
+
+        results = distritune(tasks, worker_envs)
+
+        self.assertIn("slow", results[0].stdout)
+        self.assertIn("fast", results[1].stdout)
+
     def test_stderr_logging(self):
         """Test that both stdout and stderr are captured in the log file."""
         import json
