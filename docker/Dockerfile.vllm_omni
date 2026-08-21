@@ -35,6 +35,7 @@ WORKDIR /app/external
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        curl \
         pkg-config \
         libdrm-dev \
         libopenmpi3 \
@@ -64,6 +65,9 @@ RUN cd /app/vllm-omni && \
 WORKDIR /app
 # Copy assets
 COPY assets/data /app/data
+RUN curl --fail --location --retry 3 \
+    --output /app/data/cat.png \
+    https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
 # Include CI
 RUN rm -fr /app/.ci/*
 COPY .ci/run.py /app/.ci/run.py
