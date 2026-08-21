@@ -177,23 +177,7 @@ def classify_entry(
         )
 
     if not in_system_db:
-        return ComparisonEntry(
-            command=command,
-            outcome=Outcome.SYSTEM_DB_MISS.value,
-            arm_a_median_ms=arm_a.median_ms if arm_a else None,
-            arm_b_median_ms=arm_b.median_ms if arm_b else None,
-            arm_a_stddev_ms=arm_a.stddev_ms if arm_a else None,
-            arm_b_stddev_ms=arm_b.stddev_ms if arm_b else None,
-            speedup_pct=None,
-            arm_a_solver=arm_a_solver,
-            arm_b_solver=arm_b_solver,
-            system_db_solver=None,
-            in_system_db=False,
-            arm_a_algorithm_id=arm_a_algo,
-            arm_b_algorithm_id=arm_b_algo,
-            source_files=source_files or [],
-            notes=notes,
-        )
+        notes.append("shape not in installed system UDB")
 
     assert arm_a is not None and arm_b is not None
     arm_a.finalize()
@@ -276,6 +260,7 @@ def compare_arms(
     counts = {item.value: 0 for item in Outcome}
     for entry in entries:
         counts[entry.outcome] = counts.get(entry.outcome, 0) + 1
+    counts["system_db_miss"] = sum(1 for entry in entries if not entry.in_system_db)
 
     primary_entries = [
         e
@@ -300,7 +285,7 @@ def compare_arms(
         ],
         "no_change": [asdict(e) for e in entries if e.outcome == Outcome.NO_CHANGE.value],
         "system_db_misses": [
-            asdict(e) for e in entries if e.outcome == Outcome.SYSTEM_DB_MISS.value
+            asdict(e) for e in entries if not e.in_system_db
         ],
         "failures": [
             asdict(e)

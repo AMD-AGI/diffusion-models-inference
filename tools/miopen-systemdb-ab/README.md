@@ -63,13 +63,20 @@ python tools/miopen-systemdb-ab/run_experiment.py \
 
 | Arm | Description |
 |-----|-------------|
-| **A** | Production-like path: `MIOPEN_FIND_ENFORCE=3`, default find mode, system DB enabled, inline timing |
+| **A** | Production inference path: `MIOPEN_FIND_ENFORCE=1` (no forced tuning), default find mode, prebuilt user DB, system DB enabled |
 | **B** | Exhaustive override: `MIOPEN_FIND_ENFORCE=3`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`, then benchmark merged user DB |
+
+Arm A matches benchmark/inference containers: MIOpen uses the shipped user DB, system DB,
+and heuristics (`DYNAMIC_HYBRID`) without incremental inline tuning. Arm B is the
+exhaustive-tuned upper bound for the same shapes.
 
 Each command is timed **3 times**; the report uses the **median**.
 
 All arms set **`MIOPEN_DEBUG_CONV_DIRECT=0`** by default so expensive naive direct
 convolution solvers are excluded from find/tune (same as `data/miopen/tune.sh`).
+
+Arm A resolves the production user DB from `/miopen_userdb` (Docker image) or
+`data/miopen/userdb` (bind-mounted repo). Override with `--arm-a-user-db`.
 
 ## Where results are saved (host)
 
@@ -111,12 +118,11 @@ Benchmark and tuning tasks are distributed across GPUs using
 3. Each worker process sets `HIP_VISIBLE_DEVICES` to a **single** index from that
    list (e.g. container env `0,1,2,3` → workers pinned to `0`, `1`, `2`, `3`).
 4. Tasks (MIOpenDriver commands) are queued and assigned to idle workers; up to
-   one command runs per GPU at a time.
+   one command per GPU at a time.
 5. Per-task stdout/stderr is saved under `arm_*/logs/` or `arm_b/tune_logs/`.
 
-**Arm A (production path):** all workers share one user DB directory
-(`arm_a/user_db/`). Shapes missing from the system DB may be tuned inline and
-appended there.
+**Arm A (production path):** all workers read the same prebuilt production user DB
+(`/miopen_userdb` or `data/miopen/userdb`). No incremental tuning or user DB writes.
 
 **Arm B (exhaustive tuning):** each worker writes to its own directory
 (`arm_b/tuning/device_<gpu_id>/`) with `MIOPEN_SYSTEM_DB_PATH` set equal to
@@ -140,8 +146,6 @@ Each run writes to `tools/miopen-systemdb-ab/runs/<run_id>/`:
 | `artifacts.json` | Manifest of all persisted paths, including user DB files |
 | `arm_a/results.jsonl` | Arm A timings |
 | `arm_b/results.jsonl` | Arm B timings |
-| `arm_a/user_db/*.udb.txt` | Arm A user performance DB (inline tuning side effects) |
-| `arm_a/user_db/*.ufdb.txt` | Arm A user find DB |
 | `arm_b/tuning/device_*/` | Per-GPU exhaustive tuning DBs (pre-merge) |
 | `arm_b/tuning_merged/*.udb.txt` | Merged exhaustive user performance DB |
 | `arm_b/tuning_merged/*.ufdb.txt` | Merged exhaustive user find DB |
@@ -150,11 +154,14 @@ Each run writes to `tools/miopen-systemdb-ab/runs/<run_id>/`:
 
 Configurable via `--threshold-pct` (default 2%):
 
-- **improvement** — exhaustive median faster → system DB suboptimal
+- **improvement** — exhaustive median faster than production heuristics (Arm A)
 - **no_change** — within threshold
 - **regression** — exhaustive slower **and** solver changed
-- **system_db_miss** — shape not in system DB (excluded from primary A/B)
+- **system_db_miss** — shape not in installed system UDB (informational; still compared)
 - **failure / arch_mismatch_or_error** — driver failure
+
+On architectures without a shipped system UDB (e.g. MI350X today), all shapes may
+show as system DB misses while still producing a full heuristics-vs-exhaustive comparison.
 
 ## Resume / partial runs
 

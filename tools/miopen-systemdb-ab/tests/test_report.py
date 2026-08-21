@@ -51,7 +51,7 @@ def test_render_report_md_includes_improvements():
         "failures": [],
     }
     md = render_report_md(metadata, comparison, Path("/tmp/run"))
-    assert "Improvements (system DB suboptimal)" in md
+    assert "Improvements (exhaustive faster than production heuristics)" in md
     assert "SolverB" in md
 
     output = Path("/tmp/miopen_ab_report_test")
