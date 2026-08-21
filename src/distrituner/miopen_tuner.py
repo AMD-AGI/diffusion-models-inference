@@ -12,19 +12,22 @@ logger = logging.getLogger(__name__)
 def create_miopen_worker_environment(
     device_id: str | int,
     tuning_database_path: Path | str,
-    miopen_find_mode: int = 1,
+    miopen_find_mode: int | None = 1,
     miopen_find_enforce: int = 4,
-    miopen_debug_conv_direct: int | None = None,
+    miopen_debug_conv_direct: int = 0,
+    miopen_system_db_path: Path | str | None = None,
 ) -> dict[str, str]:
     """Create environment variables for a worker for MIOpen tuning."""
     env = {
         "HIP_VISIBLE_DEVICES": f"{device_id}",
-        "MIOPEN_FIND_MODE": f"{miopen_find_mode}",
         "MIOPEN_FIND_ENFORCE": f"{miopen_find_enforce}",
         "MIOPEN_USER_DB_PATH": str(tuning_database_path),
+        "MIOPEN_DEBUG_CONV_DIRECT": str(miopen_debug_conv_direct),
     }
-    if miopen_debug_conv_direct is not None:
-        env["MIOPEN_DEBUG_CONV_DIRECT"] = str(miopen_debug_conv_direct)
+    if miopen_find_mode is not None:
+        env["MIOPEN_FIND_MODE"] = f"{miopen_find_mode}"
+    if miopen_system_db_path is not None:
+        env["MIOPEN_SYSTEM_DB_PATH"] = str(miopen_system_db_path)
     return env
 
 
@@ -60,7 +63,8 @@ def main():
     argparser.add_argument(
         "--miopen-debug-conv-direct",
         type=int,
-        help="Value to set for MIOPEN_DEBUG_CONV_DIRECT - if set to 0, will disable naive solver to speed up tuning",
+        default=0,
+        help="Value to set for MIOPEN_DEBUG_CONV_DIRECT (default: 0, disables naive direct conv solvers)",
     )
     argparser.add_argument(
         "--log-dir",
