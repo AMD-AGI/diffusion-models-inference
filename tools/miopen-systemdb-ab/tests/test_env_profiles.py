@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parents[1] / "src"))
 
-from lib.env_profiles import (
+from miopen_ab.env_profiles import (
     arm_a_worker_envs,
     arm_b_benchmark_worker_envs,
     arm_b_tune_worker_envs,

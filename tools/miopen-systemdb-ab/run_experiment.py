@@ -13,13 +13,13 @@ from pathlib import Path
 def _setup_import_paths() -> Path:
     tool_root = Path(__file__).resolve().parent
     repo_root = tool_root.parents[1]
-    lib_root = tool_root / "lib"
+    package_root = tool_root / "miopen_ab"
     src_root = repo_root / "src"
 
-    if not lib_root.is_dir():
+    if not package_root.is_dir():
         raise SystemExit(
-            f"Missing tool library directory: {lib_root}\n"
-            "Ensure tools/miopen-systemdb-ab/lib is present in the bind-mounted repository."
+            f"Missing tool package directory: {package_root}\n"
+            "Ensure tools/miopen-systemdb-ab/miopen_ab is present in the bind-mounted repository."
         )
 
     for path in (tool_root, src_root):
@@ -32,21 +32,21 @@ def _setup_import_paths() -> Path:
 
 REPO_ROOT = _setup_import_paths()
 
-from lib.artifacts import collect_artifacts, write_artifacts_manifest  # noqa: E402
-from lib.benchmark import get_device_ids, run_benchmarks  # noqa: E402
-from lib.compare import compare_arms, write_comparison  # noqa: E402
-from lib.env_profiles import (  # noqa: E402
+from miopen_ab.artifacts import collect_artifacts, write_artifacts_manifest  # noqa: E402
+from miopen_ab.benchmark import get_device_ids, run_benchmarks  # noqa: E402
+from miopen_ab.compare import compare_arms, write_comparison  # noqa: E402
+from miopen_ab.env_profiles import (  # noqa: E402
     ARM_A_METHODOLOGY,
     ARM_B_BENCHMARK_METHODOLOGY,
     ARM_B_TUNE_METHODOLOGY,
     arm_a_worker_envs,
     arm_b_benchmark_worker_envs,
 )
-from lib.metadata import collect_metadata, write_metadata  # noqa: E402
-from lib.ownership import restore_host_ownership  # noqa: E402
-from lib.report import write_reports  # noqa: E402
-from lib.tune import merge_tuning_databases, run_exhaustive_tuning  # noqa: E402
-from lib.workloads import collect_workloads, write_commands_file  # noqa: E402
+from miopen_ab.metadata import collect_metadata, write_metadata  # noqa: E402
+from miopen_ab.ownership import restore_host_ownership  # noqa: E402
+from miopen_ab.report import write_reports  # noqa: E402
+from miopen_ab.tune import merge_tuning_databases, run_exhaustive_tuning  # noqa: E402
+from miopen_ab.workloads import collect_workloads, write_commands_file  # noqa: E402
 
 
 logger = logging.getLogger(__name__)

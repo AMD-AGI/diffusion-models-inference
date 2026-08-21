@@ -148,3 +148,10 @@ python tools/miopen-systemdb-ab/run_experiment.py \
 source .venv/bin/activate
 PYTHONPATH=src:tools/miopen-systemdb-ab pytest tools/miopen-systemdb-ab/tests -v
 ```
+
+## Note on deployment
+
+The Python package lives in `tools/miopen-systemdb-ab/miopen_ab/` (not `lib/` — that
+name is reserved by the repo-root `.gitignore` for virtualenv directories). Ensure
+this directory is present on the machine running Docker before invoking
+`run_experiment.sh`.
