@@ -12,6 +12,12 @@ RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
 [[ "$GITHUB_WORKSPACE" == "$RUNNER_WORK_ROOT/"* ]] ||
   { echo "GITHUB_WORKSPACE is outside $RUNNER_WORK_ROOT" >&2; exit 1; }
 
+# Fix ownership of any root-owned files in the workspace (safety net for killed containers)
+fix_workspace_permissions() {
+  find "$GITHUB_WORKSPACE" ! -user "$(id -u)" -exec chown "$(id -u):$(id -g)" {} + 2>/dev/null || true
+}
+trap fix_workspace_permissions EXIT
+
 docker run \
   --security-opt seccomp=unconfined \
   --device=/dev/kfd \

@@ -10,6 +10,13 @@ HOST_UID=${HOST_UID:-$(id -u)}
 WORKDIR=$(pwd)
 ROOTDIR="${ROOTDIR:-/app/diffusion-models-inference}"
 
+# Ensure all created files are owned by the host user on exit (even on failure)
+fix_permissions() {
+    chown -hR "$HOST_UID:$HOST_GID" "$ROOTDIR/data/miopen/userdb" 2>/dev/null || true
+    chown -f "$HOST_UID:$HOST_GID" "$ROOTDIR/drivercmd.txt" "$ROOTDIR/drivercmd_filtered.txt" "$ROOTDIR/.tuning_successful" "$ROOTDIR/.miopen_db_prefix" 2>/dev/null || true
+}
+trap fix_permissions EXIT
+
 # set MIOpen ENVs
 MIOPEN_USER_DB_PATH=${MIOPEN_USER_DB_PATH:-$ROOTDIR/data/miopen/userdb}
 MIOPEN_FIND_MODE=${MIOPEN_FIND_MODE:-1}
@@ -22,6 +29,7 @@ FORCE_RETUNING=${FORCE_RETUNING:-false}
 DB_PREFIX=$($ROOTDIR/data/miopen/resolve_prefix.sh)
 if [ -n "$DB_PREFIX" ]; then
     echo "Detected MIOpen DB prefix: $DB_PREFIX"
+    echo "$DB_PREFIX" > "$ROOTDIR/.miopen_db_prefix"
 else
     echo "Could not resolve MIOpen DB prefix from rocminfo, tuning will run from scratch"
 fi
@@ -90,9 +98,6 @@ cat $WORKDIR/tuning/device*/$filename.udb.txt >> $MIOPEN_USER_DB_PATH/$filename.
 sort -u $MIOPEN_USER_DB_PATH/$filename.udb.txt -o $MIOPEN_USER_DB_PATH/$filename.udb.txt
 cat $WORKDIR/tuning/device*/$filename.ufdb.txt >> $MIOPEN_USER_DB_PATH/$filename.ufdb.txt
 sort -u $MIOPEN_USER_DB_PATH/$filename.ufdb.txt -o $MIOPEN_USER_DB_PATH/$filename.ufdb.txt
-
-# change permissions to host user
-chown -hR $HOST_UID:$HOST_GID $MIOPEN_USER_DB_PATH
 
 # signal success to the host
 touch $ROOTDIR/.tuning_successful
