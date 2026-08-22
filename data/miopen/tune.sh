@@ -22,6 +22,7 @@ FORCE_RETUNING=${FORCE_RETUNING:-false}
 DB_PREFIX=$($ROOTDIR/data/miopen/resolve_prefix.sh)
 if [ -n "$DB_PREFIX" ]; then
     echo "Detected MIOpen DB prefix: $DB_PREFIX"
+    echo "$DB_PREFIX" > "$ROOTDIR/.miopen_db_prefix"
 else
     echo "Could not resolve MIOpen DB prefix from rocminfo, tuning will run from scratch"
 fi
@@ -90,9 +91,6 @@ cat $WORKDIR/tuning/device*/$filename.udb.txt >> $MIOPEN_USER_DB_PATH/$filename.
 sort -u $MIOPEN_USER_DB_PATH/$filename.udb.txt -o $MIOPEN_USER_DB_PATH/$filename.udb.txt
 cat $WORKDIR/tuning/device*/$filename.ufdb.txt >> $MIOPEN_USER_DB_PATH/$filename.ufdb.txt
 sort -u $MIOPEN_USER_DB_PATH/$filename.ufdb.txt -o $MIOPEN_USER_DB_PATH/$filename.ufdb.txt
-
-# change permissions to host user
-chown -hR $HOST_UID:$HOST_GID $MIOPEN_USER_DB_PATH
 
 # signal success to the host
 touch $ROOTDIR/.tuning_successful
