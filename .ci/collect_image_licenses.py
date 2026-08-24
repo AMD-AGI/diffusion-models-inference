@@ -332,7 +332,8 @@ def collect_git_repositories(
 
 
 def metadata_values(metadata: Any, key: str) -> list[str]:
-    return [value.strip() for value in metadata.get_all(key, []) if value.strip()]
+    values = (str(value).strip() for value in metadata.get_all(key, []))
+    return [value for value in values if value]
 
 
 def collect_python_packages(
