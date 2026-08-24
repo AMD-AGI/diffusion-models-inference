@@ -49,7 +49,7 @@ RUN pip3 install remote_pdb imageio && \
 RUN pip3 install "transformers==5.12.1" --upgrade
     #pip3 install "flydsl==0.2.4" --upgrade
 
-# Runtime gnvs
+# Runtime envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"
 ENV SGLANG_USE_ROCM_VAE=0
 # Requires SGL PR #33855

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 - name: minimax_h3.default
   tags: [lucid, instinct, gfx942, gfx950]
   model: MiniMaxAI/MiniMax-H3

@@ -17,7 +17,6 @@
     num_iterations: 1
     num_inference_steps: 40
     guidance_scale: 5.0
-    guidance_scale: 5.0
     warmup_steps: 40
     input_images: /app/data/wan_input.jpg
     use_torch_compile: True
