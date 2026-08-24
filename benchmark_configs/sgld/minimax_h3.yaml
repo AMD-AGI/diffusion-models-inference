@@ -1,0 +1,63 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: minimax_h3.default
+  tags: [lucid, instinct, gfx942, gfx950]
+  model: MiniMaxAI/MiniMax-H3
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    seed: 42
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    num_inference_steps: 50
+    ulysses_degree: 8
+    use_torch_compile: True
+    num_iterations: 1
+    warmup_steps: 50
+    attention_backend: aiter
+    config:
+      task: t2va
+      target:
+        short_edge: 768
+        aspect_ratio: "16:9"
+        duration_seconds: 5.0
+
+- name: minimax_h3.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: MiniMaxAI/MiniMax-H3
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    seed: 42
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    num_inference_steps: 50
+    ulysses_degree: 8
+    use_torch_compile: True
+    num_iterations: 1
+    warmup_steps: 50
+    config:
+      task: t2va
+      target:
+        short_edge: 768
+        aspect_ratio: "16:9"
+        duration_seconds: 5.0
+
+- name: minimax_h3.blackwell
+  tags: [lucid, blackwell, b200, b300]
+  model: MiniMaxAI/MiniMax-H3
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    seed: 42
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    num_inference_steps: 50
+    ulysses_degree: 8
+    use_torch_compile: True
+    num_iterations: 1
+    warmup_steps: 50
+    config:
+      task: t2va
+      target:
+        short_edge: 768
+        aspect_ratio: "16:9"
+        duration_seconds: 5.0

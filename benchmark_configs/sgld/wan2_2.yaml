@@ -17,6 +17,7 @@
     num_iterations: 1
     num_inference_steps: 40
     guidance_scale: 5.0
+    warmup_steps: 40
     input_images: /app/data/wan_input.jpg
     use_torch_compile: True
     attention_backend: aiter
@@ -37,6 +38,7 @@
     num_iterations: 1
     num_inference_steps: 40
     guidance_scale: 5.0
+    warmup_steps: 40
     input_images: /app/data/wan_input.jpg
     use_torch_compile: True
 
@@ -56,6 +58,7 @@
     num_iterations: 1
     num_inference_steps: 40
     guidance_scale: 5.0
+    warmup_steps: 40
     input_images: /app/data/wan_input.jpg
     use_torch_compile: True
 
@@ -77,6 +80,7 @@
     use_torch_compile: True
     use_fp8_gemms: True
     guidance_scale: 5.0
+    warmup_steps: 40
     use_hybrid_attn_schedule: True
     hybrid_attn_low_precision_backend: aiter_fp8
     hybrid_attn_high_precision_backend: aiter_sage
@@ -95,6 +99,7 @@
     ulysses_degree: 8
     use_parallel_vae: True
     num_iterations: 1
+    warmup_steps: 40
     num_inference_steps: 40
     use_torch_compile: True
     guidance_scale: 5.0
