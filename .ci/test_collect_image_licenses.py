@@ -9,6 +9,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from email.header import Header
 from pathlib import Path
 
 
@@ -101,6 +102,19 @@ class CollectImageLicensesTest(unittest.TestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+        )
+
+    def test_normalizes_non_string_metadata_values(self) -> None:
+        class Metadata:
+            @staticmethod
+            def get_all(key: str, default: list[str]) -> list[object]:
+                self.assertEqual(key, "License")
+                self.assertEqual(default, [])
+                return [Header("MIT"), " Apache-2.0 ", "  "]
+
+        self.assertEqual(
+            collector.metadata_values(Metadata(), "License"),
+            ["MIT", "Apache-2.0"],
         )
 
     def test_collects_nested_license_and_redacts_origin_credentials(self) -> None:
