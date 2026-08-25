@@ -40,38 +40,33 @@ jobs:
           yml_files=$(echo "$all_changed" | grep '\.ya\?ml$' | grep -v '^data/hipblaslt/' || true)
           spdx_files=$(echo "$all_changed" | grep -E '^data/hipblaslt/.*\.yaml$|^data/miopen/resolve_prefix\.sh$' || true)
 
-          echo "python=$( [ -n "$py_files" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-          echo "yaml=$( [ -n "$yml_files" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-          echo "spdx=$( [ -n "$spdx_files" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          {
+            echo "python=$( [ -n "$py_files" ] && echo true || echo false )"
+            echo "yaml=$( [ -n "$yml_files" ] && echo true || echo false )"
+            echo "spdx=$( [ -n "$spdx_files" ] && echo true || echo false )"
+          } >> "$GITHUB_OUTPUT"
 
           sh_files=$(echo "$all_changed" | grep '\.sh$' || true)
           wf_files=$(echo "$all_changed" | grep -E '^\.github/(workflows|actions)/.*\.ya?ml$' || true)
 
-          echo "shell=$( [ -n "$sh_files" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-          echo "workflows=$( [ -n "$wf_files" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          {
+            echo "shell=$( [ -n "$sh_files" ] && echo true || echo false )"
+            echo "workflows=$( [ -n "$wf_files" ] && echo true || echo false )"
+          } >> "$GITHUB_OUTPUT"
 
-          # Multi-line outputs via delimiter
           {
             echo "python_files<<EOF"
             echo "$py_files"
             echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          {
             echo "yaml_files<<EOF"
             echo "$yml_files"
             echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          {
             echo "spdx_files<<EOF"
             echo "$spdx_files"
             echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          {
             echo "shell_files<<EOF"
             echo "$sh_files"
             echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          {
             echo "workflow_files<<EOF"
             echo "$wf_files"
             echo "EOF"
