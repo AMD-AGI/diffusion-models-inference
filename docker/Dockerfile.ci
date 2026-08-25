@@ -486,6 +486,9 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
     git apply /patches/aiter_fp8_sparse_asm_kernel.patch && \
+    # PyTorch 2.9 Dynamo graph-breaks on PEP 604 in nested _validate_cu (aiter/ops/mha.py).
+    # Remove this patch after PyTorch is bumped above 2.9.
+    git apply /patches/aiter_mha_pep604_dynamo.patch && \
     cp /code_objects/fwd_hd128_fp8.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8.co && \
     cp /code_objects/fwd_hd128_fp8_sparse.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8_sparse.co && \
     git submodule update --init --recursive && \

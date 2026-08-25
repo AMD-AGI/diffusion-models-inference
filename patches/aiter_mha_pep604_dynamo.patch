@@ -1,0 +1,22 @@
+diff --git a/aiter/ops/mha.py b/aiter/ops/mha.py
+index deef9d5..a1b2c3d 100644
+--- a/aiter/ops/mha.py
++++ b/aiter/ops/mha.py
+@@ -2,7 +2,7 @@
+ # Copyright (C) 2024-2026, Advanced Micro Devices, Inc. All rights reserved.
+ 
+ import os
+-from typing import Any
++from typing import Any, Optional
+ 
+ import torch
+ from torch import Generator, Tensor
+@@ -2060,7 +2060,7 @@ def _flash_attn_forward(
+ 
+     # Validate newly added optional cumulative length / padded arrays if provided.
+     # They are currently only plumbed through for future CK support enabling per-batch padding.
+-    def _validate_cu(name: str, x: torch.Tensor | None):
++    def _validate_cu(name: str, x: Optional[torch.Tensor]):
+         if x is None:
+             return
+         assert x.dim() == 1, f"{name} must be 1D"
