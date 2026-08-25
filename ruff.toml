@@ -1,0 +1,8 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+line-length = 120
+
+[lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]
