@@ -51,7 +51,7 @@ docker run \
     python3 /app/.ci/run.py $FLAGS \
       --results-directory "$BENCHMARK_OUTPUT_DIR" \
       --csv-output-path "$BENCHMARK_OUTPUT_DIR/results.csv" \
-      /app/.ci/benchmark_configs/*.yaml &&
-    (amd-smi || rocm-smi || true)
-    source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh"
+      /app/.ci/benchmark_configs/*.yaml;
+    (amd-smi || rocm-smi || true);
+    source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
   '

@@ -33,9 +33,9 @@ docker run \
   -e GITHUB_WORKSPACE \
   "$DOCKER_IMAGE" \
   bash -c '
-    bash "$ROOTDIR/data/miopen/tune.sh"
-    (amd-smi || rocm-smi || true)
-    source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh"
+    bash "$ROOTDIR/data/miopen/tune.sh";
+    (amd-smi || rocm-smi || true);
+    source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
   '
 
 if [ ! -f .tuning_successful ]; then
