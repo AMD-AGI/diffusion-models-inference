@@ -1,91 +1,50 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-# Build example image with
+# RDNA4 (gfx1200/gfx1201) QA image on AMD's supported ROCm stack.
 #
-# docker build -f docker/Dockerfile.rdna4 \
-#              -t pytorch_xdit_rdna4 .
-#
-# when running from repository root.
-#
+# Unlike Dockerfile.rdna4.qa, this uses AMD's release wheel index rather than
+# the stale nightly index. Only RDNA4 (gfx1200 + gfx1201) device code is installed;
+# the much larger device-all rocm/pytorch image is deliberately not used. Runtime
+# and development components come from the same ROCm 7.14 package family.
 
-ARG AITER_COMMIT="7d604afe5fa7efba63c0dce323b95d9daf2db112"
-ARG DIFFUSERS_COMMIT="3759fab56d3170a04d747e918a13e55fda6681e2"
-ARG ARBITER_COMMIT="656b6689bdaea4f17afe7387f2d9f36e10867e32"
-ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
-ARG XDIT_REPO="https://github.com/xdit-project/xDiT.git"
-ARG XDIT_COMMIT="4433b81061d027e568d49c4812b4ed795782868f"
-ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG FLYDSL_VERSION="0.2.0"
-# transformers is the one transitive dep we pin by hand (its majors break
-# diffusers/xfuser); everything else resolves from each package's own metadata.
-ARG TRANSFORMERS_PIN="5.10.2"
+# ---- Reproducible upstream pins -------------------------------------------
+ARG ROCM_INDEX=https://repo.amd.com/rocm/whl-multi-arch
+ARG ROCM_VERSION=7.14.0
+ARG TORCH_SPEC=torch[device-gfx1200,device-gfx1201]==2.12.0+rocm7.14.0
+ARG TORCHVISION_SPEC=torchvision[device-gfx1200,device-gfx1201]==0.27.0+rocm7.14.0
+ARG TORCHAUDIO_SPEC=torchaudio==2.11.0+rocm7.14.0
+ARG AITER_REPO=https://github.com/pds-amd/aiter.git
+ARG AITER_COMMIT=19e2e9899190eb5de365edf87ad85179c317e92e
+ARG DIFFUSERS_COMMIT=77d9eb4ed7c3e4a1813ddf3b8ba995d4a988f801
+ARG XDIT_COMMIT=21a6ddb693c9da73b1252bad3e53a99d9c8b3bb7
+ARG FLYDSL_VERSION=0.3.1
+ARG TRANSFORMERS_VERSION=5.15.1
 
-# ---- ROCm + PyTorch wheels (TheRock gfx120X) -------------------------------
-# torch/vision/audio are pinned to EXACT ROCm version strings that exist only on
-# the ROCm index, which is what makes adding PyPI as --extra-index-url safe: pip
-# can never substitute a CUDA/CPU wheel, while torch's pure-Python deps still
-# resolve from PyPI. Re-read the index with:
-#   pip index versions torch --pre --index-url ${ROCM_INDEX}
-ARG ROCM_INDEX="https://rocm.nightlies.amd.com/v2/gfx120X-all/"
-ARG TORCH_SPEC="torch==2.10.0+rocm7.13.0a20260513"
-ARG TORCHVISION_SPEC="torchvision==0.25.0+rocm7.13.0a20260513"
-ARG TORCHAUDIO_SPEC="torchaudio==2.10.0+rocm7.13.0a20260513"
-
-# ---- Non-GPL ffmpeg (built from source) ------------------------------------
-# Ubuntu's apt `ffmpeg` pulls in GPL-licensed components, which is a licensing
-# hazard when the image is shared with clients (software linking such libs must
-# also be GPL). Build ffmpeg from source WITHOUT --enable-gpl/--enable-nonfree so
-# the result is LGPL-only, then COPY just the artifacts into `core`. Mirrors the
-# DCGPU Dockerfile.ci recipe. Bump FFMPEG_VERSION to move it forward.
-# Reference: https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
+# ---- LGPL-only ffmpeg -----------------------------------------------------
 FROM ubuntu:24.04 AS ffmpeg_builder
+
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update -qq && apt-get -y install --no-install-recommends \
-        autoconf \
-        automake \
-        build-essential \
-        ca-certificates \
-        cmake \
-        git-core \
-        libaom-dev \
-        libass-dev \
-        libdav1d-dev \
-        libfreetype6-dev \
-        libgnutls28-dev \
-        libmp3lame-dev \
-        libopenh264-dev \
-        libtool \
-        libunistring-dev \
-        libvorbis-dev \
-        meson \
-        ninja-build \
-        pkg-config \
-        texinfo \
-        wget \
-        yasm \
-        zlib1g-dev \
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        autoconf automake build-essential ca-certificates cmake git-core \
+        libaom-dev libass-dev libdav1d-dev libfreetype6-dev libgnutls28-dev \
+        libmp3lame-dev libopenh264-dev libtool libunistring-dev libvorbis-dev \
+        meson ninja-build pkg-config python3 texinfo wget yasm zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-ARG FFMPEG_VERSION="7.1.3"
-ENV FFMPEG_BUILD_DIR=/ffmpeg/build
-ENV FFMPEG_SRC_DIR=/ffmpeg/src
-ENV FFMPEG_BIN_DIR=/ffmpeg/bin
-RUN mkdir -p ${FFMPEG_BUILD_DIR} ${FFMPEG_SRC_DIR}
-WORKDIR ${FFMPEG_SRC_DIR}
-# NEVER set --enable-gpl or --enable-nonfree here - that is the whole point of
-# building from source (keeps the result LGPL, safe to ship to clients).
-RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
-    tar xjvf ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
-    cd ffmpeg-${FFMPEG_VERSION} && \
-    PATH="$FFMPEG_BIN_DIR:$PATH" PKG_CONFIG_PATH="$FFMPEG_BUILD_DIR/lib/pkgconfig" ./configure \
-        --prefix="$FFMPEG_BUILD_DIR" \
-        --pkg-config-flags="--static" \
-        --extra-cflags="-I$FFMPEG_BUILD_DIR/include" \
-        --extra-ldflags="-L$FFMPEG_BUILD_DIR/lib" \
+ARG FFMPEG_VERSION=7.1.5
+RUN mkdir -p /ffmpeg/build /ffmpeg/src /ffmpeg/bin
+WORKDIR /ffmpeg/src
+# Do not add --enable-gpl or --enable-nonfree: this artifact is intended for
+# redistribution in client-facing images.
+RUN wget -q "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2" && \
+    tar xjf "ffmpeg-${FFMPEG_VERSION}.tar.bz2" && \
+    cd "ffmpeg-${FFMPEG_VERSION}" && \
+    PATH="/ffmpeg/bin:$PATH" PKG_CONFIG_PATH=/ffmpeg/build/lib/pkgconfig ./configure \
+        --prefix=/ffmpeg/build \
+        --pkg-config-flags=--static \
+        --extra-cflags=-I/ffmpeg/build/include \
+        --extra-ldflags=-L/ffmpeg/build/lib \
         --extra-libs="-lpthread -lm" \
-        --ld="g++" \
-        --bindir="$FFMPEG_BIN_DIR" \
+        --ld=g++ \
+        --bindir=/ffmpeg/bin \
         --enable-gnutls \
         --enable-libaom \
         --enable-libass \
@@ -95,286 +54,158 @@ RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-
         --enable-libopenh264 \
         --enable-libvorbis \
         --enable-shared && \
-    PATH="$FFMPEG_BIN_DIR:$PATH" make -j$(($(nproc)-1)) && \
-    make install && \
-    hash -r
+    make -j"$(nproc)" && \
+    make install
 
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /ffmpeg/license-evidence \
+    --scan-root ffmpeg=/ffmpeg/src
+
+# ---- AMD-supported, gfx1201-only ROCm + PyTorch ---------------------------
 FROM ubuntu:24.04 AS core
 
+USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Minimal system layer: python 3.12 (Ubuntu 24.04 default), git, a C/C++ toolchain
-# (aiter compiles HIP extensions), the kernel-interface libs the ROCm userspace
-# links against but the pip ROCm wheels don't ship (libnuma/libdrm/libelf), plus
-# the runtime shared libs the source-built (non-GPL) ffmpeg links against
-# (libaom/libass/libdav1d/... - the -dev counterparts live only in ffmpeg_builder).
+# aiter needs a native compiler; ffmpeg needs only the runtime libraries here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        git \
-        build-essential \
-        python3 \
-        python3-dev \
-        python3-venv \
-        python3-pip \
-        libnuma1 \
-        libdrm2 \
-        libdrm-amdgpu1 \
-        libelf1 \
-        libgomp1 \
-        libaom3 \
-        libass9 \
-        libdav1d7 \
-        libfreetype6 \
-        libgnutls30 \
-        libmp3lame0 \
-        libopenh264-7 \
-        libvorbis0a \
-        libvorbisenc2 \
+        build-essential ca-certificates curl git python3 python3-dev \
+        python3-pip python3-venv libdrm2 libdrm-amdgpu1 libelf1 libgomp1 \
+        libaom3 libass9 libdav1d7 libfreetype6 libgnutls30 libmp3lame0 \
+        libjpeg-dev libnuma-dev libopenh264-7 libvorbis0a libvorbisenc2 \
+        less nano vim \
     && rm -rf /var/lib/apt/lists/*
 
-# Pull in the non-GPL ffmpeg built in ffmpeg_builder (binaries + shared libs) and
-# register its libdir with the loader. This replaces apt's GPL-tainted ffmpeg.
 COPY --from=ffmpeg_builder /ffmpeg/bin /usr/local/bin
 COPY --from=ffmpeg_builder /ffmpeg/build/lib /usr/local/lib
 COPY --from=ffmpeg_builder /ffmpeg/build/include /usr/local/include
 COPY --from=ffmpeg_builder /ffmpeg/build/share /usr/local/share
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
+RUN echo /usr/local/lib > /etc/ld.so.conf.d/ffmpeg.conf && \
     ldconfig && \
     /usr/local/bin/ffmpeg -version | head -1
 
-# Isolated venv. TheRock's ROCm SDK installs its toolchain shims (hipcc,
-# amdclang++, rocminfo, ...) into the venv bin/, so putting the venv on PATH is
-# how aiter's HIP build later finds a compiler.
+# AMD publishes the framework separately from architecture-specific device code.
+# Installing both RDNA4 extras avoids every unrelated GPU's code objects from the
+# device-all image. PyPI remains available only for ordinary Python deps;
+# exact local-version pins prevent substitution of CPU/CUDA torch wheels.
 ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv ${VIRTUAL_ENV}
+RUN python3 -m venv "${VIRTUAL_ENV}"
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
-RUN pip install --no-cache-dir --upgrade pip wheel setuptools
 
-# Install torch FIRST and let IT pin the ROCm version: torch depends on
-# rocm[libraries], so this pulls a self-consistent rocm-sdk-core + libraries at
-# exactly the version torch was built against. Do NOT install devel before torch
-# (it causes a devel-vs-runtime version skew); order matters - torch decides.
-# numpy<2.5 is constrained HERE (not downgraded later) so pip resolves straight to
-# the highest numpy numba 0.65.1 accepts (an xfuser dep caps numpy<2.5); without it
-# torch's resolve picks numpy 2.5.0 and we'd waste an install+uninstall downgrade.
 ARG ROCM_INDEX
+ARG ROCM_VERSION
 ARG TORCH_SPEC
 ARG TORCHVISION_SPEC
 ARG TORCHAUDIO_SPEC
-RUN pip install --no-cache-dir --index-url ${ROCM_INDEX} \
-        --extra-index-url https://pypi.org/simple --pre \
-        ${TORCH_SPEC} ${TORCHVISION_SPEC} ${TORCHAUDIO_SPEC} "numpy<2.5" && \
-    python -c "import torch; v=torch.__version__; print('rocm torch:', v); print('hip:', torch.version.hip); assert 'rocm' in v.lower() or torch.version.hip, v" && \
-    python -c "import numpy; print('numpy:', numpy.__version__); assert numpy.__version__ < '2.5', numpy.__version__"
-
-# Add the ROCm DEVEL toolchain (compiler + headers) to build aiter from source,
-# pinned to the EXACT rocm-sdk-core version torch just installed (one version, no
-# upgrade/downgrade churn). --no-deps so pip cannot perturb the consistent set.
-RUN ROCM_VER="$(python -c "import importlib.metadata as m; print(m.version('rocm-sdk-core'))")" && \
-    echo "pinning rocm-sdk-devel to rocm-sdk-core version ${ROCM_VER}" && \
-    pip install --no-cache-dir --index-url ${ROCM_INDEX} --no-deps "rocm-sdk-devel==${ROCM_VER}" && \
-    rocm-sdk init && \
-    rocm-sdk targets
-
-# With the pip SDK there is no /opt/rocm; rocm-sdk expands the full SDK tree into
-# site-packages/_rocm_sdk_devel, which is what aiter's ROCM_PATH/ROCM_HOME must
-# point at. A Dockerfile ENV cannot capture command output, so the path is written
-# literally (off ${VIRTUAL_ENV}; python3.12 is fixed by the ubuntu:24.04 base) - but
-# the RUN below hard-asserts it equals the SDK's own `rocm-sdk path --root`
-# (verified to return exactly this dir), so a future TheRock relayout fails the
-# build loudly instead of silently mispointing ROCM_PATH.
-ENV ROCM_PATH="${VIRTUAL_ENV}/lib/python3.12/site-packages/_rocm_sdk_devel"
+RUN python3 -m pip install --no-cache-dir --upgrade pip "setuptools<82" wheel && \
+    python3 -m pip install --no-cache-dir --pre \
+        --index-url "${ROCM_INDEX}" --extra-index-url https://pypi.org/simple \
+        "${TORCH_SPEC}" "${TORCHVISION_SPEC}" "${TORCHAUDIO_SPEC}" "numpy==2.5.1" && \
+    python3 -m pip install --no-cache-dir --index-url "${ROCM_INDEX}" --no-deps \
+        "rocm-sdk-devel==${ROCM_VERSION}" && \
+    rocm-sdk init
+ENV ROCM_PATH="/opt/venv/lib/python3.12/site-packages/_rocm_sdk_devel"
 ENV ROCM_HOME="${ROCM_PATH}"
-RUN SDK_ROOT="$(rocm-sdk path --root)" && \
-    if [ "${SDK_ROOT}" != "${ROCM_PATH}" ]; then \
-        echo "ERROR: rocm-sdk path --root (${SDK_ROOT}) != ROCM_PATH (${ROCM_PATH}); TheRock layout changed - update ROCM_PATH."; \
-        exit 1; \
-    fi && \
-    test -d "${ROCM_PATH}" && echo "ROCM_PATH OK (matches rocm-sdk path --root): ${ROCM_PATH}"
-
-# FlyDSL's bundled MLIR JIT-links gfx1201 kernels via ${ROCM_PATH}/llvm/bin/ld.lld,
-# which it spawns by bare argv0. TheRock ships ld.lld there as a 26 KB launcher
-# stub that only self-locates when called by absolute path; invoked bare it dies
-# ("could not find path component of main program: 'ld.lld'"), killing the
-# aiter_flydsl attention JIT. Replace the stub with a symlink to the sibling 8 MB
-# multicall `lld` (self-locates via /proc/self/exe), and expose it on PATH.
-RUN cd "${ROCM_PATH}/lib/llvm/bin" && \
-    ln -sf lld ld.lld && \
-    ln -sf "${ROCM_PATH}/lib/llvm/bin/ld.lld" /opt/venv/bin/ld.lld && \
-    "${ROCM_PATH}/llvm/bin/ld.lld" --version
 ENV TRITON_HIP_LLD_PATH="${ROCM_PATH}/llvm/bin/ld.lld"
 
-# TheRock's gfx120X runtime wheel ships versioned libs (libfoo.so.N) but omits the
-# unversioned libfoo.so symlinks. SONAME-loaded libs don't care, but MIOpen's
-# CkImplLibLoader dlopens libMIOpenCKGroupedConv_gfx1201.so by its BARE name (the
-# per-arch WMMA NHWC grouped-conv lib, worth ~80-190x on VAE convs); without the
-# symlink it silently drops to the slow Direct path. Restore the unversioned .so
-# for every versioned lib, then require the CK conv lib to be loadable by bare name.
-RUN MIOPEN_LIB_DIR="/opt/venv/lib/python3.12/site-packages/_rocm_sdk_libraries_gfx120X_all/lib" && \
-    cd "${MIOPEN_LIB_DIR}" && \
-    for f in *.so.*; do \
-        [ -f "$f" ] || continue; \
-        base="${f%%.so.*}.so"; \
-        if [ ! -e "$base" ]; then ln -sf "$f" "$base"; fi; \
-    done && \
-    if [ -e libMIOpenCKGroupedConv_gfx1201.so ]; then \
-        echo "MIOpen CK gfx1201 lib present (loadable by bare name)"; \
-    else \
-        echo "ERROR: libMIOpenCKGroupedConv_gfx1201.so absent - refusing to ship without the WMMA grouped-conv solver."; \
-        exit 1; \
-    fi
+# Fail early if AMD changes the base image contract or publishes a mismatched
+# tag. The exact local torch version suffix is intentionally not assumed.
+RUN test "$(rocm-sdk path --root)" = "${ROCM_PATH}" && \
+    command -v hipcc && \
+    python3 -c "import torch, torchvision, torchaudio; print('torch:', torch.__version__, 'HIP:', torch.version.hip); assert torch.__version__.split('+')[0] == '2.12.0'; assert torch.version.hip" && \
+    hipcc --version
 
-# Route channels_last (NHWC) convs to MIOpen's WMMA grouped-conv solver. On ROCm,
-# PyTorch only dispatches channels_last convs to the MIOpen NHWC path when this is
-# set; without it the heavy VAE convs run 4-34x slower and never reach MIOpen.
-ENV PYTORCH_MIOPEN_SUGGEST_NHWC=1
-# TORCHINDUCTOR_LAYOUT_OPTIMIZATION - inductor enforces channels_last on convs
-#  to hit the MIOpen NHWC solver without spurious transposes (compile paths).
-ENV TORCHINDUCTOR_LAYOUT_OPTIMIZATION=1
-# HIP_FORCE_DEV_KERNARG - kernel args in device memory, lower per-launch latency.
-ENV HIP_FORCE_DEV_KERNARG=1
-# SAFETENSORS_FAST_GPU  - GPU weight-loading path, faster checkpoint load.
-ENV SAFETENSORS_FAST_GPU=1
-# PYTORCH_ALLOC_CONF expandable_segments - several workloads benefit from this,
-#  it doesn't slow down others so setting as default.
-ENV PYTORCH_ALLOC_CONF=expandable_segments:True
-# Seems like on this specific build we need to set this explicitly as well.
-ENV PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
-
-# CPU thread caps are NOT baked: the right value is (cpus_per_pod / ranks_per_pod),
-# so the benchmark harness sets OMP/OPENBLAS/MKL/NUMEXPR/NUMBA_NUM_THREADS per-run.
-# Running this image outside the harness with >1 rank per node? Set them yourself
-# or torch+OpenBLAS defaults to ~64 threads per rank and oversubscribes the cores.
-
-# ---------------------------------------------------------------------------
-FROM core AS deps
-
-ARG AITER_COMMIT
-ARG DIFFUSERS_COMMIT
-ARG ARBITER_COMMIT
-ARG DISTVAE_COMMIT
-ARG XDIT_COMMIT
-ARG XDIT_REPO
-ARG LONGCONTEXTATTENTION_COMMIT
-ARG FLYDSL_VERSION
-ARG TRANSFORMERS_PIN
-
-# Keep aiter from replacing TheRock torch's bundled Triton with an incompatible
-# PyPI Triton.
-ENV AITER_USE_SYSTEM_TRITON=1
-
-# Dependency strategy: every editable below is installed WITH its deps (no
-# hand-maintained pin list). The one hazard is the prerelease ROCm torch: a
-# resolver pass satisfying a torch>=... floor could swap in a CUDA/CPU PyPI wheel.
-# Guard: a constraints file pinning torch/vision/audio/triton/numpy (+transformers)
-# to exactly what is installed, exported via PIP_CONSTRAINT so every later pip
-# install reuses the installed ROCm wheels and never reaches for an index.
-# numpy is already pinned <2.5 at the torch install above (numba 0.65.1, an xfuser
-# dep, requires numpy<2.5); here we only FREEZE the resolved set - no downgrade.
-RUN pip freeze | grep -iE '^(torch|torchvision|torchaudio|pytorch-triton-rocm|triton|numpy)==' > /opt/build-constraints.txt && \
-    echo "transformers==${TRANSFORMERS_PIN}" >> /opt/build-constraints.txt && \
-    echo "--- build constraints (PIP_CONSTRAINT) ---" && cat /opt/build-constraints.txt
+# Preserve the AMD-provided torch and Triton builds during all later resolver
+# passes. transformers is pinned because major-version movement can break both
+# diffusers and xfuser independently of the ROCm stack.
+ARG TRANSFORMERS_VERSION
+RUN python3 -m pip freeze | grep -iE '^(torch|torchvision|torchaudio|pytorch-triton-rocm|triton|numpy|rocm)==' > /opt/build-constraints.txt && \
+    echo "transformers==${TRANSFORMERS_VERSION}" >> /opt/build-constraints.txt && \
+    cat /opt/build-constraints.txt
 ENV PIP_CONSTRAINT=/opt/build-constraints.txt
 
-# FlyDSL - pure-Python wheel; ships the embedded MLIR runtime that JIT-links
-# gfx1201 kernels (see the ld.lld note). Install up front so the ld.lld fix target
-# exists before any JIT, and so aiter's flydsl==${FLYDSL_VERSION} dep is satisfied.
-RUN pip install --no-cache-dir "flydsl==${FLYDSL_VERSION}" && \
-    python -c "import torch; assert 'rocm' in torch.__version__.lower() or torch.version.hip"
-
-# Runtime deps not pulled by any package below: transformers (pinned; the
-# [sentencepiece] extra adds the T5 tokenizer stack) and the video-IO leaves.
-# imageio-ffmpeg is installed --no-binary so it does NOT ship its bundled
-# GPL ffmpeg binary; it falls back to the non-GPL system ffmpeg in /usr/local/bin.
-RUN pip install --no-cache-dir \
-        "transformers[sentencepiece]==${TRANSFORMERS_PIN}" \
-        imageio \
-        yuvio && \
-    pip install --no-cache-dir --no-binary imageio-ffmpeg imageio-ffmpeg && \
-    python -c "import torch; v=torch.__version__; assert 'rocm' in v.lower() or torch.version.hip, v"
+ENV AITER_USE_SYSTEM_TRITON=1
+ENV PYTORCH_MIOPEN_SUGGEST_NHWC=1
+ENV TORCHINDUCTOR_LAYOUT_OPTIMIZATION=1
+ENV HIP_FORCE_DEV_KERNARG=1
+ENV SAFETENSORS_FAST_GPU=1
+ENV PYTORCH_ALLOC_CONF=expandable_segments:True
+ENV PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
 
 WORKDIR /app/external
 
-# long-context-attention (yunchang) - sequence-parallelism primitive. Pure-Python;
-# its only hard dep is torch (flash-attn is an optional extra we do not request).
-RUN git clone https://github.com/feifeibear/long-context-attention.git && \
-    cd long-context-attention && \
-    git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
-    echo "yunchang at $(git rev-parse HEAD)" && \
-    pip install --no-cache-dir -e . && \
-    python -c "import torch; assert 'rocm' in torch.__version__.lower() or torch.version.hip"
-
-# aiter - built from source ON PURPOSE: published aiter wheels are CDNA-only
-# (gfx942+gfx950), and the part we use on RDNA4 is the JIT FlyDSL aiter_flydsl
-# attention backend, which compiles at runtime.
-RUN git clone https://github.com/ROCm/aiter.git && \
+# The gfx1201 feature branch currently targets Python 3.12, torch >=2.9.1 and
+# FlyDSL 0.3.1. RDNA4 remains explicitly experimental in aiter, so the GPU
+# smoke tests remain a release gate even though build-time compatibility holds.
+ARG AITER_REPO
+ARG AITER_COMMIT
+ARG FLYDSL_VERSION
+RUN python3 -m pip install --no-cache-dir "flydsl==${FLYDSL_VERSION}" && \
+    git clone --recursive "${AITER_REPO}" aiter && \
     cd aiter && \
-    git reset --hard ${AITER_COMMIT} && \
-    echo "aiter at $(git rev-parse HEAD)" && \
+    git checkout "${AITER_COMMIT}" && \
     git submodule update --init --recursive && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir --no-build-isolation -e . && \
-    python -c "import torch; assert 'rocm' in torch.__version__.lower() or torch.version.hip"
+    echo "aiter at $(git rev-parse HEAD)" && \
+    python3 -m pip install --no-cache-dir -r requirements.txt && \
+    python3 -m pip install --no-cache-dir --no-build-isolation -e . && \
+    python3 -c "import importlib.metadata as m, importlib.util as u, flydsl, torch; assert u.find_spec('aiter'), 'aiter package missing'; print('aiter installed:', m.version('amd-aiter'), 'flydsl:', m.version('flydsl'), 'torch:', torch.__version__)"
 
-# diffusers - from git.
-# final rm step is needed presently to pass a release process image scan.
+# Use current diffusers main because xDiT consumes features ahead of its latest
+# release. The commit pin makes this otherwise-moving dependency reproducible.
+ARG DIFFUSERS_COMMIT
 RUN git clone https://github.com/huggingface/diffusers.git && \
     cd diffusers && \
-    git reset --hard ${DIFFUSERS_COMMIT} && \
+    git checkout "${DIFFUSERS_COMMIT}" && \
     echo "diffusers at $(git rev-parse HEAD)" && \
-    pip install --no-cache-dir -e ".[torch]" && \
-    pip install --no-cache-dir ftfy && \
-    rm scripts/convert_vq_diffusion_to_diffusers.py && \
-    python -c "import torch; assert 'rocm' in torch.__version__.lower() or torch.version.hip"
+    python3 -m pip install --no-cache-dir -e ".[torch]" ftfy
 
-# arbiter - image/video quality eval. Installed WITH deps; strip the pins that
-# fight our stack: numpy/numba/llvmlite (clash with torch's numpy and our numba ->
-# float under PIP_CONSTRAINT), pyiqa/facexlib (git deps; pyiqa drags an old
-# transformers and neither is used by our eval path), opencv-python (wants the full
-# build needing libGL; we already get opencv-python-headless from xfuser's extra).
-RUN git clone https://github.com/fal-ai/arbiter.git && \
-    cd arbiter && \
-    git reset --hard ${ARBITER_COMMIT} && \
-    echo "arbiter at $(git rev-parse HEAD)" && \
-    sed -i '/numpy/d' pyproject.toml && \
-    sed -i '/pyiqa/d' pyproject.toml && \
-    sed -i '/numba/d' pyproject.toml && \
-    sed -i '/facexlib/d' pyproject.toml && \
-    sed -i '/llvmlite/d' pyproject.toml && \
-    sed -i '/opencv-python/d' pyproject.toml && \
-    pip install --no-cache-dir -e .
+RUN python3 -m pip install --no-cache-dir \
+        "transformers[sentencepiece]==${TRANSFORMERS_VERSION}" \
+        imageio yuvio && \
+    python3 -m pip install --no-cache-dir --no-binary imageio-ffmpeg imageio-ffmpeg
 
-# DistVAE - distributed VAE decode for video models.
-RUN git clone https://github.com/xdit-project/DistVAE.git && \
-    cd DistVAE && \
-    git reset --hard ${DISTVAE_COMMIT} && \
-    echo "DistVAE at $(git rev-parse HEAD)" && \
-    pip install --no-cache-dir -e .
-
+# Upstream xDiT owns DistVAE (>=0.1.0) and yunchang (>=0.6.0); do not clone or
+# separately install either dependency.
 WORKDIR /app
-# xDiT (xfuser) - installed last, WITH its declared deps + the feature extras.
-RUN git clone "${XDIT_REPO}" && \
+ARG XDIT_COMMIT
+RUN git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
-    git reset --hard ${XDIT_COMMIT} && \
-    echo "xDiT built from $(git rev-parse HEAD)" && \
-    pip install --no-cache-dir -e ".[optimum-quanto,torchao,opencv-python]" && \
-    python -c "import torch; v=torch.__version__; print('final torch:', v); assert 'rocm' in v.lower() or torch.version.hip, v" && \
-    python -c "import flydsl, diffusers, transformers, accelerate; print('cpu imports OK')" && \
-    python -c "import importlib.util as u; assert u.find_spec('cv2'), 'opencv-python-headless missing'; print('xfuser extras OK')"
-
-FROM deps AS final
-
-RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-        less \
-        nano \
-        vim && \
-    rm -rf /var/lib/apt/lists/*
+    git checkout "${XDIT_COMMIT}" && \
+    echo "xDiT at $(git rev-parse HEAD)" && \
+    python3 -m pip install --no-cache-dir -e ".[optimum-quanto,torchao,opencv-python,cache-dit]" && \
+    python3 -c "import importlib.metadata as m, torch; print('final torch:', torch.__version__); print('DistVAE:', m.version('distvae')); print('yunchang:', m.version('yunchang')); assert torch.version.hip" && \
+    python3 -c "import diffusers, flydsl, transformers; print('CPU-safe imports OK')" && \
+    python3 -c "import importlib.util as u; assert u.find_spec('xfuser'), 'xfuser missing'; assert u.find_spec('cv2'), 'opencv missing'; import cache_dit; print('xDiT and optional extras installed')" && \
+    python3 -m pip check
 
 WORKDIR /app
-# copy assets
+
+# Runtime assets and CI entry points.
 COPY assets/data /app/data
-# copy CI prerequisites
+COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
+COPY .ci/quality_check.py /app/.ci/quality_check.py
+
+# Generate third-party license evidence from the final filesystem, retaining
+# source evidence for the LGPL-only ffmpeg build stage.
+COPY --from=ffmpeg_builder /ffmpeg/license-evidence /tmp/image-license-inputs/ffmpeg-build-sources
+COPY LICENSE /tmp/project-license/LICENSE
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /usr/share/licenses/diffusion-models-inference \
+    --scan-root app=/app \
+    --scan-root project=/tmp/project-license \
+    --scan-root python=/opt/venv \
+    --scan-root rocm="${ROCM_PATH}" \
+    --scan-root local=/usr/local \
+    --evidence-root ffmpeg-build-sources=/tmp/image-license-inputs/ffmpeg-build-sources \
+    --git-root /app \
+    --python-root /opt/venv \
+    --debian \
+    --fail-on-missing-git-license \
+    --required-git-depth 2 && \
+    rm -rf /tmp/image-license-inputs /tmp/project-license \
+        /usr/local/libexec/collect_image_licenses.py

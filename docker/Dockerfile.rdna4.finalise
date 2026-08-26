@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG INCLUDE_AITER=0
+ARG INCLUDE_TUNABLE=0
+ARG INCLUDE_MIOPEN=0
+
+# COPY cannot be conditional, so the caller supplies empty placeholders for
+# artifacts that were not generated and enables only the corresponding steps.
+COPY a8w8_blockscale_tuned_gemm_merged.csv /tmp/finalise/a8w8_blockscale_tuned_gemm.csv
+COPY tunableop_results_merged.csv /tmp/finalise/tunableop_results.csv
+COPY miopen-db /tmp/finalise/miopen-db
+
+# Resolve the package directory without importing aiter; importing it requires
+# GPU discovery, which is unavailable while the final image layer is built.
+RUN if [ "${INCLUDE_AITER}" = 1 ]; then \
+      python3 -c "import importlib.util, os, shutil; s=importlib.util.find_spec('aiter'); d=os.path.join(list(s.submodule_search_locations)[0], 'configs'); os.makedirs(d, exist_ok=True); dst=os.path.join(d, 'a8w8_blockscale_tuned_gemm.csv'); shutil.copy('/tmp/finalise/a8w8_blockscale_tuned_gemm.csv', dst); assert os.path.getsize(dst) > 0"; \
+    fi
+
+RUN if [ "${INCLUDE_TUNABLE}" = 1 ]; then \
+      mkdir -p /opt/tunableop && \
+      cp /tmp/finalise/tunableop_results.csv /opt/tunableop/tunableop_results.csv && \
+      test -s /opt/tunableop/tunableop_results.csv; \
+    fi
+
+RUN if [ "${INCLUDE_MIOPEN}" = 1 ]; then \
+      mkdir -p /miopen-db/cache && \
+      cp -a /tmp/finalise/miopen-db/. /miopen-db/; \
+    fi && \
+    rm -rf /tmp/finalise
+
+ENV PYTORCH_TUNABLEOP_ENABLED=1 \
+    PYTORCH_TUNABLEOP_TUNING=0 \
+    PYTORCH_TUNABLEOP_FILENAME=/opt/tunableop/tunableop_results.csv \
+    AITER_ONLINE_TUNE=0 \
+    MIOPEN_USER_DB_PATH=/miopen-db \
+    MIOPEN_CUSTOM_CACHE_DIR=/miopen-db/cache

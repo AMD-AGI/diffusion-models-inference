@@ -40,7 +40,7 @@
     use_torch_compile: True
     attention_backend: cudnn
 
-- name: stablediffusion_3_5.1gpu.rdna4
+- name: stablediffusion_3_5.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
@@ -51,15 +51,19 @@
     width: 1024
     num_inference_steps: 28
     warmup_calls: 2
-    ulysses_degree: 1
-    ring_degree: 1
-    guidance_scale: 3.5
     num_iterations: 5
-    attention_backend: aiter_flydsl
+    guidance_scale: 3.5
+    attention_backend: aiter_flydsl_fp8
+    use_cfg_parallel: true
+    ulysses_degree: 2
     use_torch_compile: true
-    enable_model_cpu_offload: true
     enable_tiling: true
     enable_slicing: true
+    vae_tile_size_height: 512
+    vae_tile_size_width: 512
+    vae_tile_overlap_height: 128
+    vae_tile_overlap_width: 128
+    cache_method: dbcache
 
 - name: stablediffusion_3_5.2gpu.rdna4
   tags: [rdna4, gfx1201]
@@ -74,15 +78,18 @@
     warmup_calls: 2
     num_iterations: 5
     guidance_scale: 3.5
-    pipefusion_parallel_degree: 1
-    use_cfg_parallel: true
-    attention_backend: aiter_flydsl
+    attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
-    use_fp8_gemms: true
+    cache_method: dbcache
     enable_tiling: true
     enable_slicing: true
+    vae_tile_size_height: 704
+    vae_tile_size_width: 1024
+    vae_tile_overlap_height: 176
+    vae_tile_overlap_width: 0
+    use_cfg_parallel: true
 
-- name: stablediffusion_3_5.4gpu.rdna4
+- name: stablediffusion_3_5.1gpu.rdna4
   tags: [rdna4, gfx1201]
   model: stabilityai/stable-diffusion-3.5-large
   runner: xdit
@@ -95,10 +102,12 @@
     warmup_calls: 2
     num_iterations: 5
     guidance_scale: 3.5
-    pipefusion_parallel_degree: 2
-    use_cfg_parallel: true
-    attention_backend: aiter_flydsl
+    attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
-    use_fp8_gemms: true
     enable_tiling: true
     enable_slicing: true
+    vae_tile_size_height: 384
+    vae_tile_size_width: 1024
+    vae_tile_overlap_height: 96
+    vae_tile_overlap_width: 0
+    cache_method: dbcache

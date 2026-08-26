@@ -427,52 +427,86 @@
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: True
 
-- name: wan2_2.2gpu.rdna4
+- name: wan2_2_ti2v_5b.i2v.4gpu.rdna4
   tags: [rdna4, gfx1201]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  model: Wan-AI/Wan2.2-TI2V-5B-Diffusers
   runner: xdit
   args:
-    prompt: "Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside."
-    height: 720
-    width: 1280
-    input_images: /app/data/wan_input.jpg
-    num_frames: 81
-    ulysses_degree: 2
-    ring_degree: 1
-    fully_shard_degree: 2
-    memory_efficient_sharding: true
-    use_parallel_vae: true
     seed: 42
-    warmup_calls: 1
-    num_iterations: 1
-    num_inference_steps: 40
-    use_torch_compile: true
-    attention_backend: aiter_flydsl
-    enable_tiling: true
-    enable_slicing: true
-    use_fp8_gemms: true
-
-- name: wan2_2.4gpu.rdna4
-  tags: [rdna4, gfx1201]
-  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
-  runner: xdit
-  args:
-    prompt: "Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside."
-    height: 720
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds.
+    height: 736
     width: 1280
+    num_frames: 121
+    num_inference_steps: 50
+    warmup_calls: 2
+    num_iterations: 5
+    guidance_scale: 5.0
+    flow_shift: 5
+    task: i2v
     input_images: /app/data/wan_input.jpg
-    num_frames: 81
+    attention_backend: aiter_flydsl_fp8
     ulysses_degree: 4
-    ring_degree: 1
-    fully_shard_degree: 4
-    memory_efficient_sharding: true
-    use_parallel_vae: true
-    seed: 42
-    warmup_calls: 1
-    num_iterations: 1
-    num_inference_steps: 40
     use_torch_compile: true
-    attention_backend: aiter_flydsl
-    enable_tiling: true
-    enable_slicing: true
     use_fp8_gemms: true
+    use_fp8_text_encoder: true
+    memory_efficient_replicated_load: true
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.2
+    use_parallel_vae: true
+
+- name: wan2_2_ti2v_5b.i2v.2gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Wan-AI/Wan2.2-TI2V-5B-Diffusers
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds.
+    height: 1280
+    width: 736
+    num_frames: 121
+    num_inference_steps: 50
+    warmup_calls: 2
+    num_iterations: 5
+    guidance_scale: 5.0
+    flow_shift: 5
+    task: i2v
+    input_images: /app/data/wan_input.jpg
+    attention_backend: aiter_flydsl_fp8
+    use_torch_compile: true
+    use_fp8_gemms: true
+    use_parallel_vae: true
+    cache_method: dbcache
+    enable_tiling: true
+    memory_efficient_replicated_load: true
+    use_fp8_text_encoder: true
+    ulysses_degree: 2
+    vae_tile_size_height: 384
+    vae_tile_size_width: 832
+    vae_tile_overlap_height: 96
+    vae_tile_overlap_width: 0
+
+- name: wan2_2_ti2v_5b.i2v.1gpu.rdna4
+  tags: [rdna4, gfx1201]
+  model: Wan-AI/Wan2.2-TI2V-5B-Diffusers
+  runner: xdit
+  args:
+    seed: 42
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds.
+    height: 736
+    width: 1280
+    num_frames: 121
+    num_inference_steps: 50
+    warmup_calls: 2
+    num_iterations: 5
+    guidance_scale: 5.0
+    flow_shift: 5
+    task: i2v
+    input_images: /app/data/wan_input.jpg
+    attention_backend: aiter_flydsl_fp8
+    use_torch_compile: true
+    use_fp8_gemms: true
+    cache_method: dbcache
+    cache_config:
+      residual_diff_threshold: 0.2
+    enable_tiling: true
