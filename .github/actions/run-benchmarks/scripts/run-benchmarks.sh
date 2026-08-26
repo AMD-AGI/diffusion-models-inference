@@ -38,6 +38,9 @@ docker run \
   -e HF_TOKEN="$HF_TOKEN" \
   -e BENCHMARK_FLAGS="${EFFECTIVE_BENCHMARK_FLAGS}" \
   -e BENCHMARK_OUTPUT_DIR="$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH" \
+  -e HOST_UID="$(id -u)" \
+  -e HOST_GID="$(id -g)" \
+  -e GITHUB_WORKSPACE \
   "$DOCKER_IMAGE" \
   bash -c '
     GFX_ARCH=$(rocminfo | grep -oP "gfx\d+" | head -1)
@@ -48,6 +51,7 @@ docker run \
     python3 /app/.ci/run.py $FLAGS \
       --results-directory "$BENCHMARK_OUTPUT_DIR" \
       --csv-output-path "$BENCHMARK_OUTPUT_DIR/results.csv" \
-      /app/.ci/benchmark_configs/*.yaml &&
-      (amd-smi || rocm-smi || true)
+      /app/.ci/benchmark_configs/*.yaml;
+    (amd-smi || rocm-smi || true);
+    source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
   '

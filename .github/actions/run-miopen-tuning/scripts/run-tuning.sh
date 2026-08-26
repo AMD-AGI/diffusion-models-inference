@@ -30,8 +30,13 @@ docker run \
   -e MIOPEN_FIND_ENFORCE="$MIOPEN_FIND_ENFORCE" \
   -e HOST_UID="$(id -u)" \
   -e HOST_GID="$(id -g)" \
+  -e GITHUB_WORKSPACE \
   "$DOCKER_IMAGE" \
-  bash -c 'bash "$ROOTDIR/data/miopen/tune.sh"; (amd-smi || rocm-smi || true)'
+  bash -c '
+    bash "$ROOTDIR/data/miopen/tune.sh";
+    (amd-smi || rocm-smi || true);
+    source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
+  '
 
 if [ ! -f .tuning_successful ]; then
   exit 1
