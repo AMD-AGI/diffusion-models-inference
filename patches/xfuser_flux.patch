@@ -1,10 +1,10 @@
 diff --git a/xfuser/model_executor/models/runner_models/flux.py b/xfuser/model_executor/models/runner_models/flux.py
-index 2e8d32d..a9f58f8 100644
+index 144e8b9..5bf8e0d 100644
 --- a/xfuser/model_executor/models/runner_models/flux.py
 +++ b/xfuser/model_executor/models/runner_models/flux.py
-@@ -333,7 +333,7 @@ class xFuserFlux2Model(xFuserModel):
-         # and cause pathological re-captures on RDNA4.
-         if self.config.use_fbcache or PACKAGES_CHECKER._on_rdna4():
+@@ -341,7 +341,7 @@ class xFuserFlux2Model(xFuserModel):
+         # cause pathological re-captures on RDNA4.
+         if (self.config.cache_method or PACKAGES_CHECKER._on_rdna4()):
              return "default"
 -        return "reduce-overhead"
 +        return "max-autotune-no-cudagraphs"
