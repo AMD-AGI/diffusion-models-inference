@@ -37,7 +37,7 @@ ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
 ARG PYTORCH_AUDIO_COMMIT="e3c6ee2b6588b7cd27a84182de74bf12fe043831"
 ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
 # deps image arguments
-ARG AITER_COMMIT="3a5261496c591b4fd7cf280d35d20dee713098fd"
+ARG AITER_COMMIT="4fa508ef2935110ff99adf2743ea93807dbd9c67"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="f6e1c4d1e7a6aebaeeaaa0880a82ad036517909e"
 ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
@@ -486,6 +486,9 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
     git apply /patches/aiter_fp8_sparse_asm_kernel.patch && \
+    # PyTorch 2.9 Dynamo graph-breaks on PEP 604 in nested _validate_cu (aiter/ops/mha.py).
+    # Remove this patch after PyTorch is bumped above 2.9.
+    git apply /patches/aiter_mha_pep604_dynamo.patch && \
     cp /code_objects/fwd_hd128_fp8.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8.co && \
     cp /code_objects/fwd_hd128_fp8_sparse.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8_sparse.co && \
     git submodule update --init --recursive && \
