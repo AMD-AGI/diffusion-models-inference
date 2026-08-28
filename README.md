@@ -22,7 +22,7 @@ The current xDiT benchmark configurations include:
 | FLUX.2 | `black-forest-labs/FLUX.2-dev` |
 | FLUX.2 Klein | `black-forest-labs/FLUX.2-klein-9B` |
 | HunyuanVideo | `tencent/HunyuanVideo` |
-| HunyuanVideo 1.5 | Text-to-video, distilled image-to-video, and sparse variants |
+| HunyuanVideo 1.5 | `hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v` |
 | LTX-2.3 | `dg845/LTX-2.3-Diffusers` |
 | Qwen-Image | `Qwen/Qwen-Image-2512` |
 | Qwen-Image-Edit | `Qwen/Qwen-Image-Edit` |

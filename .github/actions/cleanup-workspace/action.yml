@@ -27,18 +27,11 @@ runs:
         IMAGES: ${{ inputs.images }}
       run: ${{ github.action_path }}/scripts/cleanup-docker.sh
     
-    # Use containerized cleanup to avoid permission issues on self-hosted runners
     - name: Clean workspace
       if: ${{ inputs.skip_workspace_cleanup != 'true' }}
       shell: bash
       env:
         WORKSPACE: ${{ github.workspace }}
       run: |
-        RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
-        [[ "$WORKSPACE" == "$RUNNER_WORK_ROOT/"* ]] ||
-          { echo "Workspace is outside $RUNNER_WORK_ROOT" >&2; exit 1; }
-        docker run --rm \
-          --mount type=bind,src="$RUNNER_WORK_ROOT",dst="$RUNNER_WORK_ROOT" \
-          -e WORKSPACE \
-          ubuntu:24.04 sh -c 'rm -rf "$WORKSPACE"/* "$WORKSPACE"/.??*' || true
+        rm -rf "$WORKSPACE"/* "$WORKSPACE"/.??* || true
 

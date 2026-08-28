@@ -40,11 +40,22 @@ runs:
         DOCKER_IMAGE: ${{ inputs.image }}
       run: ${{ github.action_path }}/scripts/run-tuning.sh
     
+    - name: Resolve DB prefix
+      id: db-prefix
+      shell: bash
+      run: |
+        if [ -f .miopen_db_prefix ]; then
+          echo "prefix=$(cat .miopen_db_prefix)" >> $GITHUB_OUTPUT
+        else
+          echo "::warning::No DB prefix resolved, falling back to arch glob"
+          echo "prefix=${{ inputs.arch }}" >> $GITHUB_OUTPUT
+        fi
+
     - name: Upload MIOpen tuning results
       uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.artifact_name }}
-        path: data/miopen/userdb/gfx*
+        path: data/miopen/userdb/${{ steps.db-prefix.outputs.prefix }}*
     
     - name: Upload driver commands
       uses: actions/upload-artifact@v6
