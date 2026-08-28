@@ -1,0 +1,66 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Benchmarks an already-built image on an external cluster. Informational only —
+# results do not feed tuning or optimisation work in this repository.
+name: Remote Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_image:
+        description: 'Image tag (short git SHA) or full staging image path to benchmark'
+        required: true
+      gpu_arch:
+        description: 'GPU architecture to target'
+        type: choice
+        options:
+          - mi350p
+          - gfx1201
+        required: true
+      benchmark_flags:
+        description: 'Flags used to filter benchmarks, leave empty to run all. Only --tag and --name are accepted. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
+        required: false
+        default: ''
+      timeout_minutes:
+        description: 'Maximum time to wait for the remote job (minutes)'
+        required: false
+        default: '1440'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: '${{ inputs.gpu_arch }} benchmark'
+    runs-on: remote-exec
+    timeout-minutes: 1500
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Resolve image tag
+        id: resolve
+        env:
+          INPUT_IMAGE: ${{ inputs.benchmark_image }}
+        run: |
+          IMAGE=$(echo "$INPUT_IMAGE" | xargs)
+          if [[ "$IMAGE" == *":"* ]]; then
+            TAG="${IMAGE##*:}"
+          else
+            TAG="$IMAGE"
+          fi
+          if ! [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "::error::Image tag is not a valid Docker tag: ${TAG}"
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Run remote benchmark
+        uses: ./.github/actions/run-remote-benchmark
+        with:
+          image_tag: ${{ steps.resolve.outputs.tag }}
+          gpu_arch: ${{ inputs.gpu_arch }}
+          benchmark_flags: ${{ inputs.benchmark_flags }}
+          timeout_minutes: ${{ inputs.timeout_minutes }}
+          artifact_name: ${{ github.run_number }}-remote-benchmarks-${{ inputs.gpu_arch }}
