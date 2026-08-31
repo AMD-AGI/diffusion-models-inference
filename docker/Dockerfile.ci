@@ -357,7 +357,7 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
-FROM rocm_devel AS core_runtime
+FROM rocm_devel AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
@@ -405,9 +405,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
-
-FROM core_runtime AS core
-ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
