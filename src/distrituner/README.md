@@ -48,6 +48,7 @@ The log file contains a JSON object with:
 `tasks` list**, even though tasks may finish in a different order when run in
 parallel.
 
+### Example Usage
 ```python
 from distrituner import Task, distritune
 
