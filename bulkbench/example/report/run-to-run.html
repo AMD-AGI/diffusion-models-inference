@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<!-- Generated with benchstats v3.6.2, https://github.com/Arech/benchstats -->
+<head>
+<meta charset="UTF-8">
+<style>
+.r1 {color: #c5a635; text-decoration-color: #c5a635}
+.r2 {font-style: italic}
+.r3 {font-weight: bold}
+.r4 {color: #ff8080; text-decoration-color: #ff8080}
+.r5 {color: #ff8080; text-decoration-color: #ff8080; font-weight: bold}
+.r6 {background-color: #202020}
+.r7 {color: #70a0ff; text-decoration-color: #70a0ff}
+.r8 {color: #70a0ff; text-decoration-color: #70a0ff; font-weight: bold}
+.r9 {color: #70a0ff; text-decoration-color: #70a0ff; background-color: #202020}
+.r10 {color: #70a0ff; text-decoration-color: #70a0ff; background-color: #202020; font-weight: bold}
+.r11 {color: #ff8080; text-decoration-color: #ff8080; background-color: #202020}
+.r12 {color: #ff8080; text-decoration-color: #ff8080; background-color: #202020; font-weight: bold}
+body {
+    color: #b9bcba;
+    background-color: #191919;
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inconsolata:wdth@87.5&display=swap" rel="stylesheet">
+</head>
+<body>
+    <pre style="font-family:'Inconsolata SemiCondensed',Inconsolata,Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"><code style="font-family:inherit">[<span class="r1">warn</span>]  The following directories don&#x27;t contain an immediate or nested timings.json, and are ignored:
+- ./run1/03_pyt_IK_reorder/b
+- ./run1/03_pyt_IK_reorder/b/wan2_2.quantgemm_fp8attn.gfx950
+- ./run1/05_pyt_IK_reorderbucket/b
+- ./run1/05_pyt_IK_reorderbucket/b/wan2_2.quantgemm_fp8attn.gfx950
+- ./run2/03_pyt_IK_reorder/b
+- ./run2/03_pyt_IK_reorder/b/wan2_2.quantgemm_fp8attn.gfx950
+- ./run2/05_pyt_IK_reorderbucket/b
+- ./run2/05_pyt_IK_reorderbucket/b/wan2_2.quantgemm_fp8attn.gfx950
+<span class="r2">                                                       Benchmark comparison results (</span><a class="r2" href="https://en.wikipedia.org/wiki/Brunner_Munzel_Test">Brunner Munzel test</a><span class="r2">, alpha=0.00100)                                                       </span>
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃<span class="r3">                                 Benchmark                                  </span>┃<span class="r3">                                 real_time (means), [0%, 100%]                                  </span>┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ <span class="r4">flux.usp/a/00_pyt_baseline | run1 vs run2                                 </span> │ <span class="r4">777.8ms </span><span class="r5">&gt;</span><span class="r4"> 772.7ms {-0.7%} [769.9m,785.2m] &gt; [764.7m,777.4m] {-0.7%,-1.0%} p=0.00001 (27 vs 27)</span> │
+│<span class="r6"> flux.usp/a/01_pyt_new_flags | run1 vs run2                                 </span>│<span class="r6"> 801.9ms ~ 802.9ms {+0.1%} [797.1m,824.6m] ~ [792.7m,833.6m] {-0.5%,+1.1%} p=0.42689 (27 vs 27) </span>│
+│ flux.usp/a/02_pyt_legacy_flags | run1 vs run2                              │ 792.7ms ~ 791.2ms {-0.2%} [788.5m,799.2m] ~ [783.7m,812.7m] {-0.6%,+1.7%} p=0.00693 (27 vs 27) │
+│<span class="r6"> flux.usp/a/03_pyt_IK_reorder | run1 vs run2                                </span>│<span class="r6"> 775.6ms ~ 776.6ms {+0.1%} [771.2m,780.7m] ~ [772.0m,781.6m] {+0.1%,+0.1%} p=0.05611 (27 vs 27) </span>│
+│ <span class="r7">flux.usp/a/04_pyt_IK_bucket | run1 vs run2                                </span> │ <span class="r7">778.9ms </span><span class="r8">&lt;</span><span class="r7"> 784.0ms {+0.7%} [772.0m,800.4m] &lt; [778.0m,789.2m] {+0.8%,-1.4%} p=0.00000+(27 vs 27)</span> │
+│<span class="r6"> flux.usp/a/05_pyt_IK_reorderbucket | run1 vs run2                          </span>│<span class="r6"> 774.3ms ~ 773.6ms {-0.1%} [767.6m,790.4m] ~ [766.0m,794.1m] {-0.2%,+0.5%} p=0.16445 (27 vs 27) </span>│
+│ <span class="r4">flux.usp/a/10_PR_baseline | run1 vs run2                                  </span> │ <span class="r4">777.8ms </span><span class="r5">&gt;</span><span class="r4"> 772.3ms {-0.7%} [769.3m,784.6m] &gt; [767.6m,777.0m] {-0.2%,-1.0%} p=0.00000+(27 vs 27)</span> │
+│<span class="r6"> </span><span class="r9">flux.usp/a/11_PR_only_meta | run1 vs run2                                 </span><span class="r6"> </span>│<span class="r6"> </span><span class="r9">772.5ms </span><span class="r10">&lt;</span><span class="r9"> 775.5ms {+0.4%} [768.0m,778.0m] &lt; [770.2m,779.4m] {+0.3%,+0.2%} p=0.00000+(27 vs 27)</span><span class="r6"> </span>│
+│ flux.usp/a/12_PR_new_flags_no_meta | run1 vs run2                          │ 823.9ms ~ 825.2ms {+0.2%} [816.0m,842.4m] ~ [818.6m,847.9m] {+0.3%,+0.7%} p=0.15810 (27 vs 27) │
+│<span class="r6"> flux.usp/a/13_PR_new_flags_with_meta | run1 vs run2                        </span>│<span class="r6"> 794.2ms ~ 794.3ms {+0.0%} [789.0m,809.2m] ~ [788.5m,798.8m] {-0.1%,-1.3%} p=0.29075 (27 vs 27) </span>│
+│ <span class="r4">flux.usp/a/14_PR_legacy_flags | run1 vs run2                              </span> │ <span class="r4">795.6ms </span><span class="r5">&gt;</span><span class="r4"> 784.0ms {-1.5%} [782.4m,816.5m] &gt; [779.8m,799.6m] {-0.3%,-2.1%} p=0.00000+(27 vs 27)</span> │
+│<span class="r6"> flux2.quantgemm.gfx950/a/00_pyt_baseline | run1 vs run2                    </span>│<span class="r6"> 2.272s ~ 2.273s {+0.0%} [2.260,2.281] ~ [2.255,2.293] {-0.2%,+0.5%} p=0.33377 (27 vs 27)       </span>│
+│ <span class="r4">flux2.quantgemm.gfx950/a/01_pyt_new_flags | run1 vs run2                  </span> │ <span class="r4">2.349s </span><span class="r5">&gt;</span><span class="r4"> 2.330s {-0.8%} [2.333,2.365] &gt; [2.321,2.354] {-0.5%,-0.5%} p=0.00000+(27 vs 27)      </span> │
+│<span class="r6"> flux2.quantgemm.gfx950/a/02_pyt_legacy_flags | run1 vs run2                </span>│<span class="r6"> 2.272s ~ 2.275s {+0.1%} [2.259,2.292] ~ [2.265,2.288] {+0.3%,-0.2%} p=0.04836 (27 vs 27)       </span>│
+│ flux2.quantgemm.gfx950/a/03_pyt_IK_reorder | run1 vs run2                  │ 2.268s ~ 2.270s {+0.1%} [2.255,2.280] ~ [2.257,2.297] {+0.1%,+0.8%} p=0.29175 (27 vs 27)       │
+│<span class="r6"> flux2.quantgemm.gfx950/a/04_pyt_IK_bucket | run1 vs run2                   </span>│<span class="r6"> 2.274s ~ 2.274s {-0.0%} [2.263,2.303] ~ [2.258,2.301] {-0.2%,-0.1%} p=0.41048 (27 vs 27)       </span>│
+│ <span class="r7">flux2.quantgemm.gfx950/a/05_pyt_IK_reorderbucket | run1 vs run2           </span> │ <span class="r7">2.262s </span><span class="r8">&lt;</span><span class="r7"> 2.268s {+0.3%} [2.249,2.280] &lt; [2.256,2.283] {+0.3%,+0.1%} p=0.00004 (27 vs 27)      </span> │
+│<span class="r6"> flux2.quantgemm.gfx950/a/10_PR_baseline | run1 vs run2                     </span>│<span class="r6"> 2.272s ~ 2.277s {+0.2%} [2.260,2.288] ~ [2.261,2.302] {+0.1%,+0.6%} p=0.02500 (27 vs 27)       </span>│
+│ flux2.quantgemm.gfx950/a/11_PR_only_meta | run1 vs run2                    │ 2.271s ~ 2.272s {+0.0%} [2.259,2.284] ~ [2.258,2.294] {-0.0%,+0.5%} p=0.43609 (27 vs 27)       │
+│<span class="r6"> </span><span class="r9">flux2.quantgemm.gfx950/a/12_PR_new_flags_no_meta | run1 vs run2           </span><span class="r6"> </span>│<span class="r6"> </span><span class="r9">2.334s </span><span class="r10">&lt;</span><span class="r9"> 2.345s {+0.5%} [2.324,2.356] &lt; [2.332,2.367] {+0.3%,+0.5%} p=0.00000+(27 vs 27)      </span><span class="r6"> </span>│
+│ flux2.quantgemm.gfx950/a/13_PR_new_flags_with_meta | run1 vs run2          │ 2.284s ~ 2.282s {-0.1%} [2.267,2.306] ~ [2.269,2.300] {+0.1%,-0.3%} p=0.14248 (27 vs 27)       │
+│<span class="r6"> flux2.quantgemm.gfx950/a/14_PR_legacy_flags | run1 vs run2                 </span>│<span class="r6"> 2.268s ~ 2.263s {-0.2%} [2.256,2.280] ~ [2.253,2.286] {-0.1%,+0.2%} p=0.00251 (27 vs 27)       </span>│
+│ <span class="r4">wan2_2.quantgemm_fp8attn.gfx950/b/00_pyt_baseline | run1 vs run2          </span> │ <span class="r4">34.32s </span><span class="r5">&gt;</span><span class="r4"> 34.28s {-0.1%} [34.23,34.44] &gt; [34.21,34.35] {-0.0%,-0.3%} p=0.00069 (25 vs 25)      </span> │
+│<span class="r6"> </span><span class="r11">wan2_2.quantgemm_fp8attn.gfx950/b/01_pyt_new_flags | run1 vs run2         </span><span class="r6"> </span>│<span class="r6"> </span><span class="r11">35.90s </span><span class="r12">&gt;</span><span class="r11"> 35.75s {-0.4%} [35.78,36.01] &gt; [35.66,35.88] {-0.3%,-0.4%} p=0.00000+(25 vs 25)      </span><span class="r6"> </span>│
+│ wan2_2.quantgemm_fp8attn.gfx950/b/02_pyt_legacy_flags | run1 vs run2       │ 33.97s ~ 33.97s {+0.0%} [33.85,34.10] ~ [33.89,34.05] {+0.1%,-0.2%} p=0.38500 (25 vs 25)       │
+│<span class="r6"> wan2_2.quantgemm_fp8attn.gfx950/b/04_pyt_IK_bucket | run1 vs run2          </span>│<span class="r6"> 34.27s ~ 34.30s {+0.1%} [34.19,34.38] ~ [34.19,34.42] {+0.0%,+0.1%} p=0.02572 (25 vs 25)       </span>│
+│ <span class="r4">wan2_2.quantgemm_fp8attn.gfx950/b/10_PR_baseline | run1 vs run2           </span> │ <span class="r4">34.30s </span><span class="r5">&gt;</span><span class="r4"> 34.24s {-0.1%} [34.15,34.40] &gt; [34.13,34.35] {-0.0%,-0.1%} p=0.00007 (25 vs 25)      </span> │
+│<span class="r6"> wan2_2.quantgemm_fp8attn.gfx950/b/11_PR_only_meta | run1 vs run2           </span>│<span class="r6"> 34.27s ~ 34.28s {+0.0%} [34.14,34.38] ~ [34.16,34.40] {+0.1%,+0.0%} p=0.34806 (25 vs 25)       </span>│
+│ <span class="r4">wan2_2.quantgemm_fp8attn.gfx950/b/12_PR_new_flags_no_meta | run1 vs run2  </span> │ <span class="r4">35.89s </span><span class="r5">&gt;</span><span class="r4"> 35.80s {-0.2%} [35.78,36.00] &gt; [35.73,35.88] {-0.1%,-0.3%} p=0.00000+(25 vs 25)      </span> │
+│<span class="r6"> </span><span class="r11">wan2_2.quantgemm_fp8attn.gfx950/b/13_PR_new_flags_with_meta | run1 vs run2</span><span class="r6"> </span>│<span class="r6"> </span><span class="r11">35.17s </span><span class="r12">&gt;</span><span class="r11"> 35.12s {-0.2%} [35.07,35.32] &gt; [35.07,35.18] {+0.0%,-0.4%} p=0.00047 (25 vs 25)      </span><span class="r6"> </span>│
+│ wan2_2.quantgemm_fp8attn.gfx950/b/14_PR_legacy_flags | run1 vs run2        │ 33.96s ~ 33.92s {-0.1%} [33.87,34.11] ~ [33.84,34.08] {-0.1%,-0.1%} p=0.00304 (25 vs 25)       │
+└────────────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────┘
+[<span class="r1">warn</span>]  At least one significant difference in main metrics was detected. Returning with exit(1).
+</code></pre>
+<style>
+  ::highlight(match) {
+    background-color: yellow;
+    color: black;
+  }
+</style>
+
+<script>
+  document.addEventListener("selectionchange", () => {
+    CSS.highlights.clear();
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+    if (!selectedText) return;
+    const ranges = [];
+    const walker = document.createTreeWalker(
+      document.body, 
+      NodeFilter.SHOW_TEXT
+    );
+    while (walker.nextNode()) {
+      const textNode = walker.currentNode;
+      const textContent = textNode.nodeValue;
+      let index = textContent.indexOf(selectedText);
+      while (index !== -1) {
+        const range = new Range();
+        range.setStart(textNode, index);
+        range.setEnd(textNode, index + selectedText.length);
+        ranges.push(range);
+        index = textContent.indexOf(selectedText, index + 1);
+      }
+    }
+    if (ranges.length > 0) {
+      const highlight = new Highlight(...ranges);
+      CSS.highlights.set("match", highlight);
+    }
+  });
+</script>
+</body>
+
+</html>

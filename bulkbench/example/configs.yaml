@@ -1,0 +1,18 @@
+- name: a
+  configs:
+    - flux.usp
+    #- flux2.default
+    - flux2.quantgemm.gfx942
+    - flux2.quantgemm.gfx950
+  eager_in_patches: [00_pyt_baseline, 10_PR_baseline, 11_PR_only_meta]
+  override_args:
+    num_iterations: 30
+
+- name: b
+  #enabled: false
+  configs:
+    - wan2_2.quantgemm_fp8attn.gfx950
+    - wan2_2.quantgemm_fp8attn.gfx942
+  eager_in_patches: [00_pyt_baseline, 10_PR_baseline, 11_PR_only_meta]
+  override_args:
+    num_iterations: 28
