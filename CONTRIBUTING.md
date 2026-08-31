@@ -95,6 +95,8 @@ Install [pre-commit](https://pre-commit.com/) to run the same checks automatical
 every commit:
 
 ```sh
+python3 -m venv venv
+source venv/bin/activate
 pip install pre-commit
 pre-commit install
 ```
@@ -196,6 +198,5 @@ repository checks locally. The hooks configured in `.pre-commit-config.yaml` are
 # SPDX-License-Identifier: MIT
 ```
 
-Files listed in `.ci/spdx_exclude.txt` are excluded from this check (e.g., patches
-containing upstream license headers). Patch files are also excluded because they may
-contain legitimate upstream license headers.
+Files listed in `.ci/spdx_exclude.txt` are excluded from this check, as are patch files
+which may contain legitimate upstream license headers.
