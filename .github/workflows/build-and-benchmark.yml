@@ -94,11 +94,13 @@ jobs:
 
       - name: Generate image tag
         id: generate_tag
-        run: |         
+        run: |
           IMAGE_TAG=$(git rev-parse --short HEAD)
-          echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "staging_image_with_tag=${{ env.STAGING_IMAGE }}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          {
+            echo "tag=${IMAGE_TAG}"
+            echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}"
+            echo "staging_image_with_tag=${{ env.STAGING_IMAGE }}:${IMAGE_TAG}"
+          } >> $GITHUB_OUTPUT
       
       - name: Check architectures
         id: check-archs
