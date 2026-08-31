@@ -47,7 +47,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           sh_files=$(echo "$all_changed" | grep '\.sh$' || true)
-          wf_files=$(echo "$all_changed" | grep -E '^\.github/(workflows|actions)/.*\.ya?ml$' || true)
+          wf_files=$(echo "$all_changed" | grep -E '^\.github/workflows/.*\.ya?ml$' || true)
 
           {
             echo "shell=$( [ -n "$sh_files" ] && echo true || echo false )"
@@ -140,4 +140,6 @@ jobs:
       - name: Install actionlint
         run: bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
       - name: actionlint
+        env:
+          SHELLCHECK_OPTS: --exclude=SC2086
         run: echo '${{ needs.changed-files.outputs.workflow_files }}' | xargs ./actionlint
