@@ -1,0 +1,1645 @@
+import difflib
+import shutil
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock, call, patch
+
+import pytest
+
+from bulkbench import BulkBench, GroupFailureCapture, GroupRunError, makeParser
+from bulkbench.bulkbench import configMightHaveRunSuccessfully
+from bulkbench.script_runner import ScriptRunResult
+
+
+def _makeBulkBenchNoReport(*args, **kwargs):
+    bb = BulkBench(*args, **kwargs)
+    bb._makeReport = Mock()
+    return bb
+
+
+class TestSystem(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._benchmark_configs_temp = TemporaryDirectory()
+        cls.benchmark_configs_dir = Path(cls._benchmark_configs_temp.name)
+        (cls.benchmark_configs_dir / "cfg.yaml").write_text(
+            """
+- name: cfg
+  tags: [gfx942]
+- name: cfg.variant
+  tags: [gfx950]
+- name: cfg.first
+- name: cfg.second
+  tags: []
+""",
+            encoding="utf-8",
+        )
+        for stem in ("cfg1", "cfg2", "cfg3", "cfg4"):
+            (cls.benchmark_configs_dir / f"{stem}.yaml").write_text(
+                f"- name: {stem}\n  tags: [gfx942]\n",
+                encoding="utf-8",
+            )
+        cls._benchmark_configs_patch = patch(
+            "bulkbench.bulkbench._BENCHMARK_CONFIGS_DIR",
+            cls.benchmark_configs_dir,
+        )
+        cls._benchmark_configs_patch.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._benchmark_configs_patch.stop()
+        cls._benchmark_configs_temp.cleanup()
+
+    def test_configs_file(self):
+        project_dir = Path(__file__).parent / "proj0"
+        with TemporaryDirectory() as output_dir:
+            bulk_bench = _makeBulkBenchNoReport(
+                project_dir=project_dir,
+                backup_dir=Path(output_dir) / "backups",
+                configs_file="my_configs",
+                results_dir=Path(output_dir) / "results",
+                report_dir=Path(output_dir) / "report",
+                # Specify arch to avoid a rocminfo call.
+                arch="",
+            )
+
+        self.assertEqual(
+            bulk_bench.configs,
+            {
+                "group1": {
+                    "name": "group1",
+                    "configs": ["cfg1", "cfg2"],
+                    "override_args": (
+                        '{"num_iterations":5,"use_cfg_parallel":true,"nested":{"values":[1,null]}}'
+                    ),
+                    "only_in_patches": None,
+                },
+                "group2": {
+                    "name": "group2",
+                    "configs": ["cfg3"],
+                    "override_args": None,
+                    "only_in_patches": None,
+                },
+                "group3": {
+                    "name": "group3",
+                    "configs": ["cfg4"],
+                    "override_args": None,
+                    "only_in_patches": None,
+                },
+            },
+        )
+
+    def test_regenerate_results_cli_argument(self):
+        parser = makeParser()
+
+        self.assertFalse(parser.parse_args([]).regenerate_results)
+        self.assertTrue(parser.parse_args(["-r"]).regenerate_results)
+        self.assertTrue(parser.parse_args(["--regenerate_results"]).regenerate_results)
+
+    def _read_configs(self, contents: str, *, arch: str = "") -> BulkBench:
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "configs.yaml").write_text(contents, encoding="utf-8")
+            (project_dir / "patches.yaml").write_text(
+                "- name: baseline\n  patches: []\n", encoding="utf-8"
+            )
+            return _makeBulkBenchNoReport(project_dir=project_dir, arch=arch)
+
+    def assertInvalidConfigs(self, contents: str, expected_message: str) -> None:
+        with self.assertRaises(ValueError) as context:
+            self._read_configs(contents)
+        self.assertIn(expected_message, str(context.exception))
+
+    def test_configs_file_schema_errors(self):
+        cases = (
+            ("", "must contain a YAML list"),
+            ("[]", "must contain at least one enabled config group"),
+            ("{}", "must contain a YAML list"),
+            ("- configs: [cfg]", "missing required attribute 'name'"),
+            ("- name: group\n  configs: [cfg]\n  extra: true", "unknown attribute(s): extra"),
+            ("- name: '  '\n  configs: [cfg]", "'name' must be a non-empty string"),
+            ("- name: group", "missing required attribute 'configs'"),
+            ("- name: group\n  configs: []", "'configs' must be a non-empty list"),
+            ("- name: group\n  configs: [cfg, 1]", "item 2 must be a non-empty string"),
+            ("- name: group\n  configs: [cfg, cfg]", "duplicate config name 'cfg'"),
+            (
+                "- name: group\n  configs: [cfg]\n- name: group\n  configs: [other]",
+                "duplicate group name 'group'",
+            ),
+        )
+        for contents, expected_message in cases:
+            with self.subTest(expected_message=expected_message):
+                self.assertInvalidConfigs(contents, expected_message)
+
+    def test_enabled_values_are_normalized_and_disabled_groups_are_ignored(self):
+        bulk_bench = self._read_configs(
+            """
+- name: bool_true
+  configs: [cfg]
+  enabled: true
+- name: int_one
+  configs: [cfg]
+  enabled: 1
+- name: string_true
+  configs: [cfg]
+  enabled: "true"
+- name: string_one
+  configs: [cfg]
+  enabled: "1"
+- name: alias_yes
+  configs: [cfg]
+  enabled: yes
+- name: alias_on
+  configs: [cfg]
+  enabled: on
+- enabled: false
+  unknown: ignored
+- enabled: 0
+- enabled: "false"
+- enabled: "0"
+- enabled: no
+- enabled: off
+"""
+        )
+
+        self.assertEqual(
+            set(bulk_bench.configs),
+            {"bool_true", "int_one", "string_true", "string_one", "alias_yes", "alias_on"},
+        )
+        self.assertTrue(
+            all("enabled" not in config_group for config_group in bulk_bench.configs.values())
+        )
+
+    def test_invalid_enabled_values_are_rejected(self):
+        for value in ("2", "-1", "null", "[]", "{}", '"True"', '"yes"', '""'):
+            with self.subTest(value=value):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [cfg]\n  enabled: {value}",
+                    "attribute 'enabled' must be a YAML boolean",
+                )
+
+    def test_all_groups_disabled_is_rejected(self):
+        self.assertInvalidConfigs(
+            '- enabled: false\n- enabled: 0\n- enabled: "false"\n- enabled: "0"',
+            "must contain at least one enabled config group",
+        )
+
+    def test_override_args_errors(self):
+        cases = (
+            (
+                "- name: group\n  configs: [cfg]\n  override_args: [value]",
+                "'override_args' must be an object or null",
+            ),
+            (
+                "- name: group\n  configs: [cfg]\n  override_args:\n    1: value",
+                "contains non-string mapping key 1",
+            ),
+            (
+                ("- name: group\n  configs: [cfg]\n  override_args:\n    generated_at: 2026-08-14"),
+                "isn't valid JSON",
+            ),
+            (
+                "- name: group\n  configs: [cfg]\n  override_args:\n    value: .nan",
+                "isn't valid JSON",
+            ),
+            (
+                ("- name: group\n  configs: [cfg]\n  override_args: &args\n    self: *args"),
+                "contains a circular reference",
+            ),
+        )
+        for contents, expected_message in cases:
+            with self.subTest(expected_message=expected_message):
+                self.assertInvalidConfigs(contents, expected_message)
+
+    def test_config_patch_fields_reject_invalid_values(self):
+        cases = (
+            ("only_in_patches: null", "only_in_patches field is set but empty"),
+            ("only_in_patches: baseline", "'only_in_patches' must be a list"),
+            ("only_in_patches: ['  ']", "item 1 must be a non-empty string"),
+            ("only_in_patches: [1]", "item 1 must be a non-empty string"),
+            ("eager_in_patches: null", "eager_in_patches field is set but empty"),
+            ("eager_in_patches: baseline", "'eager_in_patches' must be a list"),
+            ("eager_in_patches: ['  ']", "item 1 must be a non-empty string"),
+            ("eager_in_patches: [1]", "item 1 must be a non-empty string"),
+        )
+        for field, expected_message in cases:
+            with self.subTest(field=field):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [cfg]\n  {field}",
+                    expected_message,
+                )
+
+    def test_empty_only_in_patches_omits_group(self):
+        for restriction in ("[]", "[missing]"):
+            with self.subTest(restriction=restriction):
+                with patch("bulkbench.bulkbench.LoggingConsole.warning") as warning:
+                    bulk_bench = self._read_configs(
+                        f"""
+- name: omitted
+  configs: [cfg]
+  only_in_patches: {restriction}
+  eager_in_patches: invalid-but-not-validated
+- name: retained
+  configs: [cfg]
+"""
+                    )
+
+                self.assertEqual(set(bulk_bench.configs), {"retained"})
+                self.assertTrue(
+                    any(
+                        "Group 'omitted' was fully omitted" in warning_call.args[0]
+                        for warning_call in warning.call_args_list
+                    )
+                )
+
+    def test_all_groups_omitted_by_only_in_patches_are_rejected(self):
+        self.assertInvalidConfigs(
+            "- name: group\n  configs: [cfg]\n  only_in_patches: []",
+            "must contain at least one enabled config group",
+        )
+
+    def test_empty_eager_in_patches_does_not_create_eager_group(self):
+        for restriction in ("[]", "[missing]"):
+            with self.subTest(restriction=restriction):
+                bulk_bench = self._read_configs(
+                    f"""
+- name: group
+  configs: [cfg]
+  eager_in_patches: {restriction}
+"""
+                )
+
+                self.assertEqual(set(bulk_bench.configs), {"group"})
+
+    def test_config_patch_fields_deduplicate_and_ignore_unknown_patch_sets(self):
+        with patch("bulkbench.bulkbench.LoggingConsole.warning") as warning:
+            bulk_bench = self._read_configs(
+                """
+- name: group
+  configs: [cfg]
+  only_in_patches: [baseline, " baseline ", missing, missing]
+  eager_in_patches: [baseline, " baseline ", missing, missing]
+"""
+            )
+
+        self.assertEqual(bulk_bench.configs["group"]["only_in_patches"], frozenset({"baseline"}))
+        eager_group = bulk_bench.configs["eager_group"]
+        self.assertEqual(eager_group["configs"], ["cfg"])
+        self.assertEqual(eager_group["only_in_patches"], frozenset({"baseline"}))
+        self.assertEqual(
+            eager_group["override_args"],
+            '{"num_iterations":1,"use_torch_compile":false}',
+        )
+        self.assertEqual(warning.call_count, 2)
+        for warning_call, attribute_name in zip(
+            warning.call_args_list,
+            ("only_in_patches", "eager_in_patches"),
+            strict=True,
+        ):
+            message = warning_call.args[0]
+            self.assertIn(f"attribute '{attribute_name}' isn't defined", message)
+            self.assertIn("'missing'", message)
+
+    def test_eager_group_intersects_restrictions_and_overrides_eager_arguments(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            for name in ("changes", "quality"):
+                patch_path = project_dir / name / f"{name}.patch"
+                patch_path.parent.mkdir()
+                patch_path.touch()
+                (project_dir / f"{name}.py").touch()
+            (project_dir / "patches.yaml").write_text(
+                f"""
+- name: baseline
+  patches: []
+- name: changes
+  patches:
+    - patch: changes.patch
+      target: {project_dir / "changes.py"}
+- name: quality
+  patches:
+    - patch: quality.patch
+      target: {project_dir / "quality.py"}
+""",
+                encoding="utf-8",
+            )
+            (project_dir / "configs.yaml").write_text(
+                """
+- name: group
+  configs: [cfg]
+  only_in_patches: [baseline, changes]
+  eager_in_patches: [quality, changes]
+  override_args:
+    num_iterations: 17
+    use_torch_compile: true
+    nested: {value: original}
+""",
+                encoding="utf-8",
+            )
+            with patch.object(BulkBench, "_dryRunPatches"):
+                bulk_bench = _makeBulkBenchNoReport(project_dir=project_dir, arch="")
+
+        self.assertEqual(
+            bulk_bench.configs,
+            {
+                "group": {
+                    "name": "group",
+                    "configs": ["cfg"],
+                    "override_args": (
+                        '{"num_iterations":17,"use_torch_compile":true,'
+                        '"nested":{"value":"original"}}'
+                    ),
+                    "only_in_patches": frozenset({"baseline", "changes"}),
+                },
+                "eager_group": {
+                    "name": "eager_group",
+                    "configs": ["cfg"],
+                    "override_args": (
+                        '{"num_iterations":1,"use_torch_compile":false,'
+                        '"nested":{"value":"original"}}'
+                    ),
+                    "only_in_patches": frozenset({"changes"}),
+                },
+            },
+        )
+
+    def test_eager_group_with_empty_restriction_intersection_is_omitted(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "changes").mkdir()
+            (project_dir / "changes" / "change.patch").touch()
+            (project_dir / "target.py").touch()
+            (project_dir / "patches.yaml").write_text(
+                f"""
+- name: baseline
+  patches: []
+- name: changes
+  patches:
+    - patch: change.patch
+      target: {project_dir / "target.py"}
+""",
+                encoding="utf-8",
+            )
+            (project_dir / "configs.yaml").write_text(
+                """
+- name: group
+  configs: [cfg]
+  only_in_patches: [baseline]
+  eager_in_patches: [changes]
+""",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(BulkBench, "_dryRunPatches"),
+                patch("bulkbench.bulkbench.LoggingConsole.warning") as warning,
+            ):
+                bulk_bench = _makeBulkBenchNoReport(project_dir=project_dir, arch="")
+
+        self.assertEqual(set(bulk_bench.configs), {"group"})
+        self.assertTrue(
+            any(
+                "Eager group 'eager_group' was fully omitted" in warning_call.args[0]
+                and "have an empty intersection" in warning_call.args[0]
+                for warning_call in warning.call_args_list
+            )
+        )
+
+    def test_config_group_name_cannot_use_reserved_eager_prefix(self):
+        self.assertInvalidConfigs(
+            "- name: eager_group\n  configs: [cfg]",
+            "attribute 'name' must not start with reserved prefix 'eager_'",
+        )
+
+    def test_duplicate_yaml_keys_are_rejected(self):
+        self.assertInvalidConfigs(
+            "- enabled: false\n  name: group\n  name: other\n"
+            "- name: enabled_group\n  configs: [cfg]",
+            "found duplicate key 'name'",
+        )
+
+    def test_malformed_yaml_is_reported_as_value_error(self):
+        self.assertInvalidConfigs("- name: [", "failed to read configs_file")
+
+    def test_config_prefix_selects_an_existing_benchmark_yaml(self):
+        bulk_bench = self._read_configs("- name: group\n  configs: [cfg.variant, cfg2]\n")
+        self.assertEqual(
+            bulk_bench.configs["group"]["configs"],
+            ["cfg.variant", "cfg2"],
+        )
+
+    def test_benchmark_config_name_must_exist_in_selected_yaml(self):
+        self.assertInvalidConfigs(
+            "- name: group\n  configs: [cfg.unknown]\n",
+            "config 'cfg.unknown' wasn't found",
+        )
+
+    def test_arch_filters_configs_and_omits_empty_groups(self):
+        with patch("bulkbench.bulkbench.LoggingConsole.warning") as warning:
+            bulk_bench = self._read_configs(
+                """
+- name: partly_supported
+  configs: [cfg, cfg.variant, cfg.first, cfg.second]
+- name: unsupported
+  configs: [cfg.variant]
+""",
+                arch="gfx942",
+            )
+
+        self.assertEqual(
+            bulk_bench.configs,
+            {
+                "partly_supported": {
+                    "name": "partly_supported",
+                    "configs": ["cfg", "cfg.first", "cfg.second"],
+                    "override_args": None,
+                    "only_in_patches": None,
+                }
+            },
+        )
+        self.assertEqual(
+            warning.call_args_list,
+            [
+                call(
+                    "Config 'cfg.variant' is not supported for the current architecture "
+                    "(--tag=gfx942 mismatch)"
+                ),
+                call(
+                    "Config 'cfg.variant' is not supported for the current architecture "
+                    "(--tag=gfx942 mismatch)"
+                ),
+                call(
+                    "Group 'unsupported' was fully omitted; "
+                    "no config matches the architecture (--tag=gfx942 mismatch)"
+                ),
+            ],
+        )
+
+    def test_invalid_config_prefix_is_rejected(self):
+        for config_name in (".variant", "has/slash.variant", "has:colon.variant"):
+            with self.subTest(config_name=config_name):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [{config_name!r}]\n",
+                    "prefix before the first dot must match",
+                )
+
+    def test_benchmark_yaml_must_be_a_file(self):
+        (self.benchmark_configs_dir / "directory.yaml").mkdir()
+        for config_name in ("missing.variant", "directory.variant"):
+            with self.subTest(config_name=config_name):
+                self.assertInvalidConfigs(
+                    f"- name: group\n  configs: [{config_name}]\n",
+                    "doesn't exist or isn't a file",
+                )
+
+    def _read_patches(self, contents: str, files: tuple[str, ...] = ()) -> BulkBench:
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "configs.yaml").write_text(
+                "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+            )
+            for relative_path in files:
+                path = project_dir / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            (project_dir / "patches.yaml").write_text(
+                contents.replace("$PROJECT", str(project_dir)), encoding="utf-8"
+            )
+            with patch.object(BulkBench, "_dryRunPatches"):
+                return _makeBulkBenchNoReport(project_dir=project_dir, arch="")
+
+    def assertInvalidPatches(self, contents: str, expected_message: str, *files: str) -> None:
+        with self.assertRaises(ValueError) as context:
+            self._read_patches(contents, files)
+        self.assertIn(expected_message, str(context.exception))
+
+    def test_config_group_and_patch_set_name_validation(self):
+        valid_name = "aZ09-., ~!()[]_+={}"
+        bulk_bench = self._read_configs(f"- name: ' {valid_name} '\n  configs: [cfg]")
+        self.assertEqual(list(bulk_bench.configs), [valid_name])
+
+        bulk_bench = self._read_patches(f"- name: ' {valid_name} '\n  patches: []")
+        self.assertEqual(
+            [patch_set["name"] for patch_set in bulk_bench.patches],
+            [valid_name],
+        )
+
+        for invalid_name in (".", "..", "has/slash", "has:colon", "has?question", "has\\backslash"):
+            with self.subTest(invalid_name=invalid_name, object_type="config group"):
+                self.assertInvalidConfigs(
+                    f"- name: '{invalid_name}'\n  configs: [cfg]",
+                    "attribute 'name' must match",
+                )
+            with self.subTest(invalid_name=invalid_name, object_type="patch set"):
+                self.assertInvalidPatches(
+                    f"- name: '{invalid_name}'\n  patches: []",
+                    "attribute 'name' must match",
+                )
+
+    def test_patches_file(self):
+        bulk_bench = self._read_patches(
+            """
+- name: baseline
+  patches: []
+- name: " changes "
+  patches:
+    - patch: " change.patch "
+      target: " $PROJECT/target.py "
+    - enabled: false
+      unknown: ignored
+""",
+            ("changes/change.patch", "target.py"),
+        )
+
+        self.assertEqual(
+            bulk_bench.patches,
+            [
+                {"name": "baseline", "patches": []},
+                {
+                    "name": "changes",
+                    "patches": [
+                        {
+                            "patch": (
+                                bulk_bench.project_dir / "changes" / "change.patch"
+                            ).resolve(),
+                            "target": (bulk_bench.project_dir / "target.py").resolve(),
+                        }
+                    ],
+                },
+            ],
+        )
+
+    def test_patches_file_schema_errors(self):
+        cases = (
+            ("", "must contain a YAML list"),
+            ("[]", "must contain at least one patch set"),
+            ("{}", "must contain a YAML list"),
+            ("- patches: []", "missing required attribute 'name'"),
+            ("- name: baseline\n  patches: []\n  extra: true", "unknown attribute(s): extra"),
+            ("- name: '  '\n  patches: []", "'name' must be a non-empty string"),
+            ("- name: baseline", "missing required attribute 'patches'"),
+            ("- name: baseline\n  patches: {}", "'patches' must be a list"),
+            ("- name: baseline\n  patches: [value]", "patch 1 must be an object"),
+            (
+                "- name: baseline\n  patches:\n    - patch: missing.patch",
+                "missing required attribute 'target'",
+            ),
+            (
+                (
+                    "- name: baseline\n  patches:\n"
+                    "    - patch: missing.patch\n      target: missing.py\n      extra: true"
+                ),
+                "unknown attribute(s): extra",
+            ),
+            (
+                (
+                    "- name: baseline\n  patches:\n"
+                    "    - patch: missing.patch\n      target: missing.py\n      enabled: 2"
+                ),
+                "attribute 'enabled' must be a YAML boolean",
+            ),
+        )
+        for contents, expected_message in cases:
+            with self.subTest(expected_message=expected_message):
+                self.assertInvalidPatches(contents, expected_message)
+
+    def test_patch_and_target_must_be_existing_files(self):
+        self.assertInvalidPatches(
+            "- name: changes\n  patches:\n"
+            "    - patch: missing.patch\n      target: $PROJECT/target.py",
+            "attribute 'patch' path",
+            "target.py",
+        )
+        self.assertInvalidPatches(
+            "- name: changes\n  patches:\n"
+            "    - patch: change.patch\n      target: $PROJECT/missing.py",
+            "attribute 'target' path",
+            "changes/change.patch",
+        )
+
+    def test_duplicate_patch_objects_are_rejected(self):
+        self.assertInvalidPatches(
+            """
+- name: changes
+  patches:
+    - patch: change.patch
+      target: $PROJECT/target.py
+    - patch: ./change.patch
+      target: $PROJECT/./target.py
+""",
+            "contains duplicate patch object",
+            "changes/change.patch",
+            "target.py",
+        )
+
+    def test_duplicate_patch_sets_are_order_independent(self):
+        self.assertInvalidPatches(
+            """
+- name: first
+  patches:
+    - patch: $PROJECT/a.patch
+      target: $PROJECT/a.py
+    - patch: $PROJECT/b.patch
+      target: $PROJECT/b.py
+- name: second
+  patches:
+    - patch: $PROJECT/b.patch
+      target: $PROJECT/b.py
+    - patch: $PROJECT/a.patch
+      target: $PROJECT/a.py
+""",
+            "patch sets 'first' and 'second' contain duplicate patch sets",
+            "a.patch",
+            "a.py",
+            "b.patch",
+            "b.py",
+        )
+
+    def test_patch_object_can_be_shared_by_distinct_patch_sets(self):
+        bulk_bench = self._read_patches(
+            """
+- name: first
+  patches:
+    - patch: $PROJECT/shared.patch
+      target: $PROJECT/shared.py
+    - patch: a.patch
+      target: $PROJECT/a.py
+- name: second
+  patches:
+    - patch: $PROJECT/shared.patch
+      target: $PROJECT/shared.py
+    - patch: b.patch
+      target: $PROJECT/b.py
+""",
+            (
+                "shared.patch",
+                "shared.py",
+                "first/a.patch",
+                "a.py",
+                "second/b.patch",
+                "b.py",
+            ),
+        )
+
+        self.assertEqual(
+            [patch_set["name"] for patch_set in bulk_bench.patches],
+            ["first", "second"],
+        )
+        self.assertEqual(
+            bulk_bench.patches[0]["patches"][0],
+            bulk_bench.patches[1]["patches"][0],
+        )
+        self.assertEqual(
+            bulk_bench.patches[0]["patches"][0]["patch"],
+            (bulk_bench.project_dir / "shared.patch").resolve(),
+        )
+
+    def test_only_one_empty_patch_set_is_allowed(self):
+        self.assertInvalidPatches(
+            """
+- name: baseline
+  patches: []
+- name: disabled
+  patches:
+    - enabled: false
+      unknown: ignored
+""",
+            "patch sets 'baseline' and 'disabled' contain duplicate patch sets",
+        )
+
+    def test_patch_set_names_are_unique(self):
+        self.assertInvalidPatches(
+            "- name: group\n  patches: []\n- name: ' group '\n  patches: []",
+            "contains duplicate patch set name 'group'",
+        )
+
+    def _make_config_runner_bulk_bench(
+        self,
+        project_dir: Path,
+        configs: str,
+        *,
+        arch: str = "gfx942",
+        regenerate_results: bool = False,
+    ) -> tuple[BulkBench, Mock]:
+        (project_dir / "configs.yaml").write_text(configs, encoding="utf-8")
+        (project_dir / "patches.yaml").write_text(
+            "- name: baseline\n  patches: []\n",
+            encoding="utf-8",
+        )
+        bulk_bench = _makeBulkBenchNoReport(
+            project_dir=project_dir,
+            results_dir=project_dir / "results",
+            report_dir=project_dir / "report",
+            backup_dir=project_dir / "backups",
+            arch=arch,
+            regenerate_results=regenerate_results,
+        )
+        console = Mock()
+        bulk_bench.Con = console
+        return bulk_bench, console
+
+    def test_config_might_have_run_successfully_checks_direct_result_files(self):
+        with TemporaryDirectory() as workdir_value:
+            workdir = Path(workdir_value)
+
+            for suffix in (".jpg", ".mp4", ".png"):
+                config_dir = workdir / f"valid-{suffix[1:]}"
+                config_dir.mkdir()
+                (config_dir / "timings.json").touch()
+                (config_dir / f"result{suffix}").touch()
+                self.assertTrue(configMightHaveRunSuccessfully(workdir, config_dir.name))
+
+            uppercase_dir = workdir / "uppercase"
+            uppercase_dir.mkdir()
+            (uppercase_dir / "timings.json").touch()
+            (uppercase_dir / "result.PNG").touch()
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "uppercase"))
+
+            nested_dir = workdir / "nested"
+            (nested_dir / "output").mkdir(parents=True)
+            (nested_dir / "timings.json").touch()
+            (nested_dir / "output" / "result.png").touch()
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "nested"))
+
+            media_directory = workdir / "media-directory"
+            media_directory.mkdir()
+            (media_directory / "timings.json").touch()
+            (media_directory / "result.jpg").mkdir()
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "media-directory"))
+
+            timings_directory = workdir / "timings-directory"
+            timings_directory.mkdir()
+            (timings_directory / "timings.json").mkdir()
+            (timings_directory / "result.mp4").touch()
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "timings-directory"))
+
+            self.assertFalse(configMightHaveRunSuccessfully(workdir, "missing"))
+
+    def test_run_config_builds_command_and_logs_output(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, console = self._make_config_runner_bulk_bench(
+                project_dir,
+                (
+                    "- name: group\n"
+                    "  configs: [cfg.first, cfg.second, cfg2]\n"
+                    "  override_args:\n"
+                    "    iterations: 5\n"
+                ),
+            )
+            completed = ScriptRunResult(
+                args=(),
+                returncode=0,
+                output="benchmark output\nbenchmark warning",
+            )
+            workdir = project_dir / "results" / "changes" / "group"
+
+            with patch(
+                "bulkbench.bulkbench.run_with_script",
+                return_value=completed,
+            ) as run_process:
+                cfg = bulk_bench.configs["group"]
+                bulk_bench._runConfig(
+                    "changes",
+                    workdir,
+                    cfg["name"],
+                    cfg["configs"],
+                    cfg["override_args"],
+                )
+
+            self.assertTrue(workdir.is_dir())
+            run_process.assert_called_once_with(
+                [
+                    "python",
+                    "/app/.ci/run.py",
+                    "--name",
+                    "cfg.first",
+                    "--name",
+                    "cfg.second",
+                    "--name",
+                    "cfg2",
+                    "--override-args-json",
+                    '{"iterations":5}',
+                    "--results-directory",
+                    str(workdir),
+                    str(self.benchmark_configs_dir / "cfg.yaml"),
+                    str(self.benchmark_configs_dir / "cfg2.yaml"),
+                ],
+                cwd=Path("/app"),
+            )
+            self.assertFalse(
+                any(
+                    "benchmark output" in trace_call.args[0]
+                    for trace_call in console.trace.call_args_list
+                )
+            )
+
+    def test_run_config_skips_completed_configs_by_default(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, console = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg.first, cfg.second, cfg2]\n",
+            )
+            workdir = project_dir / "results" / "changes" / "group"
+            for config_name, media_name in (
+                ("cfg.first", "result.jpg"),
+                ("cfg2", "result.mp4"),
+            ):
+                config_dir = workdir / config_name
+                config_dir.mkdir(parents=True)
+                (config_dir / "timings.json").touch()
+                (config_dir / media_name).touch()
+
+            completed = ScriptRunResult(args=(), returncode=0, output="")
+            with patch(
+                "bulkbench.bulkbench.run_with_script",
+                return_value=completed,
+            ) as run_process:
+                bulk_bench._runAllConfigs("changes")
+
+            run_process.assert_called_once_with(
+                [
+                    "python",
+                    "/app/.ci/run.py",
+                    "--name",
+                    "cfg.second",
+                    "--results-directory",
+                    str(workdir),
+                    str(self.benchmark_configs_dir / "cfg.yaml"),
+                ],
+                cwd=Path("/app"),
+            )
+            console.info.assert_any_call(
+                "Skipping config 'cfg.first' in config group 'group' for patch set "
+                "'changes': its existing results might be successful"
+            )
+            console.info.assert_any_call(
+                "Skipping config 'cfg2' in config group 'group' for patch set "
+                "'changes': its existing results might be successful"
+            )
+            self.assertTrue(
+                any(
+                    info_call.args[0].startswith(
+                        "Config 'group' (run configs:cfg.second) succeeded in "
+                    )
+                    for info_call in console.info.call_args_list
+                )
+            )
+
+    def test_run_config_regenerate_results_runs_completed_configs(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+                regenerate_results=True,
+            )
+            workdir = project_dir / "results" / "baseline" / "group"
+            config_dir = workdir / "cfg"
+            config_dir.mkdir(parents=True)
+            (config_dir / "timings.json").touch()
+            (config_dir / "result.png").touch()
+            bulk_bench._runConfig = Mock()
+
+            bulk_bench._runAllConfigs("baseline")
+
+            bulk_bench._runConfig.assert_called_once_with(
+                "baseline",
+                workdir,
+                "group",
+                ["cfg"],
+                None,
+            )
+
+    def test_run_config_treats_fully_skipped_group_as_successful(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, console = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+            )
+            config_dir = project_dir / "results" / "baseline" / "group" / "cfg"
+            config_dir.mkdir(parents=True)
+            (config_dir / "timings.json").touch()
+            (config_dir / "result.png").touch()
+
+            with patch("bulkbench.bulkbench.run_with_script") as run_process:
+                bulk_bench._runAllConfigs("baseline")
+
+            run_process.assert_not_called()
+            console.info.assert_any_call(
+                "Skipping config 'cfg' in config group 'group' for patch set "
+                "'baseline': its existing results might be successful"
+            )
+            console.info.assert_any_call(
+                "All configs in config group 'group' for patch set 'baseline' might "
+                "already have run successfully; treating the config group as successful"
+            )
+
+    def test_run_config_raises_with_captured_nonzero_result(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+                arch="",
+            )
+            completed = ScriptRunResult(
+                args=(),
+                returncode=7,
+                output="partial output\nrunner failed",
+            )
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.run_with_script",
+                    return_value=completed,
+                ) as run_process,
+                self.assertRaises(GroupRunError) as context,
+            ):
+                bulk_bench._runConfig(
+                    "baseline",
+                    project_dir / "results" / "baseline" / "group",
+                    "group",
+                    ["cfg"],
+                    None,
+                )
+
+            self.assertEqual(
+                context.exception.result,
+                GroupFailureCapture(
+                    group_name="group",
+                    configs_to_run=["cfg"],
+                    output="partial output\nrunner failed",
+                    returncode=7,
+                ),
+            )
+            command = run_process.call_args.args[0]
+            self.assertNotIn("--tag", command)
+            self.assertNotIn("--override-args-json", command)
+
+    def test_run_config_raises_with_process_start_failure(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                project_dir,
+                "- name: group\n  configs: [cfg]\n",
+            )
+            failure = OSError("python isn't executable")
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.run_with_script",
+                    side_effect=failure,
+                ),
+                self.assertRaises(GroupRunError) as context,
+            ):
+                bulk_bench._runConfig(
+                    "baseline",
+                    project_dir / "results" / "baseline" / "group",
+                    "group",
+                    ["cfg"],
+                    None,
+                )
+
+            self.assertIs(context.exception.__cause__, failure)
+            self.assertEqual(
+                context.exception.result,
+                GroupFailureCapture(
+                    group_name="group",
+                    configs_to_run=["cfg"],
+                    output="python isn't executable",
+                    returncode=None,
+                ),
+            )
+
+    def test_run_all_configs_preserves_group_order(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                ("- name: first\n  configs: [cfg]\n- name: second\n  configs: [cfg2]\n"),
+            )
+            bulk_bench._runConfig = Mock()
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
+
+            with patch(
+                "bulkbench.bulkbench.monotonic",
+                side_effect=(1.0, 2.0, 3.0, 5.0),
+            ):
+                bulk_bench._runAllConfigs("changes")
+
+            self.assertEqual(
+                bulk_bench._runConfig.call_args_list,
+                [
+                    call(
+                        "changes",
+                        bulk_bench.results_dir / "changes" / "first",
+                        "first",
+                        ["cfg"],
+                        None,
+                    ),
+                    call(
+                        "changes",
+                        bulk_bench.results_dir / "changes" / "second",
+                        "second",
+                        ["cfg2"],
+                        None,
+                    ),
+                ],
+            )
+            self.assertEqual(
+                bulk_bench.successful_runs,
+                {"changes": [("first", 1.0, ["cfg"]), ("second", 2.0, ["cfg2"])]},
+            )
+            self.assertEqual(
+                bulk_bench.unsuccessful_runs,
+                {"changes": []},
+            )
+
+    def test_run_all_configs_skips_groups_not_enabled_for_patch_set(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                """
+- name: restricted
+  configs: [cfg]
+  only_in_patches: [baseline]
+- name: eager
+  configs: [cfg2]
+  only_in_patches: [baseline]
+  eager_in_patches: [baseline]
+""",
+            )
+            bulk_bench._runConfig = Mock()
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
+
+            bulk_bench._runAllConfigs("changes")
+
+            bulk_bench._runConfig.assert_not_called()
+            self.assertEqual(bulk_bench.successful_runs, {"changes": []})
+            self.assertEqual(bulk_bench.unsuccessful_runs, {"changes": []})
+
+            bulk_bench._runAllConfigs("baseline")
+
+            self.assertEqual(
+                [config_call.args[2] for config_call in bulk_bench._runConfig.call_args_list],
+                ["restricted", "eager", "eager_eager"],
+            )
+
+    def test_run_all_configs_records_expected_and_unexpected_failures(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            bulk_bench, console = self._make_config_runner_bulk_bench(
+                project_dir,
+                (
+                    "- name: successful\n"
+                    "  configs: [cfg]\n"
+                    "- name: process_failure\n"
+                    "  configs: [cfg.first, cfg2]\n"
+                    "- name: unexpected_failure\n"
+                    "  configs: [cfg3]\n"
+                ),
+            )
+            completed_config_dir = (
+                project_dir / "results" / "changes" / "process_failure" / "cfg.first"
+            )
+            completed_config_dir.mkdir(parents=True)
+            (completed_config_dir / "timings.json").touch()
+            (completed_config_dir / "result.png").touch()
+            process_result = GroupFailureCapture(
+                group_name="process_failure",
+                configs_to_run=["cfg2"],
+                output="partial output\nrunner failed",
+                returncode=3,
+            )
+            bulk_bench._runConfig = Mock(
+                side_effect=(
+                    None,
+                    GroupRunError(process_result),
+                    ValueError("invalid runtime state"),
+                )
+            )
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
+
+            with patch(
+                "bulkbench.bulkbench.monotonic",
+                side_effect=(
+                    0.0,
+                    1.25,
+                    10.0,
+                    176_533.4,
+                    176_540.0,
+                    176_540.1,
+                ),
+            ):
+                bulk_bench._runAllConfigs("changes")
+
+            self.assertEqual(
+                bulk_bench.successful_runs,
+                {"changes": [("successful", 1.25, ["cfg"])]},
+            )
+            failures = bulk_bench.unsuccessful_runs["changes"]
+            stored_process_result, process_duration = failures[0]
+            self.assertIs(stored_process_result, process_result)
+            self.assertAlmostEqual(process_duration, 49 * 60 * 60 + 2 * 60 + 3.4)
+            unexpected_result, unexpected_duration = failures[1]
+            self.assertEqual(unexpected_result.group_name, "unexpected_failure")
+            self.assertEqual(unexpected_result.configs_to_run, ["cfg3"])
+            self.assertIsNone(unexpected_result.returncode)
+            self.assertIn("ValueError: invalid runtime state", unexpected_result.output)
+            self.assertAlmostEqual(unexpected_duration, 0.1)
+            console.info.assert_any_call(
+                "Config 'successful' (run configs:cfg) succeeded in 00:00:01.3"
+            )
+            console.error.assert_any_call(
+                "Config group 'process_failure' (run configs:cfg2) "
+                "on patch set 'changes' failed in 49:02:03.4."
+            )
+            console.error.assert_any_call(
+                "[UNEXPECTED ERROR] Config group 'unexpected_failure' "
+                "(run configs:cfg3) on patch set 'changes' failed in 00:00:00.1."
+            )
+            self.assertEqual(bulk_bench._runConfig.call_count, 3)
+
+    def test_run_all_configs_does_not_catch_keyboard_interrupt(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                "- name: group\n  configs: [cfg]\n",
+            )
+            bulk_bench._runConfig = Mock(side_effect=KeyboardInterrupt)
+            bulk_bench.successful_runs = {}
+            bulk_bench.unsuccessful_runs = {}
+
+            with self.assertRaises(KeyboardInterrupt):
+                bulk_bench._runAllConfigs("changes")
+
+            self.assertNotIn("changes", bulk_bench.successful_runs)
+            self.assertNotIn("changes", bulk_bench.unsuccessful_runs)
+
+    def test_run_reinitializes_result_dictionaries(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, _ = self._make_config_runner_bulk_bench(
+                Path(project_dir_value),
+                "- name: group\n  configs: [cfg]\n",
+            )
+            bulk_bench.successful_runs = {"old": ["group"]}
+            bulk_bench.unsuccessful_runs = {
+                "old": [
+                    (
+                        GroupFailureCapture(
+                            group_name="group",
+                            configs_to_run=["cfg"],
+                            output="old failure",
+                            returncode=1,
+                        ),
+                        1.0,
+                    )
+                ]
+            }
+
+            def verify_reset(_patch_set_name):
+                self.assertEqual(bulk_bench.successful_runs, {})
+                self.assertEqual(bulk_bench.unsuccessful_runs, {})
+
+            bulk_bench._runAllConfigs = Mock(side_effect=verify_reset)
+
+            self.assertEqual(bulk_bench.run(), 0)
+            bulk_bench._runAllConfigs.assert_called_once_with("baseline")
+
+    def _make_runnable_bulk_bench(
+        self,
+        project_dir: Path,
+        mock_patch_commands: bool = True,
+        mock_constructor_dry_run: bool = True,
+    ) -> tuple[BulkBench, tuple[Path, Path]]:
+        (project_dir / "configs.yaml").write_text(
+            "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+        )
+        targets = (project_dir / "first.py", project_dir / "second.py")
+        patch_dir = project_dir / "changes"
+        patch_dir.mkdir()
+        for index, target in enumerate(targets):
+            target.write_text(f"original {index}", encoding="utf-8")
+            (patch_dir / f"{index}.patch").write_text(f"patch {index}", encoding="utf-8")
+        (project_dir / "patches.yaml").write_text(
+            (
+                "- name: changes\n"
+                "  patches:\n"
+                f"    - patch: 0.patch\n      target: {targets[0]}\n"
+                f"    - patch: 1.patch\n      target: {targets[1]}\n"
+            ),
+            encoding="utf-8",
+        )
+        if mock_constructor_dry_run:
+            with patch.object(BulkBench, "_dryRunPatches"):
+                bulk_bench = _makeBulkBenchNoReport(project_dir=project_dir, arch="")
+        else:
+            bulk_bench = _makeBulkBenchNoReport(project_dir=project_dir, arch="")
+        if mock_patch_commands:
+            bulk_bench._dryRunPatches = Mock()
+            bulk_bench._applyPatches = Mock()
+        return bulk_bench, targets
+
+    def _make_patch_integration_project(
+        self, project_dir: Path
+    ) -> tuple[BulkBench, tuple[Path, Path], tuple[str, str], tuple[str, str]]:
+        (project_dir / "configs.yaml").write_text(
+            "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+        )
+
+        targets = (project_dir / "first.py", project_dir / "second.py")
+        original_contents = ("alpha\ncommon\n", "one\ntwo\n")
+        patched_contents = ("patched alpha\ncommon\n", "one\npatched two\n")
+        for index, (target, original, patched_content) in enumerate(
+            zip(targets, original_contents, patched_contents, strict=True)
+        ):
+            target.write_text(original, encoding="utf-8")
+            patch_contents = "".join(
+                difflib.unified_diff(
+                    original.splitlines(keepends=True),
+                    patched_content.splitlines(keepends=True),
+                    fromfile=str(target),
+                    tofile=str(target),
+                )
+            )
+            patch_set_names = ("first", "second") if index == 0 else ("second",)
+            for patch_set_name in patch_set_names:
+                patch_dir = project_dir / patch_set_name
+                patch_dir.mkdir(exist_ok=True)
+                (patch_dir / f"{index}.patch").write_text(patch_contents, encoding="utf-8")
+
+        (project_dir / "patches.yaml").write_text(
+            (
+                "- name: first\n"
+                "  patches:\n"
+                f"    - patch: 0.patch\n      target: {targets[0]}\n"
+                "- name: second\n"
+                "  patches:\n"
+                f"    - patch: 0.patch\n      target: {targets[0]}\n"
+                f"    - patch: 1.patch\n      target: {targets[1]}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        bb = _makeBulkBenchNoReport(project_dir=project_dir, arch="")
+        return (bb, targets, original_contents, patched_contents)
+
+    def _assert_real_patch_lifecycle(self, failure: BaseException | None) -> None:
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets, originals, patched = self._make_patch_integration_project(
+                Path(project_dir_value)
+            )
+            invocation = 0
+
+            def run_all_configs(_patch_set_name):
+                nonlocal invocation
+                expected = (patched[0], originals[1]) if invocation == 0 else patched
+                self.assertEqual(
+                    tuple(target.read_text(encoding="utf-8") for target in targets),
+                    expected,
+                )
+                invocation += 1
+                if failure is not None and invocation == 2:
+                    raise failure
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+
+            if failure is None:
+                self.assertEqual(bulk_bench.run(), 0)
+            else:
+                with self.assertRaises(type(failure)) as context:
+                    bulk_bench.run()
+                self.assertIs(context.exception, failure)
+
+            self.assertEqual(bulk_bench._runAllConfigs.call_count, 2)
+            self.assertEqual(
+                tuple(target.read_text(encoding="utf-8") for target in targets),
+                originals,
+            )
+            # we must re-create object to ensure we aren't using stale fs handles
+            backup_dir = Path(str(bulk_bench.backup_dir))
+            if failure is None:
+                self.assertFalse(backup_dir.exists())
+            else:
+                self.assertTrue(backup_dir.exists())
+                self.assertEqual(list(backup_dir.iterdir()), [])
+
+    def test_real_patches_are_visible_to_benchmarks_and_always_reverted(self):
+        for failure in (
+            None,
+            RuntimeError("benchmark failed"),
+            AssertionError("benchmark assertion failed"),
+        ):
+            with self.subTest(failure_type=type(failure).__name__):
+                self._assert_real_patch_lifecycle(failure)
+
+    def test_backup_dir_must_be_empty(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "configs.yaml").write_text(
+                "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+            )
+            (project_dir / "patches.yaml").write_text(
+                "- name: baseline\n  patches: []\n", encoding="utf-8"
+            )
+            backup_dir = project_dir / "backups"
+            backup_dir.mkdir()
+            (backup_dir / "existing").touch()
+
+            with self.assertRaisesRegex(ValueError, "--backup_dir directory .* isn't empty"):
+                _makeBulkBenchNoReport(project_dir=project_dir, backup_dir=backup_dir, arch="")
+
+    def test_backup_dir_must_not_overlap_output_dirs(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            (project_dir / "configs.yaml").write_text(
+                "- name: configs\n  configs: [cfg]\n", encoding="utf-8"
+            )
+            (project_dir / "patches.yaml").write_text(
+                "- name: baseline\n  patches: []\n", encoding="utf-8"
+            )
+            shared_dir = project_dir / "shared"
+
+            with self.assertRaisesRegex(ValueError, "must not overlap --results_dir"):
+                BulkBench(
+                    project_dir=project_dir,
+                    backup_dir=shared_dir,
+                    results_dir=shared_dir,
+                    arch="",
+                )
+
+    def test_constructor_dry_runs_every_loaded_patch(self):
+        with TemporaryDirectory() as project_dir_value:
+            commands = []
+
+            def run_patch(command, **_kwargs):
+                commands.append(command)
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with patch("bulkbench.bulkbench.subprocess.run", side_effect=run_patch):
+                bulk_bench, targets = self._make_runnable_bulk_bench(
+                    Path(project_dir_value),
+                    mock_patch_commands=False,
+                    mock_constructor_dry_run=False,
+                )
+
+            self.assertEqual(
+                commands,
+                [
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[0]),
+                        str(bulk_bench.project_dir / "changes" / "0.patch"),
+                    ],
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[1]),
+                        str(bulk_bench.project_dir / "changes" / "1.patch"),
+                    ],
+                ],
+            )
+
+    def test_constructor_dry_run_failure_prevents_output_directory_creation(self):
+        with TemporaryDirectory() as project_dir_value:
+            project_dir = Path(project_dir_value)
+            patch_error = subprocess.CalledProcessError(
+                2,
+                ["patch"],
+                output="dry-run stdout",
+                stderr="dry-run stderr",
+            )
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.subprocess.run",
+                    side_effect=patch_error,
+                ),
+                self.assertRaises(ValueError) as context,
+            ):
+                self._make_runnable_bulk_bench(
+                    project_dir,
+                    mock_patch_commands=False,
+                    mock_constructor_dry_run=False,
+                )
+
+            self.assertIs(context.exception.__cause__, patch_error)
+            self.assertFalse((project_dir / "results").exists())
+            self.assertFalse((project_dir / "report").exists())
+            self.assertFalse((project_dir / "__backups").exists())
+
+    def test_run_dry_runs_all_patches_before_snapshot_and_applies_in_order(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value), mock_patch_commands=False
+            )
+            commands = []
+
+            def run_patch(command, **kwargs):
+                commands.append(command)
+                self.assertEqual(
+                    kwargs,
+                    {
+                        "capture_output": True,
+                        "check": True,
+                        "shell": False,
+                        "text": True,
+                    },
+                )
+                if "--dry-run" in command:
+                    self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+                else:
+                    self.assertEqual(
+                        {path.name for path in bulk_bench.backup_dir.iterdir()},
+                        {"00000", "00000.path", "00001", "00001.path"},
+                    )
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            bulk_bench._runAllConfigs = Mock()
+            with patch("bulkbench.bulkbench.subprocess.run", side_effect=run_patch):
+                self.assertEqual(bulk_bench.run(), 0)
+
+            patch_paths = (
+                bulk_bench.project_dir / "changes" / "0.patch",
+                bulk_bench.project_dir / "changes" / "1.patch",
+            )
+            self.assertEqual(
+                commands,
+                [
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[0]),
+                        str(patch_paths[0]),
+                    ],
+                    [
+                        "patch",
+                        "--batch",
+                        "--dry-run",
+                        str(targets[1]),
+                        str(patch_paths[1]),
+                    ],
+                    ["patch", "--batch", str(targets[0]), str(patch_paths[0])],
+                    ["patch", "--batch", str(targets[1]), str(patch_paths[1])],
+                ],
+            )
+            bulk_bench._runAllConfigs.assert_called_once_with("changes")
+            self.assertFalse(Path(str(bulk_bench.backup_dir)).exists())
+
+    def test_dry_run_failure_prevents_backups_patching_and_benchmarks(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(
+                Path(project_dir_value), mock_patch_commands=False
+            )
+            patch_error = subprocess.CalledProcessError(
+                2,
+                ["patch"],
+                output="dry-run stdout",
+                stderr="dry-run stderr",
+            )
+            bulk_bench._runAllConfigs = Mock()
+
+            with (
+                patch(
+                    "bulkbench.bulkbench.subprocess.run",
+                    side_effect=patch_error,
+                ),
+                self.assertRaises(ValueError) as context,
+            ):
+                bulk_bench.run()
+
+            message = str(context.exception)
+            self.assertIn("patch dry-run failed for patch set ''changes''", message)
+            self.assertIn(
+                str(bulk_bench.project_dir / "changes" / "0.patch"),
+                message,
+            )
+            self.assertIn(str(targets[0]), message)
+            self.assertIn("exit status 2", message)
+            self.assertIn("dry-run stdout", message)
+            self.assertIn("dry-run stderr", message)
+            self.assertIs(context.exception.__cause__, patch_error)
+            bulk_bench._runAllConfigs.assert_not_called()
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_run_snapshots_targets_by_patch_index_and_restores_them(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
+            original_contents = [target.read_text(encoding="utf-8") for target in targets]
+
+            def run_all_configs(_patch_set_name):
+                self.assertEqual(
+                    {path.name for path in bulk_bench.backup_dir.iterdir()},
+                    {"00000", "00000.path", "00001", "00001.path"},
+                )
+                for index, target in enumerate(targets):
+                    self.assertEqual(
+                        (bulk_bench.backup_dir / f"{index:05d}.path").read_text(encoding="utf-8"),
+                        str(target.resolve()),
+                    )
+                    target.write_text(f"modified {index}", encoding="utf-8")
+                return 37
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+
+            self.assertEqual(bulk_bench.run(), 0)
+            self.assertEqual(bulk_bench._runAllConfigs.call_count, 1)
+            self.assertEqual(
+                [target.read_text(encoding="utf-8") for target in targets],
+                original_contents,
+            )
+            self.assertFalse(Path(str(bulk_bench.backup_dir)).exists())
+
+    def test_run_restores_targets_when_run_all_configs_raises(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
+            original_contents = [target.read_text(encoding="utf-8") for target in targets]
+            primary_error = RuntimeError("run failed")
+
+            def run_all_configs(_patch_set_name):
+                targets[0].write_text("modified", encoding="utf-8")
+                raise primary_error
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+
+            with self.assertRaises(RuntimeError) as context:
+                bulk_bench.run()
+            self.assertIs(context.exception, primary_error)
+            self.assertEqual(
+                [target.read_text(encoding="utf-8") for target in targets],
+                original_contents,
+            )
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_run_restores_targets_when_patch_application_raises(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
+            original_contents = [target.read_text(encoding="utf-8") for target in targets]
+            primary_error = RuntimeError("apply failed")
+
+            def apply_patches(_patch_set):
+                targets[0].write_text("partially patched", encoding="utf-8")
+                raise primary_error
+
+            bulk_bench._applyPatches = Mock(side_effect=apply_patches)
+            bulk_bench._runAllConfigs = Mock()
+
+            with self.assertRaises(RuntimeError) as context:
+                bulk_bench.run()
+            self.assertIs(context.exception, primary_error)
+            bulk_bench._runAllConfigs.assert_not_called()
+            self.assertEqual(
+                [target.read_text(encoding="utf-8") for target in targets],
+                original_contents,
+            )
+            self.assertEqual(list(bulk_bench.backup_dir.iterdir()), [])
+
+    def test_run_groups_primary_and_restoration_failures(self):
+        with TemporaryDirectory() as project_dir_value:
+            bulk_bench, targets = self._make_runnable_bulk_bench(Path(project_dir_value))
+            primary_error = RuntimeError("run failed")
+
+            def run_all_configs(_patch_set_name):
+                targets[0].write_text("modified", encoding="utf-8")
+                raise primary_error
+
+            real_copy2 = shutil.copy2
+            copy_count = 0
+
+            def fail_restoration(source, destination):
+                nonlocal copy_count
+                copy_count += 1
+                if copy_count <= len(targets):
+                    return real_copy2(source, destination)
+                raise OSError(f"can't restore {destination}")
+
+            bulk_bench._runAllConfigs = Mock(side_effect=run_all_configs)
+            with (
+                patch(
+                    "bulkbench.bulkbench.shutil.copy2",
+                    side_effect=fail_restoration,
+                ),
+                self.assertRaises(BaseExceptionGroup) as context,
+            ):
+                bulk_bench.run()
+
+            self.assertIs(context.exception.exceptions[0], primary_error)
+            self.assertEqual(
+                {path.name for path in bulk_bench.backup_dir.iterdir()},
+                {"00000", "00000.path", "00001", "00001.path"},
+            )
+
+
+if __name__ == "__main__":
+    sys.exit(pytest.main(sys.argv))

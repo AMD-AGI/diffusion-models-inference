@@ -1,0 +1,26 @@
+# assumes run in a container with changeset #188404 applied on top of pytorch=2.13
+# run with `bulkbench --patches_file ./patches_PR.yaml`
+
+- name: 10_PR_baseline
+  patches: []
+
+- name: 11_PR_only_meta
+  patches:
+    # relative path names are resolved using the patch set name, `11_PR_only_meta` in this case
+    - patch: "base_model.patch"
+      target: "/app/xDiT/xfuser/model_executor/models/runner_models/base_model.py"
+
+- name: 12_PR_new_flags_no_meta
+  patches:
+    - patch: "base_model.patch"
+      target: "/app/xDiT/xfuser/model_executor/models/runner_models/base_model.py"
+
+- name: 13_PR_new_flags_with_meta
+  patches:
+    - patch: "base_model.patch"
+      target: "/app/xDiT/xfuser/model_executor/models/runner_models/base_model.py"
+
+- name: 14_PR_legacy_flags
+  patches:
+    - patch: "base_model.patch"
+      target: "/app/xDiT/xfuser/model_executor/models/runner_models/base_model.py"
