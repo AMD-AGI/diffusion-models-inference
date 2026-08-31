@@ -200,7 +200,9 @@ ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS
 COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
 RUN chmod +x /usr/local/bin/install_rocm_debs && install_rocm_debs runtime
-# Nightly debs ship the amdsmi Python package without setup.py.
+# The amd-smi CLI is already at /opt/rocm/bin. The nightly deb ships the
+# Python package under /opt/rocm/share/amd_smi/amdsmi with no setup.py, so
+# pip cannot install it; symlink it into site-packages so `import amdsmi` works.
 RUN python3 - <<'PY'
 from pathlib import Path
 import site
