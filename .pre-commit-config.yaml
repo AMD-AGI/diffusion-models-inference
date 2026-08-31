@@ -1,8 +1,25 @@
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff
+      - id: ruff-format
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: [-s]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+
   - repo: local
     hooks:
       - id: check-spdx-headers
         name: Check SPDX headers
         entry: .ci/check_spdx_headers.sh
         language: script
-        pass_filenames: false
+        files: ^data/hipblaslt/.*\.yaml$|^data/miopen/resolve_prefix\.sh$
