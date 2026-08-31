@@ -50,22 +50,8 @@ if [[ -d "${rocm_root}/lib/rocm_sysdeps/lib" ]]; then
 fi
 ldconfig
 
-# Nightly debs keep compiler binaries under lib/llvm. HIP/PyTorch still look
-# for /opt/rocm/llvm/bin/clang++ (TheRock's historical layout).
-if [[ -d "${rocm_root}/lib/llvm/bin" && -d "${rocm_root}/llvm/bin" ]]; then
-    for bin in "${rocm_root}/lib/llvm/bin/"*; do
-        [[ -e "${bin}" ]] || continue
-        name="$(basename "${bin}")"
-        dest="${rocm_root}/llvm/bin/${name}"
-        if [[ ! -e "${dest}" ]]; then
-            ln -s "${bin}" "${dest}"
-        fi
-    done
-fi
-
 test -d "${rocm_root}/lib/llvm/amdgcn/bitcode"
 test -e "${rocm_root}/lib/llvm/bin/clang++"
-test -e "${rocm_root}/llvm/bin/clang++"
 test -e "${rocm_root}/lib/libamdhip64.so"
 test -d "${rocm_root}/include/roctracer"
 test -d "${rocm_root}/lib/rocm_sysdeps/include"
