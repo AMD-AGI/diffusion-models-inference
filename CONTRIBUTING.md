@@ -104,8 +104,13 @@ for various targets — see [docker/README.md](docker/README.md) for description
 To build an image locally:
 
 ```sh
-docker build -f docker/Dockerfile.ci -t pytorch-xdit-dev .
+docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 ```
+
+This build does not require a GPU. The ROCm stack comes from the nightly deb
+snapshot pinned by `ROCM_RELEASE_ID` and `ROCM_DEB_SERIES` in the Dockerfile.
+See [docker/README.md](docker/README.md) for the ROCm package and architecture
+settings.
 
 The CI pipeline (`.github/workflows/build-and-benchmark.yml`) automates image builds
 and benchmark runs on supported hardware. The release path from staging to the public

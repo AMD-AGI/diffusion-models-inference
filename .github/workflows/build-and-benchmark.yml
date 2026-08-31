@@ -265,14 +265,10 @@ jobs:
         with:
           run_number: ${{ github.run_number }}
       
-      - name: Pull image and extract version information
+      - name: Record repository version
         run: |
           mkdir -p versions
           git rev-parse HEAD > versions/repository.txt
-          docker pull ${{ steps.metadata.outputs.tune_and_benchmark_image }}
-          docker create --name core ${{ steps.metadata.outputs.tune_and_benchmark_image }}
-          docker cp core:/opt/rocm/share/therock/ versions/ || true
-          docker rm core
       
       - name: Upload version artifacts
         uses: actions/upload-artifact@v6
