@@ -194,12 +194,12 @@ RUN git init TheRock && \
     git fetch --depth 1 origin ${THEROCK_COMMIT} && \
     git checkout --detach FETCH_HEAD
 
-FROM base AS rocm_runtime
+FROM base AS rocm_devel
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS
 COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
-RUN chmod +x /usr/local/bin/install_rocm_debs && install_rocm_debs runtime
+RUN chmod +x /usr/local/bin/install_rocm_debs && install_rocm_debs
 # The amd-smi CLI is already at /opt/rocm/bin. The nightly deb ships the
 # Python package under /opt/rocm/share/amd_smi/amdsmi with no setup.py, so
 # pip cannot install it; symlink it into site-packages so `import amdsmi` works.
@@ -213,18 +213,11 @@ dest = Path(site.getsitepackages()[0]) / "amdsmi"
 dest.symlink_to(src)
 print(f"linked {src} -> {dest}")
 PY
-ENV PATH="/opt/rocm/bin:$PATH" \
+ENV PATH="/opt/rocm/libexec/rocprofiler-compute:/opt/rocm/bin:$PATH" \
     ROCM_HOME=/opt/rocm \
     ROCM_PATH=/opt/rocm \
     HIP_CLANG_PATH=/opt/rocm/lib/llvm/bin \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
-
-FROM rocm_runtime AS rocm_devel
-ARG ROCM_RELEASE_ID
-ARG ROCM_DEB_SERIES
-ARG ROCM_GFX_TARGETS
-RUN install_rocm_debs devel
-ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM rocm_devel AS build_torch_stack
 ARG TRITON_COMMIT
