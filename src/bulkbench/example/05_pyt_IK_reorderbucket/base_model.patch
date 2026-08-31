@@ -1,0 +1,37 @@
+diff --git a/xfuser/model_executor/models/runner_models/base_model.py b/xfuser/model_executor/models/runner_models/base_model.py
+index 9eb76e3..c605873 100644
+--- a/xfuser/model_executor/models/runner_models/base_model.py
++++ b/xfuser/model_executor/models/runner_models/base_model.py
+@@ -1,5 +1,7 @@
+ import abc
+ import torch
++import torch._inductor.config_comms
++import torch._inductor.config as ic
+ import copy
+ import argparse
+ import json
+@@ -470,6 +472,24 @@ class xFuserModel(abc.ABC):
+ 
+         torch._inductor.config.reorder_for_compute_comm_overlap = True
+ 
++        torch._inductor.config.runtime_estimations_mms_benchmark  = True
++        torch._inductor.config.reorder_for_compute_comm_overlap_passes = [
++            "reorder_communication_preserving_peak_memory",
++            "sink_waits_iterative",
++            "reorder_communication_preserving_peak_memory",
++        ]
++        torch._inductor.config_comms.reorder_iterative_peak_memory_budget = 0.2      # 0.2 is default?, if you have more spare memory - you can increase it
++        torch._inductor.config_comms.sink_iterative_peak_memory_budget    = 0.2     # 0.2 is default?, increase if spare memory
++        torch._inductor.config_comms.reorder_iterative_use_runtime_estimations = True   # default False
++        torch._inductor.config_comms.sink_iterative_use_runtime_estimations    = True   # default False
++        torch._inductor.config_comms.runtime_estimations_align_across_all_distributed_ranks = True
++
++        torch._inductor.config.bucket_all_gathers_fx = "all"
++        torch._inductor.config.bucket_all_gathers_fx_bucket_size_determinator = lambda bucket_id: 100.0 if bucket_id < 2 else 1000.0
++
++        torch._inductor.config.bucket_reduce_scatters_fx = "all"
++        torch._inductor.config.bucket_reduce_scatters_fx_bucket_size_determinator = lambda bucket_id: 1000.0
++
+         # torch >= ~2.13: enabling the overlap machinery activates an SPMD
+         # graph-consistency check that issues a WORLD-group all_gather_object at
+         # compile time. Pipeline parallelism is non-SPMD (stages compile different
