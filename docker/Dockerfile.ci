@@ -184,16 +184,6 @@ RUN python3 -m venv venv
 ENV PATH="/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 
-FROM base AS setup_therock
-ARG THEROCK_COMMIT
-
-WORKDIR /app
-RUN git init TheRock && \
-    cd TheRock && \
-    git remote add origin https://github.com/ROCm/TheRock.git && \
-    git fetch --depth 1 origin ${THEROCK_COMMIT} && \
-    git checkout --detach FETCH_HEAD
-
 FROM base AS rocm_devel
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
@@ -220,13 +210,21 @@ ENV PATH="/opt/rocm/libexec/rocprofiler-compute:/opt/rocm/bin:$PATH" \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
 
 FROM rocm_devel AS build_torch_stack
+ARG THEROCK_COMMIT
 ARG TRITON_COMMIT
 ARG PYTORCH_COMMIT
 ARG PYTORCH_VISION_COMMIT
 ARG PYTORCH_AUDIO_COMMIT
 ARG PYTORCH_CODEC_COMMIT
 ARG PYTORCH_ROCM_ARCH
-COPY --from=setup_therock /app/TheRock /app/TheRock
+
+# TheRock is only needed for external-builds/pytorch checkout scripts.
+WORKDIR /app
+RUN git init TheRock && \
+    cd TheRock && \
+    git remote add origin https://github.com/ROCm/TheRock.git && \
+    git fetch --depth 1 origin ${THEROCK_COMMIT} && \
+    git checkout --detach FETCH_HEAD
 
 # needed for HIPIFY commits created by the build process
 RUN git config --global user.name "TheRock Builder" && \
