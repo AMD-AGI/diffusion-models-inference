@@ -13,24 +13,13 @@
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
 ARG THEROCK_COMMIT="9100ec681955d4af7e1c720fb5c9b208fc838172"
-ARG CCACHE_VERSION="4.11.2"
-# AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
-# at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
-ARG AMDGPU_FAMILIES="gfx94X-dcgpu;gfx950-dcgpu"
-# AMDGPU_BUNDLE_NAME disambiguates the cmake-level dist bundle name when more
-# than one AMDGPU family is selected. TheRock's therock_validate_amdgpu_targets()
-# FATAL_ERRORs if the bundle name cannot be inferred from a single family.
-# With KPACK_SPLIT_ARTIFACTS=ON it only appears in the intermediate
-# build/artifacts-unsplit/ tree and is not observable in the final image.
-ARG AMDGPU_BUNDLE_NAME="gfx94X_gfx950_bundle"
+ARG ROCM_RELEASE_ID="20260828-33135965078"
+ARG ROCM_DEB_SERIES="10.1"
+# ROCM_GFX_TARGETS selects architecture-specific nightly deb package shards.
+ARG ROCM_GFX_TARGETS="gfx942;gfx950"
 # PYTORCH_ROCM_ARCH is a ";" separated list of values, choices for LLVM targets can
 # be found at https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
 ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
-# Set ROCM_LIBRARIES_COMMIT_OVERRIDE to force to use a specific commit of rocm-libraries monorepo instead of the one pinned in TheRock.
-# This is useful for example for testing a feature not yet in the main branch of rocm-libraries or a commit not available via TheRock.
-ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
-# Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
-ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
 ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
 ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
 ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
@@ -197,106 +186,42 @@ RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 
 FROM base AS setup_therock
 ARG THEROCK_COMMIT
-ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
-ARG ROCM_SYSTEMS_COMMIT_OVERRIDE
 
 WORKDIR /app
-RUN git clone https://github.com/ROCm/TheRock.git && \
+RUN git init TheRock && \
     cd TheRock && \
-    git reset --hard ${THEROCK_COMMIT} && \
-    if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
-        echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
-        git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
-    fi && \
-    if [ -n "$ROCM_SYSTEMS_COMMIT_OVERRIDE" ]; then \
-        echo "Force updating rocm-systems commit to ${ROCM_SYSTEMS_COMMIT_OVERRIDE}" && \
-        git update-index --cacheinfo 160000,${ROCM_SYSTEMS_COMMIT_OVERRIDE},rocm-systems ; \
-    fi
-
-FROM base AS build_rocm
-ARG CCACHE_VERSION
-ARG AMDGPU_FAMILIES
-ARG AMDGPU_BUNDLE_NAME
-COPY --from=setup_therock /app/TheRock /app/TheRock
-WORKDIR /app/TheRock
-# Pre-pin meson<1.12.0 before requirements.txt (floor: meson>=1.7.0), mirroring
-# TheRock's manylinux Dockerfile. meson 1.12.0 duplicates env-derived link args
-# (e.g. LDFLAGS=-Wl,--version-script=...) in its compiler sanity check, which
-# `ld` rejects as a duplicate version tag and breaks the libdrm/libpciaccess
-# sysdeps builds. See https://github.com/ROCm/TheRock/issues/7286.
-RUN pip install --no-cache-dir "meson==1.7.0"
-# if dvc is available, fetch_source.py uses it to fetch large files - install it along with other requirements.
-# Mirroring TheRock's manylinux Dockerfile pin of aiobotocore so dvc[s3]'s
-# botocore window stays aligned with the boto3 range pinned in
-# requirements.txt (>=1.42.79,<1.42.85). aiobotocore==3.4.0 requires
-# botocore>=1.42.79,<1.42.85; resolving everything in one pip call lets
-# pip pick a botocore (1.42.84) that satisfies both pins.
-RUN pip install --no-cache-dir -r requirements.txt "pathspec<0.13.0" "dvc[s3]==3.67.1" "aiobotocore==3.4.0"
-RUN bash dockerfiles/install_ccache.sh ${CCACHE_VERSION}
-RUN bash dockerfiles/install_pinned_patchelf.sh
-RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=locked \
-    --mount=type=cache,target=/app/TheRock/git-mirror,id=therock-git-mirrors,sharing=locked \
-    python build_tools/setup_git_mirrors.py --mirror-dir /app/TheRock/git-mirror --update --jobs 8 && \
-    python build_tools/fetch_sources.py --jobs 8 --depth 1 --reference-dir /app/TheRock/git-mirror && \
-    eval "$(python build_tools/setup_ccache.py --init --local)" && \
-    ccache -o max_size=50G && \
-    ccache -o sloppiness=include_file_ctime,include_file_mtime && \
-    ccache -o compiler_check=content && \
-    cmake -S /app/TheRock -B /app/TheRock/build -GNinja . \
-    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-    -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
-    -DTHEROCK_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
-    -DTHEROCK_TEST_AMDGPU_FAMILIES="${AMDGPU_FAMILIES}" \
-    -DTHEROCK_BUNDLE_SYSDEPS=ON -DTHEROCK_AMDGPU_DIST_BUNDLE_NAME="${AMDGPU_BUNDLE_NAME}" \
-    -DTHEROCK_ENABLE_ALL=OFF \
-    -DTHEROCK_ENABLE_CORE=ON \
-    -DTHEROCK_ENABLE_COMM_LIBS=ON \
-    -DTHEROCK_ENABLE_DEBUG_TOOLS=ON \
-    -DTHEROCK_ENABLE_MATH_LIBS=ON \
-    -DTHEROCK_ENABLE_ML_LIBS=ON \
-    -DTHEROCK_ENABLE_PROFILER=ON \
-    -DTHEROCK_ENABLE_DC_TOOLS=ON \
-    -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
-    cmake --build /app/TheRock/build --target therock-artifacts && \
-    echo "CCache stats:" && ccache -s -v && \
-    cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /license-evidence \
-    --scan-root therock=/app/TheRock \
-    --git-root /app/TheRock \
-    --fail-on-missing-git-license \
-    --required-git-depth 0
+    git remote add origin https://github.com/ROCm/TheRock.git && \
+    git fetch --depth 1 origin ${THEROCK_COMMIT} && \
+    git checkout --detach FETCH_HEAD
 
 FROM base AS rocm_runtime
-COPY docker/rocm_runtime_artifacts.txt /tmp/
-RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
-    set -eu; \
-    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
-    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | tr '\n' ' '); \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
-        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-# Install amdsmi Python module
-RUN cd /opt/rocm/share/amd_smi && \
-    pip install --no-cache-dir .
-RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
-    echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
-    ldconfig
+ARG ROCM_RELEASE_ID
+ARG ROCM_DEB_SERIES
+ARG ROCM_GFX_TARGETS
+COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
+RUN chmod +x /usr/local/bin/install_rocm_debs && install_rocm_debs runtime
+# Nightly debs ship the amdsmi Python package without setup.py.
+RUN python3 - <<'PY'
+from pathlib import Path
+import site
+src = Path("/opt/rocm/share/amd_smi/amdsmi")
+if not src.is_dir():
+    raise SystemExit(f"missing {src}")
+dest = Path(site.getsitepackages()[0]) / "amdsmi"
+dest.symlink_to(src)
+print(f"linked {src} -> {dest}")
+PY
 ENV PATH="/opt/rocm/bin:$PATH" \
     ROCM_HOME=/opt/rocm \
     ROCM_PATH=/opt/rocm \
+    HIP_CLANG_PATH=/opt/rocm/lib/llvm/bin \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
 
 FROM rocm_runtime AS rocm_devel
-COPY docker/rocm_devel_artifacts.txt /tmp/
-RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
-    set -eu; \
-    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
-    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
-        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-RUN ldconfig
+ARG ROCM_RELEASE_ID
+ARG ROCM_DEB_SERIES
+ARG ROCM_GFX_TARGETS
+RUN install_rocm_debs devel
 ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM rocm_devel AS build_torch_stack
@@ -439,17 +364,10 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
-FROM rocm_runtime AS core_runtime
+FROM rocm_devel AS core_runtime
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
-# AITER JIT: install dev artifacts required for runtime kernel compilation
-RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
-    set -eu; \
-    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
-        -o "${O}" --artifacts-dir "${A}" \
-        base_dev core-hip_dev core-runtime_dev blas_dev prim_dev rand_dev
 # torchcodec: install FFmpeg and runtime dependencies
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
@@ -493,16 +411,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     pip install -e .
 
 FROM core_runtime AS core
-# Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
-# archives are re-extracted idempotently). Uses the same manifest as rocm_devel.
-COPY docker/rocm_devel_artifacts.txt /tmp/
-RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
-    set -eu; \
-    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
-    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
-        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-RUN ldconfig
 ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM core AS deps
@@ -582,7 +490,6 @@ FROM core AS final
 # by copying from the deps stage we leave behind all cache and temporary files created during installation
 COPY --from=deps /venv /venv
 COPY --from=deps /app /app
-COPY --from=build_rocm /license-evidence /tmp/image-license-inputs/rocm-build-sources
 COPY --from=build_torch_stack /install/license-evidence /tmp/image-license-inputs/torch-build-sources
 COPY --from=ffmpeg_builder /ffmpeg/license-evidence /tmp/image-license-inputs/ffmpeg-build-sources
 COPY LICENSE /tmp/project-license/LICENSE
@@ -617,7 +524,6 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --scan-root python=/venv \
     --scan-root rocm=/opt/rocm \
     --scan-root local=/usr/local \
-    --evidence-root rocm-build-sources=/tmp/image-license-inputs/rocm-build-sources \
     --evidence-root torch-build-sources=/tmp/image-license-inputs/torch-build-sources \
     --evidence-root ffmpeg-build-sources=/tmp/image-license-inputs/ffmpeg-build-sources \
     --git-root /app \
