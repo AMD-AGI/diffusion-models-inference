@@ -76,6 +76,57 @@ rules are:
 
 ## Testing and quality
 
+### Automated PR checks
+
+Every pull request targeting `main` runs the checks defined in
+`.github/workflows/pr-checks.yml`. Each check runs **only on files changed in the PR**:
+
+| Check | Tool | What it catches |
+|---|---|---|
+| Python lint | [ruff](https://docs.astral.sh/ruff/) | Syntax errors, unused imports, style issues (configured in `ruff.toml`) |
+| YAML lint | [yamllint](https://yamllint.readthedocs.io/) | Structural YAML issues (configured in `.yamllint.yaml`) |
+| SPDX headers | `.ci/check_spdx_headers.sh` | Missing copyright/license headers on first-party data files |
+| Shell lint | [ShellCheck](https://www.shellcheck.net/) | Common shell script bugs, quoting issues, portability |
+| Workflow lint | [actionlint](https://github.com/rhysd/actionlint) | GitHub Actions workflow syntax and correctness |
+
+### Running checks locally
+
+Install [pre-commit](https://pre-commit.com/) to run the same checks automatically on
+every commit:
+
+```sh
+python3 -m venv venv
+source venv/bin/activate
+pip install pre-commit
+pre-commit install
+```
+
+After installation, the hooks run on staged files each time you commit. To run them
+manually against your branch's changes:
+
+```sh
+pre-commit run --from-ref main --to-ref HEAD
+```
+
+Or run individual tools directly on changed files:
+
+```sh
+# List changed files
+changed=$(git diff --name-only --diff-filter=ACMR main...HEAD)
+
+# Python lint
+echo "$changed" | grep '\.py$' | xargs --no-run-if-empty ruff check
+
+# YAML lint
+echo "$changed" | grep '\.ya\?ml$' | xargs --no-run-if-empty yamllint -s
+
+# Shell lint
+echo "$changed" | grep '\.sh$' | xargs --no-run-if-empty shellcheck
+
+# SPDX headers (no-args mode checks all known paths)
+.ci/check_spdx_headers.sh
+```
+
 ### What contributors should do
 
 * **Unit tests** — run tests under `src/*/tests/` for any Python tool changes
@@ -140,13 +191,17 @@ license headers from upstream; patch files are excluded from first-party SPDX ch
 ### Pre-commit hooks
 
 Install [pre-commit](https://pre-commit.com/) and run `pre-commit install` to enable the
-repository checks locally. First-party data files covered by the check must start with:
+repository checks locally. The hooks configured in `.pre-commit-config.yaml` are:
+
+* **ruff** — Python linting and formatting (configuration in `ruff.toml`)
+* **yamllint** — YAML syntax and structure (configuration in `.yamllint.yaml`)
+* **shellcheck** — shell script analysis
+* **SPDX header check** — verifies first-party data files start with:
 
 ```text
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 ```
 
-The hook currently verifies these headers on the applicable first-party data files.
-Patch files are excluded because they may contain legitimate upstream license headers.
-The checks will be expanded as the repository is prepared for public development.
+Files listed in `.ci/spdx_exclude.txt` are excluded from this check, as are patch files
+which may contain legitimate upstream license headers.
