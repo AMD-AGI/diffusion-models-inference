@@ -14,7 +14,7 @@
     num_inference_steps: 50
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     input_images: /app/data/cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -33,7 +33,7 @@
     num_inference_steps: 50
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     input_images: /app/data/cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -52,7 +52,7 @@
     num_inference_steps: 50
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     input_images: /app/data/cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -72,8 +72,8 @@
     max_sequence_length: 512
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
-    use_fp8_gemms: True
+    use_torch_compile: true
+    use_fp8_gemms: true
     input_images: /app/data/cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -93,8 +93,8 @@
     max_sequence_length: 512
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
-    use_fp4_gemms: True
+    use_torch_compile: true
+    use_fp4_gemms: true
     input_images: /app/data/cat.png
     guidance_scale: 4.0
     num_iterations: 25
@@ -113,8 +113,8 @@
     num_inference_steps: 50
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
-    use_fp8_gemms: True
+    use_torch_compile: true
+    use_fp8_gemms: true
     input_images: /app/data/cat.png
     guidance_scale: 4.0
     num_iterations: 25

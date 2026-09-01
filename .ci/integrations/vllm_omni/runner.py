@@ -240,7 +240,7 @@ def save_output(output, elapsed_times, args):
 
     if isinstance(data, Image.Image):
         image = data
-        image_name = f"output.png"
+        image_name = "output.png"
         image_path = os.path.join(args.output_directory, image_name)
         image.save(image_path)
         print(f"Saved image to {image_path}")
@@ -272,7 +272,7 @@ def save_output(output, elapsed_times, args):
         if isinstance(video_array, np.ndarray) and video_array.ndim == 4:
             video_array = list(video_array)
 
-        video_name = f"output.mp4"
+        video_name = "output.mp4"
         video_path = os.path.join(args.output_directory, video_name)
         export_to_video(video_array, video_path, fps=args.fps)
         print(f"Saved video to {video_path}")

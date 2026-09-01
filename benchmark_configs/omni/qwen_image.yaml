@@ -16,7 +16,7 @@
     warmup_calls: 5
     num_iterations: 25
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     attention_backend: FLASH_ATTN
 
 - name: qwen_image.default.hopper
@@ -34,7 +34,7 @@
     warmup_calls: 5
     num_iterations: 25
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     attention_backend: CUDNN_ATTN
 
 - name: qwen_image.default.blackwell
@@ -52,5 +52,5 @@
     warmup_calls: 5
     num_iterations: 25
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     attention_backend: CUDNN_ATTN

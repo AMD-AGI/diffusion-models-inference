@@ -15,8 +15,8 @@
     num_frames: 81
     fps: 16
     ulysses_degree: 8
-    use_parallel_vae: True
-    use_torch_compile: True
+    use_parallel_vae: true
+    use_torch_compile: true
     attention_backend: FLASH_ATTN
     seed: 42
     warmup_calls: 1
@@ -38,9 +38,9 @@
     num_frames: 81
     fps: 16
     ulysses_degree: 8
-    use_parallel_vae: True
-    use_torch_compile: True
-    use_fp8_gemms: True
+    use_parallel_vae: true
+    use_torch_compile: true
+    use_fp8_gemms: true
     transformer_2_quantization_method: fp8
     attention_backend: FLASH_ATTN
     seed: 42
@@ -63,9 +63,9 @@
     num_frames: 81
     fps: 16
     ulysses_degree: 8
-    use_parallel_vae: True
-    use_torch_compile: True
-    use_fp4_gemms: True
+    use_parallel_vae: true
+    use_torch_compile: true
+    use_fp4_gemms: true
     transformer_2_quantization_method: fp8
     attention_backend: FLASH_ATTN
     seed: 42
@@ -88,8 +88,8 @@
     num_frames: 81
     fps: 16
     ulysses_degree: 8
-    use_parallel_vae: True
-    use_torch_compile: True
+    use_parallel_vae: true
+    use_torch_compile: true
     attention_backend: FLASH_ATTN
     seed: 42
     warmup_calls: 1
@@ -111,8 +111,8 @@
     num_frames: 81
     fps: 16
     ulysses_degree: 8
-    use_parallel_vae: True
-    use_torch_compile: True
+    use_parallel_vae: true
+    use_torch_compile: true
     attention_backend: CUDNN_ATTN
     seed: 42
     warmup_calls: 1

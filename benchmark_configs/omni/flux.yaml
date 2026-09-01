@@ -15,7 +15,7 @@
     max_sequence_length: 256
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: FLASH_ATTN
@@ -34,7 +34,7 @@
     max_sequence_length: 256
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: CUDNN_ATTN
@@ -53,7 +53,7 @@
     max_sequence_length: 256
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     guidance_scale: 0.0
     num_iterations: 25
     attention_backend: FLASH_ATTN
@@ -72,7 +72,7 @@
     max_sequence_length: 256
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: true
     guidance_scale: 0.0
     num_iterations: 25
     attention_backend: CUDNN_ATTN
