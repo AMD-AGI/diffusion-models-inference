@@ -160,6 +160,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Whether to use Torch compile",
     )
+    quantization = parser.add_mutually_exclusive_group()
+    quantization.add_argument(
+        "--use_fp4_gemms",
+        action="store_true",
+        help="Quantize the diffusion transformer to online MXFP4 W4A4.",
+    )
+    quantization.add_argument(
+        "--use_fp8_gemms",
+        action="store_true",
+        help="Quantize the diffusion transformer with native online FP8 W8A8.",
+    )
+    parser.add_argument(
+        "--transformer_2_quantization_method",
+        choices=("fp8", "mxfp4"),
+        help="Optional quantization method for a second diffusion transformer.",
+    )
     parser.add_argument(
         "--input_images",
         nargs="+",
@@ -224,7 +240,7 @@ def save_output(output, elapsed_times, args):
 
     if isinstance(data, Image.Image):
         image = data
-        image_name = f"output.png"
+        image_name = "output.png"
         image_path = os.path.join(args.output_directory, image_name)
         image.save(image_path)
         print(f"Saved image to {image_path}")
@@ -256,7 +272,7 @@ def save_output(output, elapsed_times, args):
         if isinstance(video_array, np.ndarray) and video_array.ndim == 4:
             video_array = list(video_array)
 
-        video_name = f"output.mp4"
+        video_name = "output.mp4"
         video_path = os.path.join(args.output_directory, video_name)
         export_to_video(video_array, video_path, fps=args.fps)
         print(f"Saved video to {video_path}")
@@ -296,12 +312,30 @@ def main():
             "torch_profiler_record_shapes": True,
         }
 
+    if args.use_fp4_gemms:
+        transformer_quantization_config = {"method": "mxfp4"}
+    elif args.use_fp8_gemms:
+        transformer_quantization_config = {"method": "fp8"}
+    else:
+        transformer_quantization_config = None
+    transformer_2_quantization_method = args.transformer_2_quantization_method
+    if transformer_quantization_config is not None or transformer_2_quantization_method is not None:
+        quantization_config = {"text_encoder": None, "vae": None}
+        if transformer_quantization_config is not None:
+            quantization_config["transformer"] = transformer_quantization_config
+        if transformer_2_quantization_method is not None:
+            quantization_config["transformer_2"] = {"method": transformer_2_quantization_method}
+    else:
+        quantization_config = None
+
     omni = Omni(
         model=args.model,
         vae_use_slicing=args.enable_slicing,
         vae_use_tiling=args.enable_tiling,
         parallel_config=parallel_config,
         enforce_eager=not args.use_torch_compile,
+        diffusion_compile_reorder_comm_overlap=args.use_torch_compile,
+        diffusion_quantization_config=quantization_config,
         profiler_config=profiler_config,
     )
 

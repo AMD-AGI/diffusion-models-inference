@@ -14,9 +14,10 @@
     num_inference_steps: 50
     ulysses_degree: 8
     ulysses_mode: advanced_uaa
-    use_torch_compile: True
+    use_torch_compile: true
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
 
 - name: z_image.default.hopper
   tags: [hopper, h100, h200]
@@ -31,6 +32,25 @@
     num_inference_steps: 50
     ulysses_degree: 8
     ulysses_mode: advanced_uaa
-    use_torch_compile: True
+    use_torch_compile: true
     guidance_scale: 4.0
     num_iterations: 25
+    attention_backend: FLASH_ATTN
+
+- name: z_image.default.blackwell
+  tags: [blackwell, b200, b300]
+  model: Tongyi-MAI/Z-Image
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 42
+    prompt: A crowded beach
+    height: 1088
+    width: 1920
+    num_inference_steps: 50
+    ulysses_degree: 8
+    ulysses_mode: advanced_uaa
+    use_torch_compile: true
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: CUDNN_ATTN
