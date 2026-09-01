@@ -32,6 +32,20 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _parse_json_object(value: str) -> dict:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(
+            f"invalid JSON object for --diffusion_attention_config: {value!r}"
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise argparse.ArgumentTypeError(
+            f"--diffusion_attention_config must be a JSON object, got {type(parsed).__name__}"
+        )
+    return parsed
+
+
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +74,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Override DIFFUSION_ATTENTION_BACKEND (e.g. FLASH_ATTN, TORCH_SDPA). "
             "Defaults to platform auto-detection when unset."
+        ),
+    )
+    server.add_argument(
+        "--diffusion_attention_config",
+        type=_parse_json_object,
+        help=(
+            "JSON object passed to vllm-omni --diffusion-attention-config. "
+            'Example: \'{"default":{"backend":"AITER_QUANT_ATTN",'
+            '"aiter_quant":{"format":"mxfp4"}}}\'.'
         ),
     )
     server.add_argument("--ulysses_degree", type=int, default=1)
@@ -105,7 +128,15 @@ def parse_args() -> argparse.Namespace:
         default=600,
         help="Seconds to wait per inference request",
     )
-    benchmark.add_argument("--profile", action="store_true")
+    benchmark.add_argument(
+        "--profile",
+        action="store_true",
+        help=(
+            "Call /start_profile and /stop_profile around timed iterations. "
+            "Requires VLLM_TORCH_PROFILER_DIR and starts the server with "
+            "--profiler-config so those endpoints are registered."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -164,6 +195,26 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
         cmd += ["--vae-use-slicing"]
     if args.enable_tiling:
         cmd += ["--vae-use-tiling"]
+    if args.diffusion_attention_config is not None:
+        cmd += [
+            "--diffusion-attention-config",
+            json.dumps(args.diffusion_attention_config, separators=(",", ":")),
+        ]
+    if args.profile:
+        profile_dir = os.environ.get("VLLM_TORCH_PROFILER_DIR")
+        if profile_dir is None:
+            raise ValueError("VLLM_TORCH_PROFILER_DIR environment variable is not set")
+        os.makedirs(profile_dir, exist_ok=True)
+        profiler_config = {
+            "profiler": "torch",
+            "torch_profiler_dir": profile_dir,
+            "torch_profiler_with_stack": False,
+            "torch_profiler_record_shapes": True,
+        }
+        cmd += [
+            "--profiler-config",
+            json.dumps(profiler_config, separators=(",", ":")),
+        ]
 
     return cmd
 
