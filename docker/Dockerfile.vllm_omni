@@ -11,9 +11,6 @@
 
 ARG BASE_IMAGE="amdsiloai/pytorch-private:xdit-2.13-20260803"
 
-FROM scratch AS patches
-COPY ./patches /patches
-
 FROM ${BASE_IMAGE}
 
 ARG VLLM_REPO=https://github.com/vllm-project/vllm.git

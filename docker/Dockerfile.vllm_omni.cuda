@@ -25,8 +25,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Clone the requested vllm-omni branch
-RUN git clone --branch ${VLLM_OMNI_BRANCH} --single-branch \
-        ${VLLM_OMNI_REPO} vllm-omni
+RUN git clone ${VLLM_OMNI_REPO} /app/vllm-omni && \
+    cd /app/vllm-omni && \
+    git reset --hard ${VLLM_OMNI_COMMIT}
 
 # Install vllm-omni as an editable install
 RUN cd /app/vllm-omni && \
