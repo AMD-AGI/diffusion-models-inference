@@ -196,7 +196,7 @@
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: aiter_sage
+    attention_backend: aiter_i8fp8
     use_fp8_gemms: True
 
 - name: flux2.quantgemm_sageattn.gfx950
