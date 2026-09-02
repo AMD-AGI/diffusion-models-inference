@@ -39,9 +39,9 @@ ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
 # deps image arguments
 ARG AITER_COMMIT="0c2b0f77b2ff6d13c677d12466abf87299f8b260"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG DIFFUSERS_COMMIT="f6e1c4d1e7a6aebaeeaaa0880a82ad036517909e"
-ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
-ARG XDIT_COMMIT="2f74acb12830163d1fe0dd1abb5422f0bff7acf0"
+ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
+ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
+ARG XDIT_COMMIT="3aa7b34ec3f1d4f86f0befc5f09384333067846c"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -526,7 +526,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git apply /patches/yunchang_aiter_round_mode.patch && \
     pip install -e .
 # install transformers with [sentencepiece] extras that brings in protobuf, required for T5 tokenizers
-RUN pip install --no-cache-dir "transformers[sentencepiece]==5.5.4"
+RUN pip install --no-cache-dir "transformers[sentencepiece]==5.16.1"
 # install diffusers
 # ftfy is an optional dependency, we install it as needed for StableDiffusion 3.5 (CLIP-based encoder pipelines)
 # final rm step is needed presently to pass a release process image scan

@@ -12,9 +12,9 @@
 # deps image arguments
 ARG FLASHATTENTION_COMMIT="fffabc3"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG DIFFUSERS_COMMIT="f6e1c4d1e7a6aebaeeaaa0880a82ad036517909e"
-ARG DISTVAE_COMMIT="6d8025c96b9975d45badae12d8ed9b6422e34e2c"
-ARG XDIT_COMMIT="2f74acb12830163d1fe0dd1abb5422f0bff7acf0"
+ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
+ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
+ARG XDIT_COMMIT="3aa7b34ec3f1d4f86f0befc5f09384333067846c"
 ARG SAGEATTENTION_COMMIT="d1a57a5"
 ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
 ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
@@ -100,7 +100,7 @@ RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
     pip install -e .
 # install transformers with [sentencepiece] extras that brings in protobuf, required for T5 tokenizers
-RUN pip install --no-cache-dir "transformers[sentencepiece]==5.5.4"
+RUN pip install --no-cache-dir "transformers[sentencepiece]==5.16.1"
 # install diffusers
 # ftfy is an optional dependency, we install it as needed for StableDiffusion 3.5 (CLIP-based encoder pipelines)
 RUN git clone https://github.com/huggingface/diffusers.git && \
