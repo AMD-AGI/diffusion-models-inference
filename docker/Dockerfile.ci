@@ -12,7 +12,7 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="9100ec681955d4af7e1c720fb5c9b208fc838172"
+ARG THEROCK_COMMIT="98747f8eba5c46fab580844c99cf39c621429a8d"
 ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
@@ -126,6 +126,16 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libglib2.0-dev \
     libglu1-mesa-dev \
     libopenblas-dev \
+    # Workaround: rocprofiler-sdk SQL output sources include <sqlite3.h>, but
+    # rocm-systems#6664 no longer propagates bundled SQLite headers to
+    # rocprofiler-sdk-output-library. Remove once fixed upstream:
+    # https://github.com/ROCm/TheRock/issues/5868
+    libsqlite3-dev \
+    # Workaround: profiler-hub generates its bundled SQLite3 amalgamation via
+    # `make sqlite3.c`, which requires tclsh even with --disable-tcl. Remove
+    # once fixed upstream:
+    # https://github.com/ROCm/rocm-systems/issues/10059
+    tcl \
     libtool \
     ninja-build \
     texinfo \
@@ -277,9 +287,11 @@ RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | tr '\n' ' '); \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
         -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-# Install amdsmi Python module
-RUN cd /opt/rocm/share/amd_smi && \
-    pip install --no-cache-dir .
+# Install amdsmi Python module into system site-packages. TheRock stages
+# sources under share/amd_smi/amdsmi/ without setup.py (packaging rework in
+# rocm-systems 5bc651a8+); pip install from share/amd_smi no longer works.
+RUN AMDSMI_SITELIB="$(python3 -c "import site; print([p for p in site.getsitepackages() if not p.startswith('/usr/local')][0])")" && \
+    cp -r /opt/rocm/share/amd_smi/amdsmi "${AMDSMI_SITELIB}/"
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
     echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
     ldconfig
