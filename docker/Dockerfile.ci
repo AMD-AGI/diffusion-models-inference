@@ -45,7 +45,9 @@ ARG XDIT_COMMIT="2f74acb12830163d1fe0dd1abb5422f0bff7acf0"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
-FROM ${BASE_IMAGE} AS build_python
+FROM ${BASE_IMAGE} AS base_os
+
+FROM base_os AS build_python
 ARG PYTHON_VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 RUN if [ "${PYTHON_VERSION}" = "default" ]; then \
@@ -104,7 +106,7 @@ RUN if [ "${PYTHON_VERSION}" = "default" ]; then \
         make install DESTDIR=/opt/python; \
     fi
 
-FROM ${BASE_IMAGE} AS base
+FROM base_os AS base
 ARG PYTHON_VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -439,17 +441,10 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
-FROM rocm_runtime AS core_runtime
+FROM rocm_devel AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
-# AITER JIT: install dev artifacts required for runtime kernel compilation
-RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
-    set -eu; \
-    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
-        -o "${O}" --artifacts-dir "${A}" \
-        base_dev core-hip_dev core-runtime_dev blas_dev prim_dev rand_dev
 # torchcodec: install FFmpeg and runtime dependencies
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
@@ -495,18 +490,9 @@ RUN --mount=type=bind,source=patches,target=/patches \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
 
-FROM core_runtime AS core
-# Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
-# archives are re-extracted idempotently). Uses the same manifest as rocm_devel.
-COPY docker/rocm_devel_artifacts.txt /tmp/
-RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
-    set -eu; \
-    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
-    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
-    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
-        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-RUN ldconfig
-ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
+COPY --from=build_rocm /license-evidence /opt/license-evidence/rocm-build-sources
+COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/torch-build-sources
+COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
@@ -585,9 +571,6 @@ FROM core AS final
 # by copying from the deps stage we leave behind all cache and temporary files created during installation
 COPY --from=deps /venv /venv
 COPY --from=deps /app /app
-COPY --from=build_rocm /license-evidence /tmp/image-license-inputs/rocm-build-sources
-COPY --from=build_torch_stack /install/license-evidence /tmp/image-license-inputs/torch-build-sources
-COPY --from=ffmpeg_builder /ffmpeg/license-evidence /tmp/image-license-inputs/ffmpeg-build-sources
 COPY LICENSE /tmp/project-license/LICENSE
 
 # install basic terminal utilities
@@ -620,13 +603,13 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --scan-root python=/venv \
     --scan-root rocm=/opt/rocm \
     --scan-root local=/usr/local \
-    --evidence-root rocm-build-sources=/tmp/image-license-inputs/rocm-build-sources \
-    --evidence-root torch-build-sources=/tmp/image-license-inputs/torch-build-sources \
-    --evidence-root ffmpeg-build-sources=/tmp/image-license-inputs/ffmpeg-build-sources \
+    --evidence-root rocm-build-sources=/opt/license-evidence/rocm-build-sources \
+    --evidence-root torch-build-sources=/opt/license-evidence/torch-build-sources \
+    --evidence-root ffmpeg-build-sources=/opt/license-evidence/ffmpeg-build-sources \
     --git-root /app \
     --python-root /venv \
     --debian \
     --fail-on-missing-git-license \
     --required-git-depth 2 && \
-    rm -rf /tmp/image-license-inputs /tmp/project-license \
+    rm -rf /tmp/project-license \
         /usr/local/libexec/collect_image_licenses.py
