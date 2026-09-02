@@ -1,0 +1,77 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: minimax_h3.default
+  tags: [lucid, instinct, gfx942, gfx950]
+  model: MiniMaxAI/MiniMax-H3
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 42
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    num_inference_steps: 50
+    fps: 24
+    height: 768
+    width: 1344
+    num_frames: 124
+    aspect_ratio: "16:9"
+    extra_params:
+      task: t2va
+    ulysses_degree: 8
+    use_parallel_vae: true
+    enable_tiling: true
+    vae_parallel_mode: tile
+    task_type: fl2va
+    warmup_calls: 5
+    num_iterations: 25
+    attention_backend: FLASH_ATTN
+
+- name: minimax_h3.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: MiniMaxAI/MiniMax-H3
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 42
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    num_inference_steps: 50
+    fps: 24
+    height: 768
+    width: 1344
+    num_frames: 124
+    aspect_ratio: "16:9"
+    extra_params:
+      task: t2va
+    ulysses_degree: 8
+    use_parallel_vae: true
+    enable_tiling: true
+    vae_parallel_mode: tile
+    task_type: fl2va
+    warmup_calls: 5
+    num_iterations: 25
+    attention_backend: CUDNN_ATTN
+
+- name: minimax_h3.blackwell
+  tags: [lucid, blackwell, b200, b300]
+  model: MiniMaxAI/MiniMax-H3
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    seed: 42
+    prompt: A cat flying through the universe on a broom, playing rap music from his boombox
+    num_inference_steps: 50
+    fps: 24
+    height: 768
+    width: 1344
+    num_frames: 124
+    aspect_ratio: "16:9"
+    extra_params:
+      task: t2va
+    ulysses_degree: 8
+    use_parallel_vae: true
+    enable_tiling: true
+    vae_parallel_mode: tile
+    task_type: fl2va
+    warmup_calls: 5
+    num_iterations: 25
+    attention_backend: CUDNN_ATTN
