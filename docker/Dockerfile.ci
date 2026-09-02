@@ -32,8 +32,8 @@ ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
 # Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
 ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
 ARG TRITON_COMMIT="4cff872ced001ea92d9fcf05b3f6517e2b486d19"
-ARG PYTORCH_COMMIT="d0fcdf917596ad6d2da9a2799bfba4b71456dcc4"
-ARG PYTORCH_VISION_COMMIT="8fb87713a24951e639c494b0f2a8a81b5f8e33a6"
+ARG PYTORCH_COMMIT="c41047dab78090b97e96ac7e45011c501498be3e"
+ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
 ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
 ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
 # deps image arguments
@@ -317,7 +317,7 @@ WORKDIR /app/TheRock/external-builds/pytorch
 RUN pip install -r /app/TheRock/requirements.txt && \
     python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1 && \
     python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1 && \
-    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/ROCm/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
     python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/ROCm/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
 # fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
 RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
