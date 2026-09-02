@@ -372,7 +372,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    attention_backend: aiter_sparge_fp8
+    attention_backend: aiter_fp8_sparge
     cross_attention_backend: aiter
     use_fp4_gemms: True
     spargeattn_simthreshold: 0.2
