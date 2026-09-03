@@ -277,7 +277,7 @@ jobs:
           docker rm core
       
       - name: Upload version artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ github.run_number }}-versions-${{ matrix.arch }}
           path: versions/**
