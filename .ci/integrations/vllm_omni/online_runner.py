@@ -36,17 +36,14 @@ def _parse_json_object(value: str) -> dict:
     try:
         parsed = json.loads(value)
     except json.JSONDecodeError as exc:
-        raise argparse.ArgumentTypeError(
-            f"invalid JSON object: {value!r}"
-        ) from exc
+        raise argparse.ArgumentTypeError(f"invalid JSON object: {value!r}") from exc
     if not isinstance(parsed, dict):
-        raise argparse.ArgumentTypeError(
-            f"expected a JSON object, got {type(parsed).__name__}"
-        )
+        raise argparse.ArgumentTypeError(f"expected a JSON object, got {type(parsed).__name__}")
     return parsed
 
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -74,7 +71,7 @@ def parse_args() -> argparse.Namespace:
         type=_parse_json_object,
         help=(
             "JSON object posted as extra_params. Model-specific request fields live "
-            "here, e.g. '{\"task\":\"t2va\"}' or '{\"flow_shift\":12.0}'."
+            'here, e.g. \'{"task":"t2va"}\' or \'{"flow_shift":12.0}\'.'
         ),
     )
     request.add_argument("--input_images", help="Input image path (I2V or I2I)")
@@ -165,15 +162,15 @@ def parse_args() -> argparse.Namespace:
 
 def build_serve_cmd(args: argparse.Namespace) -> list[str]:
     cfg_parallel = 2 if args.use_cfg_parallel else 1
-    vae_parallel = (
-        args.ulysses_degree * args.ring_degree * cfg_parallel
-        if args.use_parallel_vae
-        else 1
-    )
+    vae_parallel = args.ulysses_degree * args.ring_degree * cfg_parallel if args.use_parallel_vae else 1
 
     cmd = [
-        "vllm-omni", "serve", args.model, "--omni",
-        "--port", str(args.port),
+        "vllm-omni",
+        "serve",
+        args.model,
+        "--omni",
+        "--port",
+        str(args.port),
     ]
     if args.task_type:
         cmd += ["--task-type", args.task_type]
@@ -272,6 +269,7 @@ def wait_for_health(base_url: str, timeout: int, proc: subprocess.Popen) -> None
 
 
 # ── Request helpers ───────────────────────────────────────────────────────────
+
 
 def _timed_post(url: str, timeout: int, **kwargs) -> tuple[requests.Response, float]:
     t0 = time.perf_counter()
@@ -454,12 +452,14 @@ def _run_iterations(
 
 # ── Profiling ─────────────────────────────────────────────────────────────────
 
+
 def _call_profile_endpoint(base_url: str, action: str, timeout: int) -> None:
     resp = requests.post(f"{base_url}/{action}", timeout=timeout)
     resp.raise_for_status()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     args = parse_args()
