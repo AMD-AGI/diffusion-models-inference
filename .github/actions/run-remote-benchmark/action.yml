@@ -1,0 +1,52 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Run Remote Benchmark
+description: Benchmark an existing image on an external cluster and stream results back
+
+inputs:
+  image_tag:
+    description: 'Image tag (short git SHA) of the image to benchmark'
+    required: true
+  gpu_arch:
+    description: 'GPU architecture to target (e.g. mi350p, gfx1201)'
+    required: true
+  benchmark_flags:
+    description: 'Flags used to filter benchmarks, leave empty to run all. Only --tag and --name are accepted. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
+    required: false
+    default: ''
+  output_dir:
+    description: 'Output directory name for benchmark results'
+    required: false
+    default: 'remote-benchmarks'
+  timeout_minutes:
+    description: 'Maximum time to wait for the remote job'
+    required: false
+    default: '1440'
+  artifact_name:
+    description: 'Full artifact name for upload'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Run remote benchmark
+      shell: bash
+      env:
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        GPU_ARCH: ${{ inputs.gpu_arch }}
+        BENCHMARK_FLAGS: ${{ inputs.benchmark_flags }}
+        OUTPUT_PATH: ${{ github.workspace }}/${{ inputs.output_dir }}/${{ inputs.gpu_arch }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+        RUN_ID: ${{ github.run_id }}
+      # Invoked through bash so the step does not depend on the checkout
+      # preserving the executable bit.
+      run: bash "${{ github.action_path }}/scripts/run-remote-benchmark.sh"
+
+    - name: Upload benchmark results
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ inputs.output_dir }}/${{ inputs.gpu_arch }}/**
+        if-no-files-found: warn
