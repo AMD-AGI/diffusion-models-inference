@@ -360,7 +360,7 @@ jobs:
           run_number: ${{ github.run_number }}
 
       - name: Download all MIOpen artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: ${{ github.run_number }}-miopen-*
           merge-multiple: true
@@ -413,7 +413,7 @@ jobs:
           token: ${{ github.token }}
       
       - name: Download all MIOpen artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: ${{ github.run_number }}-miopen-*
           merge-multiple: true
