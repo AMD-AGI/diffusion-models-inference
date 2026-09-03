@@ -274,7 +274,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    attention_backend: aiter_sage
+    attention_backend: aiter_i8fp8
     cross_attention_backend: aiter
     use_fp8_gemms: True
 
@@ -293,9 +293,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    use_hybrid_attn_schedule: True
-    hybrid_attn_low_precision_backend: aiter_sage_v2
-    hybrid_attn_high_precision_backend: aiter_sage
+    attention_backend: aiter_i8fp8
     cross_attention_backend: aiter
     use_fp4_gemms: True
 
@@ -352,7 +350,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    attention_backend: aiter_sparge
+    attention_backend: aiter_fp8_sparge
     cross_attention_backend: aiter
     use_fp8_gemms: True
     spargeattn_simthreshold: 0.2
@@ -374,7 +372,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: True
-    attention_backend: aiter_sparge_fp8
+    attention_backend: aiter_fp8_sparge
     cross_attention_backend: aiter
     use_fp4_gemms: True
     spargeattn_simthreshold: 0.2

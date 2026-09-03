@@ -481,16 +481,12 @@ WORKDIR /app/external
 # that PR, but safe and forward-compatible.
 ENV AITER_USE_SYSTEM_TRITON=1
 RUN --mount=type=bind,source=patches,target=/patches \
-    --mount=type=bind,source=src/code_objects,target=/code_objects \
     git clone https://github.com/ROCm/aiter.git && \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
-    git apply /patches/aiter_fp8_sparse_asm_kernel.patch && \
     # PyTorch 2.9 Dynamo graph-breaks on PEP 604 in nested _validate_cu (aiter/ops/mha.py).
     # Remove this patch after PyTorch is bumped above 2.9.
     git apply /patches/aiter_mha_pep604_dynamo.patch && \
-    cp /code_objects/fwd_hd128_fp8.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8.co && \
-    cp /code_objects/fwd_hd128_fp8_sparse.co hsa/gfx950/fmha_v3_fwd/fwd_hd128_fp8_sparse.co && \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
@@ -569,7 +565,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/xfuser_aiter_sparge_fp8_asm_backend.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute runtime dependencies
