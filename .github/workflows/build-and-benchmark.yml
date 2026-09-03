@@ -82,7 +82,7 @@ jobs:
       staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
 
@@ -217,7 +217,7 @@ jobs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
       
@@ -251,7 +251,7 @@ jobs:
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
           
@@ -349,7 +349,7 @@ jobs:
     if: ${{ inputs.benchmark_image == '' && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
       
@@ -407,7 +407,7 @@ jobs:
       (inputs.run_mode == 'MIOpen tuning only' || inputs.run_mode == 'MIOpen tuning + benchmarking')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
           token: ${{ github.token }}

@@ -40,7 +40,7 @@ jobs:
       short_sha: ${{ steps.short_sha.outputs.sha }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       
       - name: Get short commit SHA
         id: short_sha
