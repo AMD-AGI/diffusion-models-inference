@@ -74,7 +74,7 @@ def parse_args() -> argparse.Namespace:
         type=_parse_json_object,
         help=(
             "JSON object posted as extra_params. Model-specific request fields live "
-            "here, e.g. '{\"task\":\"t2va\"}' or '{\"max_sequence_length\":256}'."
+            "here, e.g. '{\"task\":\"t2va\"}' or '{\"flow_shift\":12.0}'."
         ),
     )
     request.add_argument("--input_images", help="Input image path (I2V or I2I)")
