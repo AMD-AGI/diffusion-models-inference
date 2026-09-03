@@ -72,7 +72,7 @@ jobs:
           esac
       
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_ref }}
       

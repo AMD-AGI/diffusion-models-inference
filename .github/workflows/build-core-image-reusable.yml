@@ -69,7 +69,7 @@ jobs:
       staging_image_with_tag: ${{ steps.set_outputs.outputs.staging_image_with_tag }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_ref }}
       
