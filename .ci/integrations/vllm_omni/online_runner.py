@@ -36,17 +36,14 @@ def _parse_json_object(value: str) -> dict:
     try:
         parsed = json.loads(value)
     except json.JSONDecodeError as exc:
-        raise argparse.ArgumentTypeError(
-            f"invalid JSON object for --diffusion_attention_config: {value!r}"
-        ) from exc
+        raise argparse.ArgumentTypeError(f"invalid JSON object: {value!r}") from exc
     if not isinstance(parsed, dict):
-        raise argparse.ArgumentTypeError(
-            f"--diffusion_attention_config must be a JSON object, got {type(parsed).__name__}"
-        )
+        raise argparse.ArgumentTypeError(f"expected a JSON object, got {type(parsed).__name__}")
     return parsed
 
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -65,15 +62,26 @@ def parse_args() -> argparse.Namespace:
     request.add_argument("--seed", type=int, default=42)
     request.add_argument("--num_frames", type=int, help="Set for video generation")
     request.add_argument("--fps", type=int, help="Output video frame rate")
-    request.add_argument("--max_sequence_length", type=int)
+    request.add_argument(
+        "--aspect_ratio",
+        help='Named output ratio (e.g. "16:9"). MiniMax-H3 T2VA requires one.',
+    )
+    request.add_argument(
+        "--extra_params",
+        type=_parse_json_object,
+        help=(
+            "JSON object posted as extra_params. Model-specific request fields live "
+            'here, e.g. \'{"task":"t2va"}\' or \'{"flow_shift":12.0}\'.'
+        ),
+    )
     request.add_argument("--input_images", help="Input image path (I2V or I2I)")
 
     server = parser.add_argument_group("server")
     server.add_argument(
         "--attention_backend",
         help=(
-            "Override DIFFUSION_ATTENTION_BACKEND (e.g. FLASH_ATTN, TORCH_SDPA). "
-            "Defaults to platform auto-detection when unset."
+            "Override the diffusion attention backend (e.g. FLASH_ATTN, TORCH_SDPA). "
+            "Passed as --diffusion-attention-backend. Defaults to platform auto-detection when unset."
         ),
     )
     server.add_argument(
@@ -110,6 +118,15 @@ def parse_args() -> argparse.Namespace:
     server.add_argument("--use_hsdp", action="store_true")
     server.add_argument("--enable_slicing", action="store_true")
     server.add_argument("--enable_tiling", action="store_true")
+    server.add_argument(
+        "--task_type",
+        help="Startup task partition for modular models (e.g. fl2va for MiniMax-H3)",
+    )
+    server.add_argument(
+        "--vae_parallel_mode",
+        choices=("tile", "spatial_shard_height", "spatial_shard_width"),
+        help="VAE parallel decode strategy passed as --vae-parallel-mode",
+    )
     server.add_argument("--port", type=int, default=8098)
 
     benchmark = parser.add_argument_group("benchmark")
@@ -119,13 +136,13 @@ def parse_args() -> argparse.Namespace:
     benchmark.add_argument(
         "--health_timeout",
         type=int,
-        default=600,
+        default=800,
         help="Seconds to wait for server readiness",
     )
     benchmark.add_argument(
         "--request_timeout",
         type=int,
-        default=600,
+        default=800,
         help="Seconds to wait per inference request",
     )
     benchmark.add_argument(
@@ -145,16 +162,18 @@ def parse_args() -> argparse.Namespace:
 
 def build_serve_cmd(args: argparse.Namespace) -> list[str]:
     cfg_parallel = 2 if args.use_cfg_parallel else 1
-    vae_parallel = (
-        args.ulysses_degree * args.ring_degree * cfg_parallel
-        if args.use_parallel_vae
-        else 1
-    )
+    vae_parallel = args.ulysses_degree * args.ring_degree * cfg_parallel if args.use_parallel_vae else 1
 
     cmd = [
-        "vllm-omni", "serve", args.model, "--omni",
-        "--port", str(args.port),
+        "vllm-omni",
+        "serve",
+        args.model,
+        "--omni",
+        "--port",
+        str(args.port),
     ]
+    if args.task_type:
+        cmd += ["--task-type", args.task_type]
 
     if args.ulysses_degree > 1:
         cmd += ["--usp", str(args.ulysses_degree)]
@@ -195,6 +214,10 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
         cmd += ["--vae-use-slicing"]
     if args.enable_tiling:
         cmd += ["--vae-use-tiling"]
+    if args.vae_parallel_mode:
+        cmd += ["--vae-parallel-mode", args.vae_parallel_mode]
+    if args.attention_backend:
+        cmd += ["--diffusion-attention-backend", args.attention_backend.upper()]
     if args.diffusion_attention_config is not None:
         cmd += [
             "--diffusion-attention-config",
@@ -222,12 +245,8 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 def start_server(args: argparse.Namespace) -> subprocess.Popen:
     cmd = build_serve_cmd(args)
     env = os.environ.copy()
-    if args.attention_backend is not None:
-        env["DIFFUSION_ATTENTION_BACKEND"] = args.attention_backend.upper()
-        logger.info("Starting server: %s  [DIFFUSION_ATTENTION_BACKEND=%s]",
-                    shlex.join(cmd), env["DIFFUSION_ATTENTION_BACKEND"])
-    else:
-        logger.info("Starting server: %s", shlex.join(cmd))
+    env.setdefault("VLLM_OMNI_VIDEO_SYNC_TIMEOUT", str(args.request_timeout))
+    logger.info("Starting server: %s", shlex.join(cmd))
     return subprocess.Popen(cmd, env=env, preexec_fn=os.setsid)
 
 
@@ -250,6 +269,7 @@ def wait_for_health(base_url: str, timeout: int, proc: subprocess.Popen) -> None
 
 
 # ── Request helpers ───────────────────────────────────────────────────────────
+
 
 def _timed_post(url: str, timeout: int, **kwargs) -> tuple[requests.Response, float]:
     t0 = time.perf_counter()
@@ -291,8 +311,10 @@ def _send_video_request(base_url: str, args: argparse.Namespace, output_path: st
         data["true_cfg_scale"] = str(args.true_cfg_scale)
     if args.fps is not None:
         data["fps"] = str(args.fps)
-    if args.max_sequence_length is not None:
-        data["extra_params"] = json.dumps({"max_sequence_length": args.max_sequence_length})
+    if args.aspect_ratio is not None:
+        data["aspect_ratio"] = args.aspect_ratio
+    if args.extra_params:
+        data["extra_params"] = json.dumps(args.extra_params)
     if args.negative_prompt is not None:
         data["negative_prompt"] = args.negative_prompt
     input_file = open(args.input_images, "rb") if args.input_images else None
@@ -336,8 +358,8 @@ def _send_image_request(base_url: str, args: argparse.Namespace, output_path: st
         params["true_cfg_scale"] = args.true_cfg_scale
     if args.negative_prompt is not None:
         params["negative_prompt"] = args.negative_prompt
-    if args.max_sequence_length is not None:
-        params["extra_params"] = {"max_sequence_length": args.max_sequence_length}
+    if args.extra_params:
+        params["extra_params"] = args.extra_params
     if args.input_images:
         url = f"{base_url}/v1/images/edits"
         form = dict(params)
@@ -430,12 +452,14 @@ def _run_iterations(
 
 # ── Profiling ─────────────────────────────────────────────────────────────────
 
+
 def _call_profile_endpoint(base_url: str, action: str, timeout: int) -> None:
     resp = requests.post(f"{base_url}/{action}", timeout=timeout)
     resp.raise_for_status()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     args = parse_args()
