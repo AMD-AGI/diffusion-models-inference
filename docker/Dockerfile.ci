@@ -441,10 +441,17 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
-FROM rocm_devel AS core
+FROM rocm_runtime AS core_runtime
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
+# AITER JIT: install dev artifacts required for runtime kernel compilation
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" \
+        base_dev core-hip_dev core-runtime_dev blas_dev prim_dev rand_dev
 # torchcodec: install FFmpeg and runtime dependencies
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
@@ -490,6 +497,20 @@ RUN --mount=type=bind,source=patches,target=/patches \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
 
+FROM core_runtime AS core
+# Layer full devel artifacts on top of core_runtime (overlapping JIT-dev
+# archives are re-extracted idempotently). Uses the same manifest as rocm_devel.
+COPY docker/rocm_devel_artifacts.txt /tmp/
+RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
+    set -eu; \
+    A="/app/TheRock/artifacts"; O="/opt/rocm"; \
+    PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_devel_artifacts.txt | tr '\n' ' '); \
+    python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
+        -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
+RUN ldconfig
+ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
+# Held in core rather than final so that no stage downstream of core has an edge
+# back into a builder stage.
 COPY --from=build_rocm /license-evidence /opt/license-evidence/rocm-build-sources
 COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/torch-build-sources
 COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
