@@ -572,6 +572,11 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
+    # xDiT only sets reorder_for_compute_comm_overlap, whose pass list defaulted
+    # to three passes on torch 2.9 but defaults to [] on 2.13, silently dropping
+    # comm/compute overlap. Pin the pass list explicitly.
+    # Remove once xDiT sets the pass list itself.
+    git apply /patches/xfuser_compile_comm_overlap_passes.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute runtime dependencies
