@@ -482,13 +482,9 @@ WORKDIR /app/external
 # https://github.com/ROCm/aiter/pull/3161). No-op on AITER_COMMIT pins predating
 # that PR, but safe and forward-compatible.
 ENV AITER_USE_SYSTEM_TRITON=1
-RUN --mount=type=bind,source=patches,target=/patches \
-    git clone https://github.com/ROCm/aiter.git && \
+RUN git clone https://github.com/ROCm/aiter.git && \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
-    # PyTorch 2.9 Dynamo graph-breaks on PEP 604 in nested _validate_cu (aiter/ops/mha.py).
-    # Remove this patch after PyTorch is bumped above 2.9.
-    git apply /patches/aiter_mha_pep604_dynamo.patch && \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
