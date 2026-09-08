@@ -1,0 +1,19 @@
+diff --git a/xfuser/model_executor/models/runner_models/base_model.py b/xfuser/model_executor/models/runner_models/base_model.py
+index 4a1c68a..dd9eb05 100644
+--- a/xfuser/model_executor/models/runner_models/base_model.py
++++ b/xfuser/model_executor/models/runner_models/base_model.py
+@@ -468,6 +468,14 @@ class xFuserModel(abc.ABC):
+ 
+         torch._inductor.config.reorder_for_compute_comm_overlap = True
+ 
++        aten_opts = getattr(torch._inductor.config, "aten_distributed_optimizations", None)
++        assert aten_opts is not None
++        aten_opts.enable_overlap_scheduling = True
++        aten_opts.collective_bucketing = True
++        aten_opts.insert_overlap_deps = True
++        aten_opts.collective_estimator = "benchmark"
++        aten_opts.insert_overlap_deps_impl = "meta"
++
+         # torch >= ~2.13: enabling the overlap machinery activates an SPMD
+         # graph-consistency check that issues a WORLD-group all_gather_object at
+         # compile time. Pipeline parallelism is non-SPMD (stages compile different

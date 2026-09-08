@@ -1,0 +1,24 @@
+diff --git a/xfuser/model_executor/models/runner_models/base_model.py b/xfuser/model_executor/models/runner_models/base_model.py
+index 9eb76e3..e9216b8 100644
+--- a/xfuser/model_executor/models/runner_models/base_model.py
++++ b/xfuser/model_executor/models/runner_models/base_model.py
+@@ -1,5 +1,6 @@
+ import abc
+ import torch
++import torch._inductor.config as ic
+ import copy
+ import argparse
+ import json
+@@ -470,6 +471,12 @@ class xFuserModel(abc.ABC):
+ 
+         torch._inductor.config.reorder_for_compute_comm_overlap = True
+ 
++        torch._inductor.config.bucket_all_gathers_fx = "all"
++        torch._inductor.config.bucket_all_gathers_fx_bucket_size_determinator = lambda bucket_id: 100.0 if bucket_id < 2 else 1000.0
++
++        torch._inductor.config.bucket_reduce_scatters_fx = "all"
++        torch._inductor.config.bucket_reduce_scatters_fx_bucket_size_determinator = lambda bucket_id: 1000.0
++
+         # torch >= ~2.13: enabling the overlap machinery activates an SPMD
+         # graph-consistency check that issues a WORLD-group all_gather_object at
+         # compile time. Pipeline parallelism is non-SPMD (stages compile different
