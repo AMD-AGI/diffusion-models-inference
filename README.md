@@ -24,6 +24,7 @@ The current xDiT benchmark configurations include:
 | HunyuanVideo | `tencent/HunyuanVideo` |
 | HunyuanVideo 1.5 | `hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v` |
 | LTX-2.3 | `dg845/LTX-2.3-Diffusers` |
+| MiniMax-H3 | `MiniMaxAI/MiniMax-H3` |
 | Qwen-Image | `Qwen/Qwen-Image-2512` |
 | Qwen-Image-Edit | `Qwen/Qwen-Image-Edit` |
 | Stable Diffusion 3.5 | `stabilityai/stable-diffusion-3.5-large` |
