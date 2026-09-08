@@ -1,0 +1,601 @@
+diff --git a/xfuser/config/args.py b/xfuser/config/args.py
+index 7402250..f50edfa 100644
+--- a/xfuser/config/args.py
++++ b/xfuser/config/args.py
+@@ -90,6 +90,8 @@ class xFuserArgs:
+     # sequence parallel
+     shard_dit: Optional[bool] = False
+     ulysses_degree: Optional[int] = 1
++    ulysses_all_to_all_backend: str = "rccl"
++    ulysses_overlap_scheduler: str = "legacy"
+     ring_degree: Optional[int] = 1
+     # tensor parallel
+     tensor_parallel_degree: int = 1
+@@ -271,6 +273,18 @@ class xFuserArgs:
+             default=1,
+             help="Ulysses sequence parallel degree. Used in attention layer.",
+         )
++        parallel_group.add_argument(
++            "--ulysses_all_to_all_backend",
++            choices=("rccl", "flydsl"),
++            default="rccl",
++            help="Backend for Ulysses all-to-all communication.",
++        )
++        parallel_group.add_argument(
++            "--ulysses_overlap_scheduler",
++            choices=("legacy", "aten"),
++            default="legacy",
++            help="Inductor communication-overlap scheduler used by the FlyDSL backend.",
++        )
+         parallel_group.add_argument(
+             "--ring_degree",
+             type=int,
+@@ -496,6 +510,18 @@ class xFuserArgs:
+             default=1,
+             help="Ulysses sequence parallel degree. Used in attention layer.",
+         )
++        parser.add_argument(
++            "--ulysses_all_to_all_backend",
++            choices=("rccl", "flydsl"),
++            default="rccl",
++            help="Backend for Ulysses all-to-all communication.",
++        )
++        parser.add_argument(
++            "--ulysses_overlap_scheduler",
++            choices=("legacy", "aten"),
++            default="legacy",
++            help="Inductor communication-overlap scheduler used by the FlyDSL backend.",
++        )
+         parser.add_argument(
+             "--ring_degree",
+             type=int,
+@@ -912,6 +938,8 @@ class xFuserArgs:
+             ),
+             sp_config=SequenceParallelConfig(
+                 ulysses_degree=self.ulysses_degree,
++                all_to_all_backend=self.ulysses_all_to_all_backend,
++                overlap_scheduler=self.ulysses_overlap_scheduler,
+                 ring_degree=self.ring_degree,
+                 shard_dit=self.shard_dit,
+                 dit_parallel_size=self.dit_parallel_size,
+diff --git a/xfuser/config/config.py b/xfuser/config/config.py
+index b80352f..62f42ef 100644
+--- a/xfuser/config/config.py
++++ b/xfuser/config/config.py
+@@ -117,11 +117,21 @@ class DataParallelConfig:
+ @dataclass
+ class SequenceParallelConfig:
+     ulysses_degree: Optional[int] = None
++    all_to_all_backend: str = "rccl"
++    overlap_scheduler: str = "legacy"
+     ring_degree: Optional[int] = None
+     shard_dit: bool = False
+     dit_parallel_size: int = 1
+ 
+     def __post_init__(self):
++        if self.all_to_all_backend not in {"rccl", "flydsl"}:
++            raise ValueError(
++                f"unsupported Ulysses all-to-all backend: {self.all_to_all_backend}"
++            )
++        if self.overlap_scheduler not in {"legacy", "aten"}:
++            raise ValueError(
++                f"unsupported Ulysses overlap scheduler: {self.overlap_scheduler}"
++            )
+         if self.ulysses_degree is None:
+             self.ulysses_degree = 1
+             logger.info(
+diff --git a/xfuser/core/distributed/runtime_state.py b/xfuser/core/distributed/runtime_state.py
+index e8ea00b..c270a00 100644
+--- a/xfuser/core/distributed/runtime_state.py
++++ b/xfuser/core/distributed/runtime_state.py
+@@ -106,6 +106,10 @@ class RuntimeState(metaclass=ABCMeta):
+             )
+ 
+     def destroy_distributed_env(self):
++        if self.parallel_config.sp_config.all_to_all_backend == "flydsl":
++            from xfuser.model_executor.layers.ulysses_flydsl import reset_all_to_all
++
++            reset_all_to_all()
+         if model_parallel_is_initialized():
+             destroy_model_parallel()
+         destroy_distributed_environment()
+@@ -1034,3 +1038,11 @@ def initialize_runtime_state(pipeline: Optional[DiffusionPipeline] = None, engin
+     elif not pipeline:
+         _RUNTIME = ExternalRuntimeState()
+ 
++    if engine_config is not None:
++        from xfuser.model_executor.layers.usp import configure_ulysses_all_to_all
++
++        sequence_config = engine_config.parallel_config.sp_config
++        configure_ulysses_all_to_all(
++            sequence_config.all_to_all_backend,
++            sequence_config.overlap_scheduler,
++        )
+diff --git a/xfuser/model_executor/layers/ulysses_flydsl.py b/xfuser/model_executor/layers/ulysses_flydsl.py
+new file mode 100644
+index 0000000..73fa6aa
+--- /dev/null
++++ b/xfuser/model_executor/layers/ulysses_flydsl.py
+@@ -0,0 +1,381 @@
++from __future__ import annotations
++
++import threading
++from dataclasses import dataclass
++
++import torch
++import torch.distributed as dist
++import torch.distributed._symmetric_memory as symm_mem
++
++import flydsl.compiler as flyc
++import flydsl.expr as fx
++
++
++@flyc.kernel
++def copy_chunk_kernel(
++    source: fx.Tensor,
++    destination: fx.Tensor,
++    source_offset: fx.Int32,
++    destination_offset: fx.Int32,
++    count: fx.Int32,
++):
++    source = fx.rocdl.make_buffer_tensor(source)
++    destination = fx.rocdl.make_buffer_tensor(destination)
++    index = fx.block_idx.x * 256 + fx.thread_idx.x
++    if index < count:
++        destination[destination_offset + index] = source[source_offset + index]
++
++
++@flyc.jit
++def launch_copy_chunk(
++    source: fx.Tensor,
++    destination: fx.Tensor,
++    source_offset: fx.Int32,
++    destination_offset: fx.Int32,
++    count: fx.Int32,
++    stream: fx.Stream = fx.Stream(None),
++):
++    copy_chunk_kernel(
++        source,
++        destination,
++        source_offset,
++        destination_offset,
++        count,
++    ).launch(
++        grid=((count + 255) // 256, 1, 1),
++        block=(256, 1, 1),
++        stream=stream,
++    )
++
++
++@dataclass
++class _PendingLaunch:
++    event: torch.cuda.Event
++    stream: torch.cuda.Stream
++
++
++_state_lock = threading.Lock()
++_pending: dict[int, _PendingLaunch] = {}
++
++
++def _storage_key(tensor: torch.Tensor) -> int:
++    return tensor.untyped_storage().data_ptr()
++
++
++class FlyDSLAllToAll:
++    """Single-node, equal-split all-to-all using FlyDSL peer-memory copies."""
++
++    def __init__(
++        self,
++        group: dist.ProcessGroup,
++        capacity: int,
++        dtype: torch.dtype,
++        device: torch.device,
++    ) -> None:
++        if capacity <= 0:
++            raise ValueError("capacity must be positive")
++
++        self.group_name = group.group_name
++        self.rank = dist.get_rank(group)
++        self.world_size = dist.get_world_size(group)
++        self.capacity = capacity
++        self.dtype = dtype
++        self.device = torch.device(device)
++        self.stream = torch.cuda.Stream(device=self.device)
++        self._launch_lock = threading.Lock()
++
++        if not symm_mem.is_symm_mem_enabled_for_group(self.group_name):
++            symm_mem.enable_symm_mem_for_group(self.group_name)
++        self.workspace = symm_mem.empty(
++            capacity,
++            dtype=dtype,
++            device=self.device,
++        )
++        self.handle = symm_mem.rendezvous(self.workspace, group)
++        self.peer_buffers = [
++            self.handle.get_buffer(peer_rank, (capacity,), dtype)
++            for peer_rank in range(self.world_size)
++        ]
++
++    def launch(self, source: torch.Tensor) -> torch.Tensor:
++        if source.device != self.device:
++            raise ValueError(f"expected source on {self.device}, got {source.device}")
++        if source.dtype != self.dtype:
++            raise ValueError(f"expected source dtype {self.dtype}, got {source.dtype}")
++        if source.ndim != 1 or not source.is_contiguous():
++            raise ValueError("FlyDSL all-to-all expects a contiguous flat tensor")
++        if source.numel() > self.capacity:
++            raise ValueError(
++                f"input has {source.numel()} elements, capacity is {self.capacity}"
++            )
++        if source.numel() % self.world_size != 0:
++            raise ValueError("input numel must be divisible by the group size")
++
++        output = torch.empty_like(source)
++        self.stream.wait_stream(torch.cuda.current_stream(self.device))
++        source.record_stream(self.stream)
++        output.record_stream(self.stream)
++        chunk_numel = source.numel() // self.world_size
++
++        with self._launch_lock, torch.cuda.stream(self.stream):
++            launch_copy_chunk(
++                source,
++                self.peer_buffers[self.rank],
++                0,
++                0,
++                source.numel(),
++                self.stream,
++            )
++            self.handle.barrier()
++
++            for source_rank, peer_buffer in enumerate(self.peer_buffers):
++                launch_copy_chunk(
++                    peer_buffer,
++                    output,
++                    self.rank * chunk_numel,
++                    source_rank * chunk_numel,
++                    chunk_numel,
++                    self.stream,
++                )
++
++            self.handle.barrier()
++            completion = torch.cuda.Event()
++            completion.record(self.stream)
++
++        with _state_lock:
++            _pending[_storage_key(output)] = _PendingLaunch(
++                completion,
++                self.stream,
++            )
++        return output
++
++
++_collectives_lock = threading.Lock()
++_collectives: dict[tuple[str, torch.dtype], FlyDSLAllToAll] = {}
++_groups: dict[str, dist.ProcessGroup] = {}
++
++
++def register_process_group(group: dist.ProcessGroup) -> str:
++    group_name = str(group.group_name)
++    with _collectives_lock:
++        registered = _groups.get(group_name)
++        if registered is not None and registered is not group:
++            raise RuntimeError(
++                f"a different process group is already registered as {group_name}"
++            )
++        _groups[group_name] = group
++    return group_name
++
++
++def reset_all_to_all() -> None:
++    with _state_lock:
++        if _pending:
++            raise RuntimeError("cannot reset FlyDSL all-to-all with pending work")
++    with _collectives_lock:
++        for collective in _collectives.values():
++            collective.stream.synchronize()
++        _collectives.clear()
++        _groups.clear()
++
++
++def _get_collective(
++    source: torch.Tensor,
++    group_name: str,
++) -> FlyDSLAllToAll:
++    key = (group_name, source.dtype)
++    with _collectives_lock:
++        collective = _collectives.get(key)
++        if collective is None or collective.capacity < source.numel():
++            try:
++                group = _groups[group_name]
++            except KeyError as error:
++                raise RuntimeError(
++                    f"process group {group_name} is not registered"
++                ) from error
++            collective = FlyDSLAllToAll(
++                group,
++                source.numel(),
++                source.dtype,
++                source.device,
++            )
++            _collectives[key] = collective
++    return collective
++
++
++@torch.library.custom_op(
++    "xfuser::ulysses_all_to_all_launch",
++    mutates_args=(),
++    device_types="cuda",
++)
++def all_to_all_launch(
++    source: torch.Tensor,
++    group_name: str,
++) -> torch.Tensor:
++    return _get_collective(source, group_name).launch(source)
++
++
++@all_to_all_launch.register_fake
++def _all_to_all_launch_fake(
++    source: torch.Tensor,
++    group_name: str,
++) -> torch.Tensor:
++    return torch.empty_like(source)
++
++
++@torch.library.custom_op(
++    "xfuser::ulysses_all_to_all_wait",
++    mutates_args=(),
++    device_types="cuda",
++)
++def wait(tensor: torch.Tensor) -> torch.Tensor:
++    with _state_lock:
++        pending = _pending.pop(_storage_key(tensor))
++    torch.cuda.current_stream(tensor.device).wait_event(pending.event)
++    return tensor.clone()
++
++
++@wait.register_fake
++def _wait_fake(tensor: torch.Tensor) -> torch.Tensor:
++    return torch.empty_like(tensor)
++
++
++@torch.library.custom_op(
++    "xfuser::ulysses_all_to_all_aten_launch",
++    mutates_args=(),
++    device_types="cuda",
++)
++def all_to_all_aten_launch(
++    source: torch.Tensor,
++    group_name: str,
++) -> torch.Tensor:
++    output = all_to_all_launch(source, group_name)
++    with _state_lock:
++        pending = _pending.pop(_storage_key(output))
++
++    from torch._C._distributed_c10d import PythonCallbackWork, _register_work
++
++    def wait_for_event(timeout) -> bool:
++        pending.event.wait()
++        return True
++
++    _register_work(output, PythonCallbackWork(wait_for_event))
++    return output
++
++
++@all_to_all_aten_launch.register_fake
++def _all_to_all_aten_launch_fake(
++    source: torch.Tensor,
++    group_name: str,
++) -> torch.Tensor:
++    return torch.empty_like(source)
++
++
++def _register_inductor_lowerings() -> None:
++    from torch._inductor import ir
++    from torch._inductor.lowering import (
++        add_layout_constraint,
++        constrain_to_fx_strides,
++        register_lowering,
++    )
++
++    legacy_op = torch.ops.xfuser.ulysses_all_to_all_launch.default
++    aten_op = torch.ops.xfuser.ulysses_all_to_all_aten_launch.default
++    wait_op = torch.ops.xfuser.ulysses_all_to_all_wait.default
++    add_layout_constraint(legacy_op, constrain_to_fx_strides)
++    add_layout_constraint(aten_op, constrain_to_fx_strides)
++    add_layout_constraint(wait_op, constrain_to_fx_strides)
++
++    @register_lowering(legacy_op)
++    def lower_all_to_all(
++        source: ir.TensorBox,
++        group_name: str,
++    ) -> ir.TensorBox:
++        node = ir._CollectiveKernel.create_out_of_place(
++            legacy_op,
++            source,
++            group_name,
++        )
++        return ir.TensorBox.create(node)
++
++    @register_lowering(aten_op)
++    def lower_all_to_all_aten(
++        source: ir.TensorBox,
++        group_name: str,
++    ) -> ir.TensorBox:
++        node = ir._CollectiveKernel.create_out_of_place(
++            aten_op,
++            source,
++            group_name,
++        )
++        return ir.TensorBox.create(node)
++
++    @register_lowering(wait_op)
++    def lower_wait(tensor: ir.TensorBox) -> ir.TensorBox:
++        ir._WaitKernel.create_wait(wait_op, tensor)
++        return tensor
++
++
++_register_inductor_lowerings()
++
++
++def all_to_all_single(
++    source: torch.Tensor,
++    group_name: str,
++) -> torch.Tensor:
++    return wait(all_to_all_launch(source, group_name))
++
++
++def all_to_all_single_aten(
++    source: torch.Tensor,
++    group_name: str,
++) -> torch.Tensor:
++    launched = all_to_all_aten_launch(source, group_name)
++    return torch.ops._c10d_functional.wait_tensor.default(launched)
++
++
++def _estimate_legacy_runtime(scheduler_node) -> float:
++    op = getattr(scheduler_node.node, "op_overload", None)
++    if op is torch.ops.xfuser.ulysses_all_to_all_launch.default:
++        return 1_000_000.0
++    if op is torch.ops.xfuser.ulysses_all_to_all_wait.default:
++        return 0.0
++    return scheduler_node.get_estimated_runtime()
++
++
++def configure_legacy_inductor_overlap() -> None:
++    passes = [
++        "reorder_communication_preserving_peak_memory",
++        "sink_waits_iterative",
++        "reorder_communication_preserving_peak_memory",
++    ]
++
++    torch._inductor.config.reorder_for_compute_comm_overlap = True
++    torch._inductor.config.reorder_for_compute_comm_overlap_passes = passes
++    torch._inductor.config.estimate_op_runtime = _estimate_legacy_runtime
++    options = torch._inductor.config.aten_distributed_optimizations
++    options.enable_overlap_scheduling = False
++    if hasattr(options, "enable_simple_overlap"):
++        options.enable_simple_overlap = False
++
++
++def _estimate_aten_runtime(fx_node, override_size=None) -> float | None:
++    if (
++        fx_node.target
++        is torch.ops.xfuser.ulysses_all_to_all_aten_launch.default
++    ):
++        return 1.0
++    return None
++
++
++def configure_aten_inductor_overlap() -> None:
++    torch._inductor.config.reorder_for_compute_comm_overlap = False
++    torch._inductor.config.reorder_for_compute_comm_overlap_passes = []
++
++    options = torch._inductor.config.aten_distributed_optimizations
++    if hasattr(options, "enable_simple_overlap"):
++        options.enable_simple_overlap = False
++    options.enable_overlap_scheduling = True
++    options.insert_overlap_deps = True
++    options.custom_runtime_estimation = _estimate_aten_runtime
++    options.compute_estimator = "analytical"
++    options.pre_bucketing_fsdp_collectives = False
+diff --git a/xfuser/model_executor/layers/usp.py b/xfuser/model_executor/layers/usp.py
+index 911c684..b1be102 100644
+--- a/xfuser/model_executor/layers/usp.py
++++ b/xfuser/model_executor/layers/usp.py
+@@ -42,6 +42,48 @@ _HEAD_BALANCE_BACKENDS = frozenset({
+     AttentionBackendType.FLEX_BLOCK_SPARGE,
+ })
+ 
++_ALL_TO_ALL_BACKEND = "rccl"
++_FLYDSL_ALL_TO_ALL = None
++_FLYDSL_GROUP_NAME = None
++
++
++def configure_ulysses_all_to_all(
++    backend: str,
++    overlap_scheduler: str = "legacy",
++) -> None:
++    global _ALL_TO_ALL_BACKEND, _FLYDSL_ALL_TO_ALL, _FLYDSL_GROUP_NAME
++
++    if backend == "rccl":
++        _ALL_TO_ALL_BACKEND = backend
++        _FLYDSL_ALL_TO_ALL = None
++        _FLYDSL_GROUP_NAME = None
++        return
++    if backend != "flydsl":
++        raise ValueError(f"unsupported Ulysses all-to-all backend: {backend}")
++    if overlap_scheduler not in {"legacy", "aten"}:
++        raise ValueError(f"unsupported Ulysses overlap scheduler: {overlap_scheduler}")
++    if PROCESS_GROUP is None or PROCESS_GROUP.ULYSSES_PG is None:
++        raise RuntimeError("the Ulysses process group must be initialized first")
++
++    from xfuser.model_executor.layers.ulysses_flydsl import (
++        all_to_all_single,
++        all_to_all_single_aten,
++        configure_aten_inductor_overlap,
++        configure_legacy_inductor_overlap,
++        register_process_group,
++    )
++
++    _FLYDSL_GROUP_NAME = register_process_group(PROCESS_GROUP.ULYSSES_PG)
++    if overlap_scheduler == "aten":
++        _FLYDSL_ALL_TO_ALL = all_to_all_single_aten
++        configure_aten_inductor_overlap()
++    else:
++        _FLYDSL_ALL_TO_ALL = all_to_all_single
++        configure_legacy_inductor_overlap()
++    _ALL_TO_ALL_BACKEND = backend
++
+ 
+ def ring_attn(attention_function, query, key, value, dropout_p=0.0, is_causal=False, joint_attn_kwargs=None, attention_kwargs=None):
+     kwargs = {
+@@ -87,8 +129,18 @@ def _maybe_wait(tensor: torch.Tensor) -> torch.Tensor:
+ def _sdpa_all_to_all_single(x):
+     x_shape = x.shape
+     x = x.flatten()
+-    x = ft_c.all_to_all_single(x, output_split_sizes=None, input_split_sizes=None, group=PROCESS_GROUP.ULYSSES_PG)
+-    x = _maybe_wait(x)
++    if _ALL_TO_ALL_BACKEND == "flydsl":
++        if _FLYDSL_ALL_TO_ALL is None or _FLYDSL_GROUP_NAME is None:
++            raise RuntimeError("the FlyDSL all-to-all backend is not configured")
++        x = _FLYDSL_ALL_TO_ALL(x, _FLYDSL_GROUP_NAME)
++    else:
++        x = ft_c.all_to_all_single(
++            x,
++            output_split_sizes=None,
++            input_split_sizes=None,
++            group=PROCESS_GROUP.ULYSSES_PG,
++        )
++        x = _maybe_wait(x)
+     x = x.reshape(x_shape)
+     return x
+ 
+@@ -390,4 +442,3 @@ def attention(
+         attention_kwargs=attention_kwargs,
+     )
+     return out
+-
+diff --git a/xfuser/model_executor/models/runner_models/base_model.py b/xfuser/model_executor/models/runner_models/base_model.py
+index 1c48cb0..4b7db62 100644
+--- a/xfuser/model_executor/models/runner_models/base_model.py
++++ b/xfuser/model_executor/models/runner_models/base_model.py
+@@ -414,7 +414,18 @@ class xFuserModel(abc.ABC):
+         """Enables compute-communication overlap for the model while caring for
+         pipeline-parallel models that don't respect the SPMD assumption and could
+         deadlock in torch's compiler spmd_check()."""
+-        torch._inductor.config.reorder_for_compute_comm_overlap = True
++        sequence_config = self.engine_config.parallel_config.sp_config
++        if (
++            sequence_config.all_to_all_backend == "flydsl"
++            and sequence_config.overlap_scheduler == "aten"
++        ):
++            from xfuser.model_executor.layers.ulysses_flydsl import (
++                configure_aten_inductor_overlap,
++            )
++
++            configure_aten_inductor_overlap()
++        else:
++            torch._inductor.config.reorder_for_compute_comm_overlap = True
+ 
+         # torch >= ~2.13: enabling the overlap machinery activates an SPMD
+         # graph-consistency check that issues a WORLD-group all_gather_object at
