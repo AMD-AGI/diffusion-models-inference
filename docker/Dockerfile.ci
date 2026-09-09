@@ -233,6 +233,13 @@ ARG PYTORCH_VISION_COMMIT
 ARG PYTORCH_AUDIO_COMMIT
 ARG PYTORCH_CODEC_COMMIT
 ARG PYTORCH_ROCM_ARCH
+ARG DEBIAN_FRONTEND=noninteractive
+
+# CPU BLAS headers for the PyTorch wheel. Runtime libs are installed in core.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    libopenblas-dev \
+    pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
 # TheRock is only needed for external-builds/pytorch checkout scripts.
 WORKDIR /app
@@ -378,14 +385,18 @@ FROM rocm_devel AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
-# torchcodec: install FFmpeg and runtime dependencies
+# Runtime libs for torchcodec/FFmpeg, OpenBLAS-linked torch, and OpenCV/GLib.
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
   libass9 \
   libdav1d7 \
   libfreetype6 \
+  libgfortran5 \
+  libgl1 \
+  libglib2.0-0t64 \
   libgnutls30 \
   libmp3lame0 \
+  libopenblas0 \
   libopenh264-7 \
   libvorbis0a \
   libvorbisenc2 \
