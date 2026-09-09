@@ -403,6 +403,10 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
+# Held in core rather than final so that no stage downstream of core has an edge
+# back into a builder stage.
+COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/torch-build-sources
+COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
@@ -512,7 +516,6 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --scan-root python=/venv \
     --scan-root rocm=/opt/rocm \
     --scan-root local=/usr/local \
-    --evidence-root rocm-build-sources=/opt/license-evidence/rocm-build-sources \
     --evidence-root torch-build-sources=/opt/license-evidence/torch-build-sources \
     --evidence-root ffmpeg-build-sources=/opt/license-evidence/ffmpeg-build-sources \
     --git-root /app \
