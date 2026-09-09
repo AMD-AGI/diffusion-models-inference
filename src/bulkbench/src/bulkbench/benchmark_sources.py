@@ -2,7 +2,7 @@
 
 import os
 
-from .bulkbench import EAGER_GROUP_PREFIX
+from .benchmark_plan_loader import EAGER_GROUP_PREFIX
 
 _TIMINGS_FILENAME = "timings.json"
 _ALT_DELIMITER = "|"
@@ -79,7 +79,7 @@ def get_benchmark_sources(
     """Return ``(benchmark name, result directory)`` pairs for the directories under ``fpath``.
 
     When ``ignore_eager`` is true, omit nested result directories whose immediate
-    parent name starts with ``eager_``  (``bulkbench.EAGER_GROUP_PREFIX``).
+    parent name starts with ``eager_``  (``benchmark_plan_loader.EAGER_GROUP_PREFIX``).
     """
     fpath = os.fspath(fpath)
 

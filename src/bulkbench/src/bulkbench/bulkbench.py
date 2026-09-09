@@ -30,6 +30,64 @@ from .benchmark_plan_loader import (
 )
 from .script_runner import run_with_script
 
+
+# We're going to try to lazily import determinism_check_results() from xfuser.
+# It's ok if it fails, since absence of the check shouldn't break the workflow
+# Additionally, creating hard dependency on xFuser requires pyproject.toml
+# modification and that would make it install xfuser and all its heavy
+# dependencies. That would break lightweightness of the bulkbench and won't allow
+# to use `parser_JSON.py` to analyze the results of the benchmarks independently
+# of heavy dependencies of xfuser, pytorch & etc.
+def import_xfuser_determinism_check_results(console: LoggingConsole):
+    """Imports the determinism check results functions from xfuser.
+    That roundtrip is necessary instead of a simple
+
+    ```
+    from xfuser.core.utils.determinism_check_results import (
+        determinism_check_results,
+        readable_bytes,
+    )
+    ```
+
+    to avoid importing all parent modules of xfuser, that typically import pytorch,
+    which takes a long time and could produce lot's of spam to the console.
+    """
+    import importlib.util
+
+    determinism_check_results, readable_bytes = None, None
+    suberror = "Report on determinism check results will not be available."
+
+    try:
+        package = importlib.util.find_spec("xfuser")
+        if package is not None:
+            package_dir = Path(next(iter(package.submodule_search_locations)))
+            path = package_dir / "core/utils/determinism_check_results.py"
+
+            spec = importlib.util.spec_from_file_location(
+                "_xfuser_core_utils_determinism_check_results", path
+            )
+            if spec is not None:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                determinism_check_results, readable_bytes = (
+                    module.determinism_check_results,
+                    module.readable_bytes,
+                )
+            else:
+                console.error(
+                    "xfuser.core.utils.determinism_check_results module spec not found.", suberror
+                )
+        else:
+            console.error("xfuser package not found.", suberror)
+    except Exception as exc:  # ruff: ignore[blind-except]
+        console.error("Error importing xfuser determinism check results.", suberror, exc)
+
+    return determinism_check_results, readable_bytes
+
+
+determinism_check_results, readable_bytes = None, None
+
+
 DEFAULT_CONSOLE_LOG_LEVEL = LoggingConsole.LogLevel.Info
 DEFAULT_RESULTS_SUBDIR = "results"
 DEFAULT_REPORT_SUBDIR = "report"
@@ -153,6 +211,14 @@ class BulkBench:
 
         self.Con = _validatedConsole(_get_arg("console"), _get_arg("console_log_level"))
         self.Con.trace(f"Console log level: {self.Con.log_level}")
+
+        global determinism_check_results, readable_bytes
+        if determinism_check_results is None:
+            determinism_check_results, readable_bytes = import_xfuser_determinism_check_results(
+                self.Con
+            )
+            if readable_bytes is None:
+                readable_bytes = lambda x: f"{x} bytes"
 
         self.regenerate_results = _get_arg("regenerate_results", False)
         assert isinstance(self.regenerate_results, bool), "regenerate_results must be a boolean"
@@ -455,7 +521,7 @@ class BulkBench:
         n_successful_groups = sum(len(r) for r in self.successful_runs.values())
         n_configs_run = sum(len(c) for r in self.successful_runs.values() for (_, _, c) in r)
         if n_configs_run:
-            # dict[str, list[tuple[str, float, list[str]]]]            
+            # dict[str, list[tuple[str, float, list[str]]]]
             self.Con.info(
                 n_successful_groups,
                 "groups,",
@@ -473,7 +539,11 @@ class BulkBench:
                     ),
                 )
         else:
-            self.Con.info("All", n_successful_groups, "groups didn't actually run due to results already present.")
+            self.Con.info(
+                "All",
+                n_successful_groups,
+                "groups didn't actually run due to results already present.",
+            )
 
         n_unsuccessful_groups = sum(len(r) for r in self.unsuccessful_runs.values())
         if n_unsuccessful_groups:
@@ -491,9 +561,11 @@ class BulkBench:
             for patch_set_name, data in self.unsuccessful_runs.items():
                 if len(data) > 0:
                     self.Con.warning(
-                        f"  in patch set '{patch_set_name}' these", len(data), "config groups failed:"
+                        f"  in patch set '{patch_set_name}' these",
+                        len(data),
+                        "config groups failed:",
                     )
-                    for (run_result, duration) in data:
+                    for run_result, duration in data:
                         assert isinstance(run_result, GroupFailureCapture)
                         self.Con.error(
                             f"    '{run_result.group_name}' ({_formatDuration(duration)}, "
@@ -501,6 +573,22 @@ class BulkBench:
                             f"Got return code {run_result.returncode}",
                         )
                         self.Con.debug(f"Registered output:\n{run_result.output}")
+
+        if determinism_check_results is not None:
+            det_check = determinism_check_results(self.results_dir)
+            if det_check:
+                self.Con.warning(f"Following {len(det_check)} configs failed determinism check:")
+                total_size = 0
+                for path, (failed_checks, failed_size) in det_check.items():
+                    total_size += failed_size
+                    self.Con.warning(
+                        f"  {path}: {failed_checks} checks failed, {readable_bytes(failed_size)} is occupied by dumps"
+                    )
+                self.Con.warning(f"Total size of the dumps is {readable_bytes(total_size)}")
+        else:
+            self.Con.warning(
+                "Report on determinism check results is not be available dur to failed xFuser import."
+            )
         return n_unsuccessful_groups == 0  # all groups ran successfully
 
     def _areGroupsDisjoint(self) -> bool:
