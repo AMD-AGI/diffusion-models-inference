@@ -99,29 +99,16 @@ FROM base_os AS base
 ARG PYTHON_VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 
-# install depedencies
+# Shared fetch/compiler tools. Native extensions in core (AITER, torchao)
+# and the torch/ffmpeg builders still need a host toolchain.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    automake \
-    bison \
     build-essential \
     ca-certificates \
     cmake \
     curl \
-    flex \
-    freeglut3-dev \
-    gfortran \
     git \
-    libgfortran5 \
-    libgl1 \
-    libgl1-mesa-dev \
-    libglib2.0-dev \
-    libglu1-mesa-dev \
-    libopenblas-dev \
-    libtool \
     ninja-build \
-    texinfo \
-    wget \
-    xxd && \
+    wget && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
