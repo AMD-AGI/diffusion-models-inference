@@ -17,6 +17,24 @@ or ROCm release series. `ROCM_GFX_TARGETS` controls which architecture-specific
 package shards are installed and is independent of `PYTORCH_ROCM_ARCH`, which
 controls the architectures built into PyTorch and related wheels.
 
+ROCm is layered as three named stages (later layers add packages only):
+
+| Target | Packages | Use |
+| --- | --- | --- |
+| `rocm_runtime` | `amdrocm-core${ROCM_DEB_SERIES}-${gfx}` | Runtime libs and `hipcc` |
+| `rocm_runtime_jit` | plus `amdrocm-core-dev${ROCM_DEB_SERIES}-${gfx}` | Headers for AITER / Triton compile |
+| `rocm_devel` | plus developer-tools, RDC, OpenCL, blas/rccl tests | Parent of `core` / `final` / `build_torch_stack` |
+
+`--target core` and `--target final` still inherit `rocm_devel` (full tools and
+test debs). `rocm_runtime` and `rocm_runtime_jit` are ancestor cache layers and a
+placeholder for a leaner product image; they are not CI tags.
+
+A later lean cutover is: point `core` at `rocm_runtime_jit`. That drops
+developer-tools, RDC, OpenCL, and test debs from the shipped image, and the
+`deps` rocprofiler-compute pip install must move or go away with that parent.
+`build_torch_stack` can move to `rocm_runtime_jit` in the same change if torch
+rebuilds should no longer follow test/tool deb churn.
+
 The image does not build ROCm from source and does not support
 `rocm-libraries` or `rocm-systems` commit overrides. Changes that are not
 available in the pinned nightly must first be published in a nightly snapshot.
