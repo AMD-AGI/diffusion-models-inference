@@ -186,12 +186,12 @@ RUN python3 -m venv venv
 ENV PATH="/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 
-FROM base AS rocm_devel
+FROM base AS rocm_runtime
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS
 COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
-RUN chmod +x /usr/local/bin/install_rocm_debs && install_rocm_debs
+RUN chmod +x /usr/local/bin/install_rocm_debs && install_rocm_debs runtime
 # The amd-smi CLI is already at /opt/rocm/bin. The nightly deb ships the
 # Python package under /opt/rocm/share/amd_smi/amdsmi with no setup.py, so
 # pip cannot install it; symlink it into site-packages so `import amdsmi` works.
@@ -205,11 +205,25 @@ dest = Path(site.getsitepackages()[0]) / "amdsmi"
 dest.symlink_to(src)
 print(f"linked {src} -> {dest}")
 PY
-ENV PATH="/opt/rocm/libexec/rocprofiler-compute:/opt/rocm/bin:$PATH" \
+ENV PATH="/opt/rocm/bin:$PATH" \
     ROCM_HOME=/opt/rocm \
     ROCM_PATH=/opt/rocm \
     HIP_CLANG_PATH=/opt/rocm/lib/llvm/bin \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
+
+FROM rocm_runtime AS rocm_runtime_jit
+ARG ROCM_RELEASE_ID
+ARG ROCM_DEB_SERIES
+ARG ROCM_GFX_TARGETS
+RUN install_rocm_debs jit
+ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld
+
+FROM rocm_runtime_jit AS rocm_devel
+ARG ROCM_RELEASE_ID
+ARG ROCM_DEB_SERIES
+ARG ROCM_GFX_TARGETS
+RUN install_rocm_debs devel
+ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM rocm_devel AS build_torch_stack
 ARG THEROCK_COMMIT
@@ -359,6 +373,7 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
+# Lean cutover: change this parent to rocm_runtime_jit.
 FROM rocm_devel AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
@@ -384,8 +399,7 @@ COPY --from=ffmpeg_builder /ffmpeg/build/share /usr/local/share
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
     ldconfig
 COPY docker/libkineto.conf /config/libkineto.conf
-ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld \
-    KINETO_CONFIG="/config/libkineto.conf"
+ENV KINETO_CONFIG="/config/libkineto.conf"
 # install aiter
 WORKDIR /app/external
 # Keep the Triton wheel we built from TRITON_COMMIT against our PyTorch; otherwise
