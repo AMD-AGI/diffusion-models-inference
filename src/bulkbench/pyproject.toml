@@ -11,6 +11,10 @@ dependencies = [
     "benchstats==3.6.3",
     "PyYAML",
     "rich",
+    # also optionally depends on xfuser.core.utils.determinism_check_results, but if it's not
+    # available, simply print informational messages and skip the determinism report. This is
+    # needed to let anyone use `bulkbench.parser_JSON` to analyze results without heavy
+    # dependencies on xfuser, pytorch & etc.
 ]
 
 [project.scripts]
