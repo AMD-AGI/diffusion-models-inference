@@ -17,10 +17,10 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: True
-    enable_slicing: True
+    enable_tiling: true
+    enable_slicing: true
     guidance_scale: 6.0
-    use_torch_compile: True
+    use_torch_compile: true
     attention_backend: aiter
 
 - name: hunyuanvideo.default.hopper
@@ -39,10 +39,10 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: True
-    enable_slicing: True
+    enable_tiling: true
+    enable_slicing: true
     guidance_scale: 6.0
-    use_torch_compile: True
+    use_torch_compile: true
     attention_backend: flash_3
 
 - name: hunyuanvideo.default.blackwell
@@ -61,8 +61,8 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: True
-    enable_slicing: True
+    enable_tiling: true
+    enable_slicing: true
     guidance_scale: 6.0
-    use_torch_compile: True
+    use_torch_compile: true
     attention_backend: cudnn
