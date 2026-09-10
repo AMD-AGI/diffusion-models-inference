@@ -95,6 +95,7 @@ def parse_args() -> argparse.Namespace:
     )
     server.add_argument("--ulysses_degree", type=int, default=1)
     server.add_argument("--ring_degree", type=int, default=1)
+    server.add_argument("--text_encoder_tp_size", type=int)
     server.add_argument("--ulysses_mode", help="advanced_uaa enables uneven head/sequence shapes")
     server.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
     server.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
@@ -179,6 +180,8 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
         cmd += ["--usp", str(args.ulysses_degree)]
     if args.ring_degree > 1:
         cmd += ["--ring", str(args.ring_degree)]
+    if args.text_encoder_tp_size is not None:
+        cmd += ["--text-encoder-tp-size", str(args.text_encoder_tp_size)]
     if cfg_parallel > 1:
         cmd += ["--cfg-parallel-size", str(cfg_parallel)]
     if vae_parallel > 1:
