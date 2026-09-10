@@ -179,7 +179,7 @@
     num_iterations: 25
     attention_backend: cudnn
 
-- name: flux2.quantgemm_sageattn.gfx942
+- name: flux2.quantgemm_quantattn.gfx942
   tags: [release, instinct, gfx942]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
@@ -196,10 +196,10 @@
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: aiter_i8fp8
+    attention_backend: aiter_fp8
     use_fp8_gemms: true
 
-- name: flux2.quantgemm_sageattn.gfx950
+- name: flux2.quantgemm_quantattn.gfx950
   tags: [release, instinct, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
@@ -216,7 +216,7 @@
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: aiter_i8fp8
+    attention_backend: aiter_fp8
     use_fp4_gemms: true
 
 # TI2V 2K
