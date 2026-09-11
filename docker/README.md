@@ -61,3 +61,25 @@ delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping 
 docker build -f docker/Dockerfile.ci --target rocm_runtime . --progress=plain 2>&1 \
     | grep -i 'setup_amdsmi'
 ```
+
+### LLVM classic toolkit path
+
+`docker/setup_rocm_llvm_layout.sh` links `${ROCM_PATH}/lib/llvm/bin` tools into
+`${ROCM_PATH}/llvm/bin`. Nightly debs install `ld.lld` under `lib/llvm/bin` and
+leave `llvm/bin` as clang `.cfg` stubs; FlyDSL/MLIR still invoke
+`$ROCM_PATH/llvm/bin/ld.lld`. It runs in `rocm_runtime` after the ROCm `ENV`
+block, which also puts `lib/llvm/bin` on `PATH`.
+
+If a future nightly ships an executable `ld.lld` at the classic path, a build
+log prints a `setup_rocm_llvm_layout: RETIRE THIS SHIM` banner and the script
+makes no changes — delete it and its `COPY`/`RUN` at that point. Keep the
+`PATH=/opt/rocm/lib/llvm/bin` `ENV` unless the nightly also puts that directory
+on `PATH`. The shim can also be deleted if FlyDSL (or its bundled MLIR) stops
+looking for `$ROCM_PATH/llvm/bin/ld.lld` and uses `lib/llvm/bin`,
+`HIP_CLANG_PATH`, `TRITON_HIP_LLD_PATH`, or `PATH` instead; that will not
+print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
+
+```sh
+docker build -f docker/Dockerfile.ci --target rocm_runtime . --progress=plain 2>&1 \
+    | grep -i 'setup_rocm_llvm_layout'
+```

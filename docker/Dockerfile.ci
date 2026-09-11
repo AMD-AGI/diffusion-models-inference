@@ -189,19 +189,12 @@ ENV PATH="/opt/rocm/lib/llvm/bin:/opt/rocm/bin:$PATH" \
     ROCM_PATH=/opt/rocm \
     HIP_CLANG_PATH=/opt/rocm/lib/llvm/bin \
     HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
-# Nightly debs install the LLVM toolchain at lib/llvm/bin but leave
-# $ROCM_PATH/llvm/bin as a stub (cfg files only). FlyDSL/MLIR still
-# invoke $ROCM_PATH/llvm/bin/ld.lld when serializing GPU binaries.
-RUN llvm_bin="${ROCM_PATH}/lib/llvm/bin" && \
-    classic_bin="${ROCM_PATH}/llvm/bin" && \
-    mkdir -p "${classic_bin}" && \
-    for src in "${llvm_bin}"/*; do \
-        dest="${classic_bin}/$(basename "${src}")"; \
-        if [ -e "${src}" ] && [ ! -e "${dest}" ]; then \
-            ln -s "${src}" "${dest}"; \
-        fi; \
-    done && \
-    test -x "${classic_bin}/ld.lld"
+# Nightly debs leave $ROCM_PATH/llvm/bin as a stub; FlyDSL/MLIR still
+# invoke ld.lld there. Prints a RETIRE banner and does nothing once a
+# nightly ships that path itself. Also retire if FlyDSL stops looking
+# there. PATH is the ENV above, not this shim.
+COPY docker/setup_rocm_llvm_layout.sh /usr/local/bin/setup_rocm_llvm_layout
+RUN chmod +x /usr/local/bin/setup_rocm_llvm_layout && setup_rocm_llvm_layout
 
 FROM rocm_runtime AS rocm_runtime_jit
 ARG ROCM_RELEASE_ID
