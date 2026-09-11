@@ -44,3 +44,20 @@ To build and validate every stage locally without a GPU:
 ```sh
 docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 ```
+
+### amd-smi Python bindings
+
+`docker/setup_amdsmi.sh` links the ROCm Python bindings into the venv, because
+the nightly debs ship them under `${ROCM_HOME}/share/amd_smi/amdsmi` with no
+`setup.py`, where pip cannot install them and nothing can import them. It runs
+in `rocm_runtime`; the script header explains why a symlink is the only correct
+mechanism.
+
+If a future nightly puts the bindings on `sys.path` itself, a build log prints
+a `setup_amdsmi: RETIRE THIS SHIM` banner and the script makes no changes —
+delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping `ROCM_RELEASE_ID`:
+
+```sh
+docker build -f docker/Dockerfile.ci --target rocm_runtime . --progress=plain 2>&1 \
+    | grep -i 'setup_amdsmi'
+```
