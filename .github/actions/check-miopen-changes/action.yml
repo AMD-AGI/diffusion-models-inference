@@ -1,0 +1,34 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Check MIOpen Changes'
+description: 'Checks whether a change qualifies for automatic MIOpen retuning'
+
+inputs:
+  base_ref:
+    description: 'Base reference for comparison'
+    required: false
+    default: 'HEAD~1'
+  head_ref:
+    description: 'Head reference for comparison'
+    required: false
+    default: 'HEAD'
+
+outputs:
+  should_trigger:
+    description: 'Whether retuning should be triggered'
+    value: ${{ steps.check.outputs.should_trigger }}
+  changed_paths:
+    description: 'Qualifying path prefixes that changed'
+    value: ${{ steps.check.outputs.changed_paths }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check for MIOpen changes
+      id: check
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base_ref }}
+        HEAD_REF: ${{ inputs.head_ref }}
+      run: ${{ github.action_path }}/scripts/check-changes.sh
