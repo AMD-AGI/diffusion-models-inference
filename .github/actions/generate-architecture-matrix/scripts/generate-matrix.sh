@@ -24,8 +24,12 @@ for TAG in "${TAGS[@]}"; do
   TAG=$(echo "$TAG" | xargs)
   [ -z "$TAG" ] && continue
 
+  # Runner labels may carry a prefix (e.g. itt-gfx942); benchmark tag filtering
+  # only cares about the gfx identifier, if the label contains one.
+  GFX_ARCH=$(echo "$TAG" | grep -oE 'gfx[0-9a-z]+' | head -1 || true)
+
   if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
-  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"${TAG}\",\"runner\":\"${TAG}\",\"timeout\":${TIMEOUT}}"
+  MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"${TAG}\",\"runner\":\"${TAG}\",\"gfx_arch\":\"${GFX_ARCH}\",\"timeout\":${TIMEOUT}}"
   FIRST=false
 done
 
