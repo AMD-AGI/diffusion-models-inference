@@ -22,6 +22,7 @@ import pandas as pd
 
 from huggingface_hub import snapshot_download, scan_cache_dir, DryRunFileInfo
 
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.propagate = False
@@ -31,6 +32,52 @@ _handler.setFormatter(logging.Formatter(
     datefmt='%Y-%m-%d %H:%M:%S',
 ))
 logger.addHandler(_handler)
+
+
+def import_xfuser_determinism_check_results():
+    """Imports the determinism check results functions from xfuser.
+    That roundtrip is necessary instead of a simple
+
+    ```
+    from xfuser.core.utils.determinism_check_results import (
+        determinism_check_results,
+        readable_bytes,
+    )
+    ```
+
+    to avoid importing all parent modules of xfuser, that typically import pytorch,
+    which takes a long time and could produce lot's of spam to the console.
+    """
+    import importlib.util
+
+    determinism_check_results, readable_bytes = None, None
+    suberror = "Report on determinism check results will not be available."
+
+    try:
+        package = importlib.util.find_spec("xfuser")
+        if package is not None:
+            package_dir = Path(next(iter(package.submodule_search_locations)))
+            path = package_dir / "core/utils/determinism_check_results.py"
+
+            spec = importlib.util.spec_from_file_location("_xfuser_core_utils_determinism_check_results", path)
+            if spec is not None:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                determinism_check_results, readable_bytes = (
+                    module.determinism_check_results,
+                    module.readable_bytes,
+                )
+            else:
+                logger.warning("xfuser.core.utils.determinism_check_results module not found.", suberror)
+        else:
+            logger.warning("xfuser package not found.", suberror)
+    except Exception as exc:  # ruff: ignore[blind-except]
+        logger.warning("Error importing xfuser determinism check results.", suberror, exc)
+
+    return determinism_check_results, readable_bytes
+
+tried_import_xfuser_determinism_check_results = False
+determinism_check_results, readable_bytes = None, None # import_xfuser_determinism_check_results()
 
 
 @dataclass
@@ -165,8 +212,7 @@ def _filter_experiments_by_tags(experiments: List[Experiment], tags: List[str]) 
     experiments = [
         e for e in experiments
         if all(t in e.tags for t in tags)
-    ]   
-
+    ]
     return experiments
 
 
@@ -266,6 +312,63 @@ def _delete_model_cache(model: str, revision: Optional[str] = None, dry_run: boo
         logger.error(e, stack_info=True, exc_info=True)
 
 
+def _is_determinism_check_enabled(exp: Experiment) -> bool:
+    """Assuming that xFuser doesn't enable determinism check by default, and that the `exp.args`
+    has configuration arguments AND `--override-args-json` already merged, checks if the check
+    is enabled by the experiment config.
+    """
+    # global overrider
+    if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_REPORT", "1") == "1":
+        return True
+
+    ret = False
+    if (
+        "determinism_check" in exp.args
+        and exp.args["determinism_check"]
+        and (
+            (isinstance(exp.args["determinism_check"], str) and exp.args["determinism_check"].isdigit())
+            or isinstance(exp.args["determinism_check"], int)
+        )
+    ):
+        ret = int(exp.args["determinism_check"]) > 0
+
+    return ret
+
+
+def _report_determinism_check_results(exp: Experiment, benchmark_output_directory: Path) -> None:
+    global tried_import_xfuser_determinism_check_results, determinism_check_results, readable_bytes
+    if not tried_import_xfuser_determinism_check_results:
+        tried_import_xfuser_determinism_check_results = True
+        determinism_check_results, readable_bytes = import_xfuser_determinism_check_results()
+        if readable_bytes is None:
+            readable_bytes = lambda x: f"{x} bytes"  # noqa: E731
+
+    if determinism_check_results is None:  # import must have failed
+        return
+
+    try:
+        det_check = determinism_check_results(benchmark_output_directory)
+        if not isinstance(det_check, dict):
+            logger.error(f"Expected a dictionary in results report, got {type(det_check)}")
+            return
+        if 0 == len(det_check):
+            logger.info(f"Determinism checks passed for {exp.name}")
+            return
+
+        if 1 != len(det_check):
+            logger.error("Expected exactly one top-level directory in results report")
+        if "" in det_check:
+            res = det_check[""]
+            logger.warning(
+                f"Determinism check failed for {exp.name}: {res[0]} checks failed, "
+                f"{readable_bytes(res[1])} is occupied by dumps"
+            )
+        else:
+            logger.error("Results for the top-level directory not found. Skipping report.")
+    except Exception:  # ruff: ignore[blind-except]
+        logger.error("Error getting determinism check results.", exc_info=True)
+
+
 def _run_experiment(
     exp: Experiment,
     cmd: List[str],
@@ -302,9 +405,12 @@ def _run_experiment(
     if r.returncode != 0:
         logger.info(f"Experiment {exp.name} failed!")
         return False
-    else:
-        logger.info(f"Experiment: {exp.name} completed successfully.")
-        return True
+
+    if _is_determinism_check_enabled(exp):
+        _report_determinism_check_results(exp, benchmark_output_directory)
+
+    logger.info(f"Experiment: {exp.name} completed successfully.")
+    return True
 
 
 def _export_config(experiments: List[Experiment], export_config_path: str) -> None:
@@ -440,7 +546,7 @@ def command(e: Experiment, override_args: dict, override_runner: Optional[str] =
                 raise ValueError("num_gpus is required for torchrun runner")
             cmd = [
                 "torchrun",
-                f"--nproc_per_node={e.num_gpus}", 
+                f"--nproc_per_node={e.num_gpus}",
                 e.entrypoint
             ]
         else:
@@ -532,6 +638,16 @@ def main():
     preserve_original_state = not args.clear_model_cache and not args.no_clear_model_cache
     timing: Dict[str, Any] = {"download_model": {}, "experiments": []}
 
+    override_args = json.loads(args.override_args_json)
+    # assumes `override_args` aren't mutated in the loop below
+
+    if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_CHECK", "1") == "1":
+        if "determinism_check" not in override_args:
+            override_args["determinism_check"] = 1  # this will enable the check
+        if "determinism_check_report_ranks" not in override_args:
+            # but this will disable dumping files for failed checks
+            override_args["determinism_check_report_ranks"] = "none"
+
     for model_name, exps in experiments_per_model.items():
         logger.info(f"Running experiments for model: {model_name}")
 
@@ -546,8 +662,6 @@ def main():
             msg = f"Skipped experiments for {model_name}. Failed to download model. See logs for more details."
             errors.append(msg)
             continue
-
-        override_args = json.loads(args.override_args_json)
 
         for i, exp in enumerate(exps, 1):
             benchmark_output_directory = Path(args.results_directory) / exp.name
