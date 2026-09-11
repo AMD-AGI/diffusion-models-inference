@@ -346,7 +346,7 @@ RUN cd pytorch && \
     CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
     LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
-    python setup.py bdist_wheel && \
+    python -m build --wheel -vvv --no-isolation -o dist && \
     pip install dist/*.whl && \
     cp dist/*.whl /install
 # install vision
