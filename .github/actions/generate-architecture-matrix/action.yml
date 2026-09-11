@@ -4,8 +4,8 @@
 name: 'Generate Architecture Matrix'
 description: 'Generates matrix configuration for enabled architectures'
 inputs:
-  workflow_inputs:
-    description: 'JSON string of all workflow inputs'
+  gpu_runners:
+    description: 'Comma-separated list of GPU runner labels'
     required: true
 
 outputs:
@@ -20,5 +20,5 @@ runs:
       id: generate
       shell: bash
       env:
-        WORKFLOW_INPUTS: ${{ inputs.workflow_inputs }}
+        GPU_RUNNERS: ${{ inputs.gpu_runners }}
       run: ${{ github.action_path }}/scripts/generate-matrix.sh
