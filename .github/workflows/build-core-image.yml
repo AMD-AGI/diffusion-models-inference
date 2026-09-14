@@ -26,6 +26,15 @@ on:
         description: "Prebuilt core image tag (build untuned only)"
         required: false
         default: ""
+      force_trigger_tuning:
+        description: "Force trigger automatic MIOpen tuning"
+        type: boolean
+        required: false
+        default: false
+      gpu_runners:
+        description: "Comma-separated list of GPU runner labels used for MIOpen tuning"
+        required: false
+        default: 'gfx942,gfx950'
       disable_docker_cache:
         description: "Disable Docker cache on core build"
         type: boolean
@@ -60,6 +69,7 @@ jobs:
                 "tag": "${{ inputs.tag }}",
                 "runner": "${{ inputs.runner || 'build-only' }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
+                "force_trigger_tuning": "${{ inputs.force_trigger_tuning || 'false' }}",
                 "short_sha": "${{ steps.short_sha.outputs.sha }}"
               }
             }
@@ -80,3 +90,109 @@ jobs:
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  check-changes:
+    name: Check for MIOpen changes
+    runs-on: ubuntu-latest
+    if: ${{ inputs.force_trigger_tuning != true }}
+    outputs:
+      should_trigger: ${{ steps.check.outputs.should_trigger }}
+      changed_paths: ${{ steps.check.outputs.changed_paths }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Check for MIOpen changes
+        id: check
+        uses: ./.github/actions/check-miopen-changes
+
+  tuning-matrix:
+    name: Generate tuning matrix
+    needs: [check-changes, build-xdit-images]
+    runs-on: ubuntu-latest
+    if: |
+      !cancelled() &&
+      needs.build-xdit-images.result == 'success' &&
+      (
+        inputs.force_trigger_tuning == true ||
+        (github.ref_name == 'main' && needs.check-changes.outputs.should_trigger == 'true')
+      )
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Generate matrix
+        id: generate
+        uses: ./.github/actions/generate-architecture-matrix
+        with:
+          # Push events carry no inputs, so the dispatch default is repeated here.
+          gpu_runners: ${{ inputs.gpu_runners || 'gfx942,gfx950' }}
+
+      - name: Write tuning summary
+        uses: ./.github/actions/write-workflow-summary
+        with:
+          title: 'Automatic MIOpen tuning'
+          tables: |
+            {
+              "Trigger": {
+                "forced": "${{ inputs.force_trigger_tuning || 'false' }}",
+                "qualifying_paths": "${{ needs.check-changes.outputs.changed_paths }}",
+                "untuned_image": "${{ needs.build-xdit-images.outputs.staging_image_with_tag }}",
+                "gpu_runners": "${{ inputs.gpu_runners || 'gfx942,gfx950' }}"
+              }
+            }
+          code: |
+            {
+              "Matrix Configuration": ${{ toJSON(fromJSON(steps.generate.outputs.matrix)) }}
+            }
+
+  tune:
+    name: ${{ matrix.arch }} tuning
+    needs: [build-xdit-images, tuning-matrix]
+    if: ${{ !cancelled() && needs.tuning-matrix.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.tuning-matrix.outputs.matrix) }}
+    uses: ./.github/workflows/miopen-tune-reusable.yml
+    with:
+      git_ref: ${{ github.ref_name }}
+      image: ${{ needs.build-xdit-images.outputs.staging_image_with_tag }}
+      arch: ${{ matrix.arch }}
+      runner: ${{ matrix.runner }}
+      timeout_minutes: ${{ matrix.timeout }}
+      artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  create-miopen-branch:
+    name: Create MIOpen branch
+    needs: [tune]
+    runs-on: build-only
+    if: ${{ !cancelled() && needs.tune.result == 'success' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ github.token }}
+
+      - name: Download all MIOpen artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ github.run_number }}-miopen-*
+          merge-multiple: true
+          path: data/miopen/userdb
+
+      - name: Create MIOpen branch
+        uses: ./.github/actions/create-miopen-db-branch
+        with:
+          branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
+          run_number: ${{ github.run_number }}
+

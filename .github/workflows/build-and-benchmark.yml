@@ -225,7 +225,7 @@ jobs:
         id: generate
         uses: ./.github/actions/generate-architecture-matrix
         with:
-          workflow_inputs: ${{ toJSON(inputs) }}
+          gpu_runners: ${{ inputs.gpu_runners }}
       
       - name: Write matrix summary
         uses: ./.github/actions/write-workflow-summary

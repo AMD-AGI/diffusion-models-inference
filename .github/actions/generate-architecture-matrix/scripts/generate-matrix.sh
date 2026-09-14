@@ -4,10 +4,10 @@
 
 set -euo pipefail
 
-# Generate a GitHub Actions matrix JSON from workflow inputs.
-# Expects env var: WORKFLOW_INPUTS (JSON string with .gpu_runners comma-separated list)
+# Generate a GitHub Actions matrix JSON from a runner list.
+# Expects env var: GPU_RUNNERS (comma-separated list)
 
-GPU_RUNNERS=$(echo "$WORKFLOW_INPUTS" | jq -r '.gpu_runners // ""' | xargs)
+GPU_RUNNERS=$(echo "${GPU_RUNNERS:-}" | xargs)
 
 if [ -z "$GPU_RUNNERS" ]; then
   echo "Error: gpu_runners is empty"
