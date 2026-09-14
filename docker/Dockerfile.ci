@@ -201,6 +201,11 @@ ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS
 RUN install_rocm_debs jit
+# hipBLASLt's CMake config find_dependency(origami) next to hipblaslt;
+# nightly debs ship liborigami.so without lib/cmake/origami. Prints a
+# RETIRE banner and does nothing once a nightly ships that package.
+COPY docker/setup_origami_cmake.sh /usr/local/bin/setup_origami_cmake
+RUN chmod +x /usr/local/bin/setup_origami_cmake && setup_origami_cmake
 ENV TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld
 
 FROM rocm_runtime_jit AS rocm_devel

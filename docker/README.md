@@ -83,3 +83,25 @@ print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
 docker build -f docker/Dockerfile.ci --target rocm_runtime . --progress=plain 2>&1 \
     | grep -i 'setup_rocm_llvm_layout'
 ```
+
+### Origami CMake package
+
+`docker/setup_origami_cmake.sh` writes `${ROCM_HOME}/lib/cmake/origami/origami-config.cmake`
+so `find_package(hipblaslt)` can configure. hipBLASLt's installed package config
+requires `find_package(origami)` in a sibling `lib/cmake/origami` directory
+(`NO_DEFAULT_PATH`, so `CMAKE_PREFIX_PATH` does not help). Nightly debs ship
+`liborigami.so` in the BLAS host package but omit that CMake package from
+BLAS devel. It runs in `rocm_runtime_jit` after the `-dev` debs, which is when
+hipBLASLt's CMake files land. The script header explains why a stub imported
+target is the only correct mechanism.
+
+If a future nightly ships `origami-config.cmake` (or `origamiConfig.cmake`) next
+to hipBLASLt, a build log prints a `setup_origami_cmake: RETIRE THIS SHIM`
+banner and the script makes no changes — delete it and its `COPY`/`RUN` at that
+point. The shim can also be deleted if hipBLASLt stops `find_dependency(origami)`;
+that will not print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
+
+```sh
+docker build -f docker/Dockerfile.ci --target rocm_runtime_jit . --progress=plain 2>&1 \
+    | grep -i 'setup_origami_cmake'
+```
