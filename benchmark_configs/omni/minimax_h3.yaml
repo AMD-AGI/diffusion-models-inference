@@ -20,8 +20,7 @@
     ulysses_degree: 8
     text_encoder_tp_size: 8
     use_parallel_vae: true
-    enable_tiling: true
-    vae_parallel_mode: tile
+    use_torch_compile: true
     task_type: fl2va
     warmup_calls: 5
     num_iterations: 25
@@ -46,8 +45,7 @@
     ulysses_degree: 8
     text_encoder_tp_size: 8
     use_parallel_vae: true
-    enable_tiling: true
-    vae_parallel_mode: tile
+    use_torch_compile: true
     task_type: fl2va
     warmup_calls: 5
     num_iterations: 25
@@ -72,8 +70,7 @@
     ulysses_degree: 8
     text_encoder_tp_size: 8
     use_parallel_vae: true
-    enable_tiling: true
-    vae_parallel_mode: tile
+    use_torch_compile: true
     task_type: fl2va
     warmup_calls: 5
     num_iterations: 25
