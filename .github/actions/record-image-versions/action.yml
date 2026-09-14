@@ -1,0 +1,29 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Record image versions
+description: Record git HEAD and installed ROCm identity from a Docker image
+
+inputs:
+  image:
+    description: 'Docker image to inspect'
+    required: true
+  output_dir:
+    description: 'Directory for version artifacts'
+    required: false
+    default: 'versions'
+  container_name:
+    description: 'Temporary container name used for docker cp'
+    required: false
+    default: 'core'
+
+runs:
+  using: composite
+  steps:
+    - name: Record repository and ROCm versions
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        OUTPUT_DIR: ${{ inputs.output_dir }}
+        CONTAINER_NAME: ${{ inputs.container_name }}
+      run: ${{ github.action_path }}/scripts/record-versions.sh

@@ -267,10 +267,10 @@ jobs:
         with:
           run_number: ${{ github.run_number }}
       
-      - name: Record repository version
-        run: |
-          mkdir -p versions
-          git rev-parse HEAD > versions/repository.txt
+      - name: Record repository and ROCm versions
+        uses: ./.github/actions/record-image-versions
+        with:
+          image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
       
       - name: Upload version artifacts
         uses: actions/upload-artifact@v7
