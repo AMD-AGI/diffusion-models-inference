@@ -324,6 +324,7 @@ jobs:
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
           artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
+          miopen_workloads_artifact_name: ${{ github.run_number }}-miopen-workloads-${{ matrix.arch }}
       
       - name: Image cleanup
         if: always()
