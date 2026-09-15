@@ -79,7 +79,9 @@ runs:
       uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.artifact_name }}
-        path: ${{ inputs.output_dir }}/${{ inputs.arch }}/**
+        path: |
+          ${{ inputs.output_dir }}/${{ inputs.arch }}/**
+          !${{ inputs.output_dir }}/${{ inputs.arch }}/miopen_workloads/**
 
     - name: Upload MIOpen workload commands
       if: always()
