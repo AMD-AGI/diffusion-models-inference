@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: flux2_klein.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950, 350p]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, mi350p]
   model: black-forest-labs/FLUX.2-klein-9B
   runner: xdit
   args:

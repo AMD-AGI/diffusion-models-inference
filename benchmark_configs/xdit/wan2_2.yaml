@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: wan2_2.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950, 350p]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, mi350p]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -93,7 +93,7 @@
     attention_backend: aiter
 
 - name: wan2_2.quantgemm.gfx950 # MXFP4 only supported on gfx950
-  tags: [release, mad, lucid, instinct, gfx950, 350p]
+  tags: [release, mad, lucid, instinct, gfx950, mi350p]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -185,7 +185,7 @@
     attention_backend: aiter_fp8
 
 - name: wan2_2.quantgemm_quantattn.gfx950
-  tags: [release, mad, lucid, instinct, gfx950, 350p]
+  tags: [release, mad, lucid, instinct, gfx950, mi350p]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -282,7 +282,7 @@
     use_spargeattn_head_balance: true
 
 - name: wan2_2.quantgemm_sparseattn.gfx950
-  tags: [release, mad, lucid, instinct, gfx950, 350p]
+  tags: [release, mad, lucid, instinct, gfx950, mi350p]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
