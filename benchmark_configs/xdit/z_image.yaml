@@ -64,6 +64,7 @@
     guidance_scale: 4.0
     attention_backend: aiter_flydsl_fp8
     ulysses_degree: 2
+    use_fp8_comms: true
     use_torch_compile: true
     use_fp8_gemms: true
     cache_method: dbcache
