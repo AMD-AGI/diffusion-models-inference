@@ -1,427 +1,93 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Build and Benchmark xDiT
+# Benchmarks an already-built image on an external cluster. Informational only —
+# results do not feed tuning or optimisation work in this repository.
+name: Remote Benchmark
 
 on:
   workflow_dispatch:
     inputs:
-      git_branch:
-        description: 'Git branch to build from (optional)'
-        required: false
-        default: ''
-      prebuilt_core_image_tag:
-        description: 'Prebuilt core image tag (skips core build)'
-        required: false
-        default: ''
-      prebuilt_untuned_image_tag:
-        description: 'Prebuilt untuned image tag (skips core and untuned builds)'
-        required: false
-        default: ''
-      run_mode:
-        description: 'Workflow execution mode'
-        type: choice
-        options:
-          - 'Standard run'
-          - 'MIOpen tuning only'
-          - 'MIOpen tuning + benchmarking'
-        required: false
-        default: 'Standard run'
-      miopen_find_mode:
-        description: 'MIOpen find mode (integer)'
-        required: false
-        default: '1'
-      miopen_find_enforce:
-        description: 'MIOpen find enforce (integer)'
-        required: false
-        default: '3'
-      force_retuning:
-        description: 'Force full retuning (delete existing tuning databases before tuning)'
-        type: boolean
-        required: false
-        default: false
-      benchmark_flags:
-        description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
-        required: false
-        default: ''
-      collect_hipblaslt_logs:
-        description: 'Collect hipBLASLt GEMM logs per benchmark (adds runtime overhead, intended for ad-hoc GEMM tuning data collection only)'
-        type: boolean
-        required: false
-        default: false
       benchmark_image:
-        description: 'Image tag or full Docker Hub path for benchmark-only mode'
+        description: 'Image tag (short git SHA) or full staging image path to benchmark'
+        required: true
+      gpu_archs:
+        description: 'Comma-separated architectures to target on the remote cluster (e.g. mi350p,gfx1201). Each runs as a separate job.'
+        required: true
+        default: 'mi350p'
+      benchmark_flags:
+        description: 'Flags used to filter benchmarks, leave empty to run all. Only --tag and --name are accepted. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
         required: false
         default: ''
-      disable_docker_cache:
-        description: 'Disable Docker cache on core build'
-        type: boolean
+      runner_label:
+        description: 'Label of the runner hosting the remote executor'
         required: false
-        default: false
-      gpu_runners:
-        description: 'Comma-separated list of GPU runner labels'
-        required: true
-        default: 'gfx942,gfx950'
+        default: 'kube-bridge'
+      timeout_minutes:
+        description: 'Maximum time to wait for each remote job (minutes)'
+        required: false
+        default: '1440'
 
 permissions:
-  contents: write
-  actions: write
-
-env:
-  CORE_IMAGE: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
-  STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+  contents: read
 
 jobs:
-  validate:
-    name: Validate inputs
+  resolve:
+    name: Resolve architectures
     runs-on: ubuntu-latest
     outputs:
-      any_arch_enabled: ${{ steps.check-archs.outputs.any_enabled }}
-      image_tag: ${{ steps.generate_tag.outputs.tag }}
-      core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
-      staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
+      archs: ${{ steps.parse.outputs.archs }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.git_branch || github.ref_name }}
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
-          password: ${{ secrets.DOCKERHUB_OAT }}
-
-      - name: Generate image tag
-        id: generate_tag
-        run: |
-          IMAGE_TAG=$(git rev-parse --short HEAD)
-          {
-            echo "tag=${IMAGE_TAG}"
-            echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}"
-            echo "staging_image_with_tag=${{ env.STAGING_IMAGE }}:${IMAGE_TAG}"
-          } >> $GITHUB_OUTPUT
-      
-      - name: Check architectures
-        id: check-archs
+      - name: Parse architecture list
+        id: parse
         env:
-          GPU_RUNNERS: ${{ inputs.gpu_runners }}
+          GPU_ARCHS: ${{ inputs.gpu_archs }}
         run: |
-          GPU_RUNNERS=$(echo "$GPU_RUNNERS" | xargs)
-          if [ -z "$GPU_RUNNERS" ]; then
-            echo "Error: No GPU runners specified"
+          archs=$(echo "$GPU_ARCHS" | tr ',' '\n' \
+            | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+            | grep -v '^$' | jq -R . | jq -sc .)
+          if [ "$archs" = "[]" ]; then
+            echo "::error::gpu_archs did not contain any architecture names"
             exit 1
           fi
-          echo "any_enabled=true" >> $GITHUB_OUTPUT
-      
-      - name: Validate prebuilt untuned image exists
-        if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image == '' }}
-        uses: ./.github/actions/validate-image-exists
-        with:
-          image: ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}
-      
-      - name: Validate prebuilt core image exists
-        if: ${{ inputs.prebuilt_core_image_tag != '' && inputs.prebuilt_untuned_image_tag == '' && inputs.benchmark_image == '' }}
-        uses: ./.github/actions/validate-image-exists
-        with:
-          image: ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}
-      
-      - name: Determine benchmark image
-        id: determine_benchmark
-        env:
-          INPUT_BENCHMARK_IMAGE: ${{ inputs.benchmark_image }}
-        run: |
-          BENCHMARK=$(echo "$INPUT_BENCHMARK_IMAGE" | xargs)
-          if [ -z "$BENCHMARK" ]; then
-            echo "benchmark_image=" >> $GITHUB_OUTPUT
-            echo "benchmark_image_tag=" >> $GITHUB_OUTPUT
-          elif [[ "$BENCHMARK" == *"/"* ]] || [[ "$BENCHMARK" == *":"* ]]; then
-            echo "benchmark_image=${BENCHMARK}" >> $GITHUB_OUTPUT
-            # Extract tag portion after colon, or use whole string if no colon
-            if [[ "$BENCHMARK" == *":"* ]]; then
-              TAG="${BENCHMARK##*:}"
-            else
-              TAG=""
-            fi
-            echo "benchmark_image_tag=${TAG}" >> $GITHUB_OUTPUT
-          else
-            echo "benchmark_image=${{ env.STAGING_IMAGE }}:${BENCHMARK}" >> $GITHUB_OUTPUT
-            echo "benchmark_image_tag=${BENCHMARK}" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Validate benchmark image exists
-        if: ${{ inputs.benchmark_image != '' }}
-        uses: ./.github/actions/validate-image-exists
-        with:
-          image: ${{ steps.determine_benchmark.outputs.benchmark_image }}
-      
-      - name: Store build metadata
-        uses: ./.github/actions/save-build-metadata
-        with:
-          image_tag: ${{ steps.generate_tag.outputs.tag }}
-          core_image: ${{ env.CORE_IMAGE }}
-          core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
-          staging_image: ${{ env.STAGING_IMAGE }}
-          staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
-          benchmark_image: ${{ steps.determine_benchmark.outputs.benchmark_image }}
-          benchmark_image_tag: ${{ steps.determine_benchmark.outputs.benchmark_image_tag }}
-          prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
-          prebuilt_untuned_image_tag: ${{ inputs.prebuilt_untuned_image_tag }}
-          git_branch: ${{ inputs.git_branch }}
-          run_number: ${{ github.run_number }}
-          
-      - name: Write summary
-        uses: ./.github/actions/write-workflow-summary
-        with:
-          title: 'Workflow Configuration'
-          tables: |
-            {
-              "Workflow Inputs": {
-                "run_mode": "${{ inputs.run_mode }}",
-                "force_retuning": "${{ inputs.force_retuning }}",
-                "benchmark_image": "${{ inputs.benchmark_image }}",
-                "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag }}",
-                "prebuilt_untuned_image_tag": "${{ inputs.prebuilt_untuned_image_tag }}"
-              },
-              "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
-              "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
-            }
+          echo "archs=${archs}" >> "$GITHUB_OUTPUT"
+          echo "Targeting: ${archs}"
 
-  build-core:
-    name: Build core and untuned images
-    needs: [validate]
-    if: ${{ inputs.benchmark_image == '' && inputs.prebuilt_untuned_image_tag == '' }}
-    uses: ./.github/workflows/build-core-image-reusable.yml
-    with:
-      git_ref: ${{ inputs.git_branch || github.ref_name }}
-      image_tag: ${{ needs.validate.outputs.image_tag }}
-      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
-      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
-      prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
-      build_untuned_image: true
-      disable_docker_cache: ${{ inputs.disable_docker_cache }}
-      runner: ${{ vars.BUILD_RUNNER || 'build-only' }}
-    secrets:
-      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
-      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
-
-  generate-matrix:
-    name: Generate architecture matrix
-    needs: [validate, build-core]
-    runs-on: ubuntu-latest
-    if: |
-      !cancelled() &&
-      needs.validate.result == 'success' &&
-      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped')
-    outputs:
-      matrix: ${{ steps.generate.outputs.matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.git_branch || github.ref_name }}
-      
-      - name: Generate matrix
-        id: generate
-        uses: ./.github/actions/generate-architecture-matrix
-        with:
-          workflow_inputs: ${{ toJSON(inputs) }}
-      
-      - name: Write matrix summary
-        uses: ./.github/actions/write-workflow-summary
-        with:
-          title: 'Architecture Matrix'
-          code: |
-            {
-              "Matrix Configuration": ${{ toJSON(fromJSON(steps.generate.outputs.matrix)) }}
-            }
-
-  tune-and-benchmark:
-    name: ${{ matrix.arch }} tuning and benchmarking
-    needs: [validate, generate-matrix, build-core]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ matrix.timeout }}
-    if: |
-      needs.validate.outputs.any_arch_enabled == 'true' && 
-      !cancelled() && 
-      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped') &&
-      (!failure() || inputs.benchmark_image != '')
+  benchmark:
+    name: '${{ matrix.arch }} benchmark'
+    needs: resolve
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 1500
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+      matrix:
+        arch: ${{ fromJSON(needs.resolve.outputs.archs) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.git_branch || github.ref_name }}
-          
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
-          password: ${{ secrets.DOCKERHUB_OAT }}
+        uses: actions/checkout@v5
 
-      - name: Load build metadata
-        id: metadata
-        uses: ./.github/actions/load-build-metadata
-        with:
-          run_number: ${{ github.run_number }}
-      
-      - name: Pull image and extract version information
-        run: |
-          mkdir -p versions
-          git rev-parse HEAD > versions/repository.txt
-          docker pull ${{ steps.metadata.outputs.tune_and_benchmark_image }}
-          docker create --name core ${{ steps.metadata.outputs.tune_and_benchmark_image }}
-          docker cp core:/opt/rocm/share/therock/ versions/ || true
-          docker rm core
-      
-      - name: Upload version artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ github.run_number }}-versions-${{ matrix.arch }}
-          path: versions/**
-          overwrite: true
-
-      - name: Determine step conditions
-        id: conditions
+      - name: Resolve image tag
+        id: resolve
         env:
-          BENCHMARK_IMAGE: ${{ steps.metadata.outputs.benchmark_image }}
-          RUN_MODE: ${{ inputs.run_mode }}
+          INPUT_IMAGE: ${{ inputs.benchmark_image }}
         run: |
-          if [ -z "$BENCHMARK_IMAGE" ]; then
-            echo "should_run_miopen_tuning=true" >> $GITHUB_OUTPUT
+          IMAGE=$(echo "$INPUT_IMAGE" | xargs)
+          if [[ "$IMAGE" == *":"* ]]; then
+            TAG="${IMAGE##*:}"
           else
-            echo "should_run_miopen_tuning=false" >> $GITHUB_OUTPUT
+            TAG="$IMAGE"
           fi
-          
-          if [ "$RUN_MODE" != "MIOpen tuning only" ]; then
-            echo "should_run_benchmarks=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_run_benchmarks=false" >> $GITHUB_OUTPUT
+          if ! [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "::error::Image tag is not a valid Docker tag: ${TAG}"
+            exit 1
           fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Run MIOpen tuning
-        if: ${{ steps.conditions.outputs.should_run_miopen_tuning == 'true' }}
-        uses: ./.github/actions/run-miopen-tuning
+      - name: Run remote benchmark
+        uses: ./.github/actions/run-remote-benchmark
         with:
-          image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
-          arch: ${{ matrix.arch }}
-          artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
-          miopen_find_mode: ${{ inputs.miopen_find_mode }}
-          miopen_find_enforce: ${{ inputs.miopen_find_enforce }}
-          force_retuning: ${{ inputs.force_retuning }}
-      
-      - name: Run benchmarks
-        if: ${{ steps.conditions.outputs.should_run_benchmarks == 'true' }}
-        uses: ./.github/actions/run-benchmarks
-        with:
-          image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
-          arch: ${{ matrix.arch }}
+          image_tag: ${{ steps.resolve.outputs.tag }}
+          gpu_arch: ${{ matrix.arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
-          benchmark_only: ${{ steps.metadata.outputs.benchmark_image != '' }}
-          collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
-          hf_token: ${{ secrets.HF_TOKEN }}
-          hf_cache_map: ${{ vars.HF_CACHE_MAP }}
-          artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
-      
-      - name: Image cleanup
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-workspace
-        with:
-          images: '${{ steps.metadata.outputs.tune_and_benchmark_image }}'
-          containers: 'xdit-bench miopen-tune'
-          skip_workspace_cleanup: 'true'
-      
-      - name: Workspace cleanup
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-workspace
-        with:
-          containers: 'xdit-bench'
-          skip_workspace_cleanup: 'false'
-
-  build-final:
-    name: Build final tuned image
-    needs: [validate, build-core, tune-and-benchmark]
-    runs-on: ${{ vars.BUILD_RUNNER || 'build-only' }}
-    if: ${{ inputs.benchmark_image == '' && !cancelled() && !failure() }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.git_branch || github.ref_name }}
-      
-      - name: Load build metadata
-        id: metadata
-        uses: ./.github/actions/load-build-metadata
-        with:
-          run_number: ${{ github.run_number }}
-
-      - name: Download all MIOpen artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: ${{ github.run_number }}-miopen-*
-          merge-multiple: true
-          path: data/miopen/userdb
-      
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
-          password: ${{ secrets.DOCKERHUB_OAT }}
-      
-      - name: Pull untuned image
-        run: docker pull ${{ steps.metadata.outputs.untuned_image }} || true
-      
-      - name: Build final tuned image
-        env:
-          BUILDKIT_PROGRESS: plain
-          UNTUNED_IMAGE: ${{ steps.metadata.outputs.untuned_image }}
-          IMAGE_TAG: ${{ steps.metadata.outputs.staging_image_with_tag }}
-        run: |
-          docker buildx build \
-            --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
-            -f docker/Dockerfile.ci \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from "${UNTUNED_IMAGE}" \
-            -t "${IMAGE_TAG}" \
-            --push \
-            .
-      
-      - name: Cleanup
-        if: always()
-        uses: ./.github/actions/cleanup-workspace
-        with:
-          images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}'
-          containers: 'core'
-
-  create-miopen-branch:
-    name: Create MIOpen branch
-    needs: [validate, generate-matrix, tune-and-benchmark]
-    runs-on: build-only
-    if: |
-      !cancelled() &&
-      needs.tune-and-benchmark.result == 'success' &&
-      (inputs.run_mode == 'MIOpen tuning only' || inputs.run_mode == 'MIOpen tuning + benchmarking')
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.git_branch || github.ref_name }}
-          token: ${{ github.token }}
-      
-      - name: Download all MIOpen artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: ${{ github.run_number }}-miopen-*
-          merge-multiple: true
-          path: data/miopen/userdb
-      
-      - name: Create MIOpen branch
-        uses: ./.github/actions/create-miopen-db-branch
-        with:
-          branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
-          run_number: ${{ github.run_number }}
-
+          timeout_minutes: ${{ inputs.timeout_minutes }}
+          artifact_name: ${{ github.run_number }}-remote-benchmarks-${{ matrix.arch }}
