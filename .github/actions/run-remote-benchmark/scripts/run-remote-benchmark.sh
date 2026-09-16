@@ -105,6 +105,10 @@ flush_output() {
 }
 
 collect_results() {
+  # Copied before the log check: a missing log is exactly the case where the
+  # submitted manifest is the only evidence of what went wrong.
+  cp "${RESULT_DIR}/workload.yaml" "$OUTPUT_PATH/" 2>/dev/null || true
+
   [ -f "${RESULT_DIR}/output.log" ] || return 0
 
   # Keep the saved log readable by dropping the base64 blob from it.
@@ -137,6 +141,8 @@ echo "Waiting for remote executor to pick up request..."
 while true; do
   if (( $(date +%s) >= DEADLINE )); then
     echo "::error::Timed out after ${TIMEOUT_MINUTES} minutes waiting for the remote benchmark"
+    flush_output
+    collect_results
     exit 1
   fi
 
