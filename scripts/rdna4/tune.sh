@@ -20,10 +20,15 @@ Environment overrides:
   WORKLOAD_NAMES            Optional comma-separated workload names to run
   STATE_DIR                 Persistent host output/cache directory (default: $HOME/rdna4-finalise)
   HF_CACHE                  Hugging Face cache directory (default: $HOME/huggingface)
+  XDIT_SRC                  Optional host xDiT tree bind-mounted at /app/xDiT
   GPU_DEVICES               Four space-separated render nodes (default: /dev/dri/renderD130 /dev/dri/renderD132 /dev/dri/renderD131 /dev/dri/renderD133)
   HIP_DEVICE_ORDER          Logical ROCm device order (default: 0,2,1,3)
   CPUSET_CPUS               Host CPU list for the container (default: all physical cores on GPU NUMA node)
   MEMORY_NODES              NUMA nodes allowed for container memory (default: all host NUMA nodes)
+  NUMA_PREFERRED            Soft NUMA memory preference inside the container (default: auto).
+                            Auto picks the allowed node with the most RAM, or the GPU node when
+                            memory is within 10%. Empty string disables the preference.
+                            Allocations spill to the other allowed nodes, so 512g jobs still fit.
   CONTAINER_MEMORY          Container memory limit and swap limit (default: 512g)
   OMP_NUM_THREADS           OpenMP threads per process (default: 32)
   AITER_BUILD_JOBS          Maximum parallel jobs for AITER extension builds (default: 32)
@@ -87,6 +92,38 @@ physical_cpus_on_node() {
 comma_join() {
     local IFS=,
     printf '%s\n' "$*"
+}
+
+node_memtotal_kb() {
+    awk '/MemTotal/ { print $4; exit }' "/sys/devices/system/node/node${1}/meminfo"
+}
+
+# Prefer the widest memory controller without binding, so large jobs can spill.
+# When NUMA is balanced, keep allocations next to the GPUs.
+select_preferred_memory_node() {
+    local gpu_node=$1
+    local allowed=$2
+    local node kb gpu_kb=0 best_node="" best_kb=0
+    local -a nodes=()
+    IFS=, read -r -a nodes <<< "${allowed}"
+    (( ${#nodes[@]} > 0 )) || return 0
+    if (( ${#nodes[@]} == 1 )); then
+        printf '%s' "${nodes[0]}"
+        return 0
+    fi
+    for node in "${nodes[@]}"; do
+        kb=$(node_memtotal_kb "${node}")
+        [[ ${node} == "${gpu_node}" ]] && gpu_kb=${kb}
+        if (( kb > best_kb )); then
+            best_kb=${kb}
+            best_node=${node}
+        fi
+    done
+    if (( gpu_kb * 10 >= best_kb * 9 )); then
+        printf '%s' "${gpu_node}"
+    else
+        printf '%s' "${best_node}"
+    fi
 }
 
 # Print "file<TAB>name" for each experiment tagged rdna4.
@@ -209,9 +246,19 @@ for node_path in /sys/devices/system/node/node[0-9]*; do
     memory_nodes_default+="${memory_nodes_default:+,}${node}"
 done
 MEMORY_NODES=${MEMORY_NODES:-${memory_nodes_default}}
+if [[ ${NUMA_PREFERRED+x} ]]; then
+    numa_preferred=${NUMA_PREFERRED}
+else
+    numa_preferred=$(select_preferred_memory_node "${numa_node}" "${MEMORY_NODES}")
+fi
 
 echo "Using GPUs: ${devices[*]} (NUMA node ${numa_node}, CPUs ${cpu_list})"
 echo "Allowing container memory on NUMA nodes: ${MEMORY_NODES}"
+if [[ -n ${numa_preferred} ]]; then
+    echo "Preferring host allocations on NUMA node ${numa_preferred} (spills to other allowed nodes)"
+else
+    echo "NUMA memory preference disabled"
+fi
 for node_path in /sys/devices/system/node/node[0-9]*; do
     awk '/MemTotal|MemFree/ { printf "node %s %s: %.1f GiB\n", node, $3, $4 / 1024 / 1024 }' \
         node="${node_path##*node}" "${node_path}/meminfo"
@@ -334,12 +381,20 @@ docker_args+=(
     -v "${STATE_DIR}/aiter-tune:/aiter-tune"
     -v "${STATE_DIR}/inductor-cache:/inductor-cache"
     -v "${STATE_DIR}/tunableop:/tunableop"
+    -v "${ROOT}/scripts/rdna4/numa_preferred_exec.py:/tmp/numa_preferred_exec.py:ro"
 )
+if [[ -n ${XDIT_SRC:-} ]]; then
+    docker_args+=(-v "${XDIT_SRC}:/app/xDiT")
+    echo "Bind-mounting xDiT from ${XDIT_SRC}"
+fi
+if [[ -n ${numa_preferred} ]]; then
+    docker_args+=(-e "NUMA_PREFERRED=${numa_preferred}")
+fi
 
 [[ -n ${RCCL_ALGO:-} ]] && docker_args+=(-e "NCCL_ALGO=${RCCL_ALGO}")
 [[ -n ${RCCL_PROTO:-} ]] && docker_args+=(-e "NCCL_PROTO=${RCCL_PROTO}")
 
-docker run "${docker_args[@]}" "${BASE_IMAGE}" python3 -c \
+docker run "${docker_args[@]}" "${BASE_IMAGE}" python3 /tmp/numa_preferred_exec.py python3 -c \
     "import torch; n=torch.cuda.device_count(); arches={torch.cuda.get_device_properties(i).gcnArchName.split(':')[0] for i in range(n)}; print(f'GPUs: {n}, arches: {sorted(arches)}'); assert n >= 4, 'the RDNA4 matrix requires at least four GPUs'; assert arches == {'gfx1201'}, f'expected only gfx1201 GPUs, got {arches}'"
 
 # Ctrl-C (or SIGTERM) stops the whole matrix, not just the running workload.
@@ -386,7 +441,7 @@ for i in "${!workloads[@]}"; do
         --name "${current_container}" \
         -e "HIP_VISIBLE_DEVICES=${workload_hip_devices}" \
         "${BASE_IMAGE}" \
-        python3 /app/.ci/run.py --no-clear-model-cache --tag rdna4 \
+        python3 /tmp/numa_preferred_exec.py python3 /app/.ci/run.py --no-clear-model-cache --tag rdna4 \
         --name "${workload}" \
         --results-directory /outputs --csv-output-path /outputs/results.csv \
         --print-timing-summary \
