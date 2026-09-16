@@ -665,6 +665,7 @@
       enable_taylorseer: false
     use_fp8_text_encoder: true
     ulysses_degree: 4
+    use_fp8_comms: true
     fully_shard_degree: 2
     memory_efficient_sharding: true
     use_parallel_vae: true
@@ -700,7 +701,8 @@
       enable_taylorseer: false
     use_fp8_text_encoder: true
     ulysses_degree: 4
-    fully_shard_degree: 4
+    use_fp8_comms: true
+    fully_shard_degree: 2
     memory_efficient_sharding: true
     use_parallel_vae: true
     enable_tiling: true
@@ -732,6 +734,7 @@
       enable_taylorseer: false
     use_fp8_text_encoder: true
     ulysses_degree: 4
+    use_fp8_comms: true
     fully_shard_degree: 2
     memory_efficient_sharding: true
     use_parallel_vae: true
@@ -765,6 +768,7 @@
       enable_taylorseer: false
     use_fp8_text_encoder: true
     ulysses_degree: 2
+    use_fp8_comms: true
     fully_shard_degree: 2
     memory_efficient_sharding: true
     use_parallel_vae: true
@@ -800,6 +804,7 @@
       enable_taylorseer: false
     use_fp8_text_encoder: true
     ulysses_degree: 2
+    use_fp8_comms: true
     fully_shard_degree: 2
     memory_efficient_sharding: true
     use_parallel_vae: true
@@ -832,6 +837,7 @@
       enable_taylorseer: false
     use_fp8_text_encoder: true
     ulysses_degree: 2
+    use_fp8_comms: true
     fully_shard_degree: 2
     memory_efficient_sharding: true
     use_parallel_vae: true
