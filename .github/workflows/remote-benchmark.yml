@@ -1,0 +1,93 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Benchmarks an already-built image on an external cluster. Informational only —
+# results do not feed tuning or optimisation work in this repository.
+name: Remote Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_image:
+        description: 'Image tag (short git SHA) or full staging image path to benchmark'
+        required: true
+      gpu_archs:
+        description: 'Comma-separated architectures to target on the remote cluster (e.g. mi350p,gfx1201). Each runs as a separate job.'
+        required: true
+        default: 'mi350p'
+      benchmark_flags:
+        description: 'Flags used to filter benchmarks, leave empty to run all. Only --tag and --name are accepted. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
+        required: false
+        default: ''
+      runner_label:
+        description: 'Label of the runner hosting the remote executor'
+        required: false
+        default: 'kube-bridge'
+      timeout_minutes:
+        description: 'Maximum time to wait for each remote job (minutes)'
+        required: false
+        default: '1440'
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve architectures
+    runs-on: ubuntu-latest
+    outputs:
+      archs: ${{ steps.parse.outputs.archs }}
+    steps:
+      - name: Parse architecture list
+        id: parse
+        env:
+          GPU_ARCHS: ${{ inputs.gpu_archs }}
+        run: |
+          archs=$(echo "$GPU_ARCHS" | tr ',' '\n' \
+            | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+            | grep -v '^$' | jq -R . | jq -sc .)
+          if [ "$archs" = "[]" ]; then
+            echo "::error::gpu_archs did not contain any architecture names"
+            exit 1
+          fi
+          echo "archs=${archs}" >> "$GITHUB_OUTPUT"
+          echo "Targeting: ${archs}"
+
+  benchmark:
+    name: '${{ matrix.arch }} benchmark'
+    needs: resolve
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 1500
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(needs.resolve.outputs.archs) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Resolve image tag
+        id: resolve
+        env:
+          INPUT_IMAGE: ${{ inputs.benchmark_image }}
+        run: |
+          IMAGE=$(echo "$INPUT_IMAGE" | xargs)
+          if [[ "$IMAGE" == *":"* ]]; then
+            TAG="${IMAGE##*:}"
+          else
+            TAG="$IMAGE"
+          fi
+          if ! [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "::error::Image tag is not a valid Docker tag: ${TAG}"
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Run remote benchmark
+        uses: ./.github/actions/run-remote-benchmark
+        with:
+          image_tag: ${{ steps.resolve.outputs.tag }}
+          gpu_arch: ${{ matrix.arch }}
+          benchmark_flags: ${{ inputs.benchmark_flags }}
+          timeout_minutes: ${{ inputs.timeout_minutes }}
+          artifact_name: ${{ github.run_number }}-remote-benchmarks-${{ matrix.arch }}
