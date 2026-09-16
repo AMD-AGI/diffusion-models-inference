@@ -5,7 +5,9 @@
 set -euo pipefail
 
 # Submit a benchmark job to the remote executor and stream its output back.
-# Expects env vars: IMAGE_TAG, GPU_ARCH, OUTPUT_PATH, TIMEOUT_MINUTES, RUN_ID
+# Runs until the job finishes or the workflow is cancelled; cancelling also
+# stops the cluster workload.
+# Expects env vars: IMAGE_TAG, GPU_ARCH, OUTPUT_PATH, RUN_ID
 #   and optionally BENCHMARK_FLAGS
 
 REQUESTS_DIR="/home/runner/kube-requests"
@@ -51,14 +53,37 @@ fi
 
 mkdir -p "$OUTPUT_PATH"
 
+# Mirrors the executor's own sanitising, so the name shown here is the one that
+# ends up on the cluster and can be acted on before the job is even accepted.
+WORKLOAD_NAME="bench-$(printf '%s' "$RUN_KEY" | tr '[:upper:]' '[:lower:]' \
+  | sed 's/[^a-z0-9-]/-/g' | cut -c1-53)"
+printf '%s\n' "$WORKLOAD_NAME" > "${OUTPUT_PATH}/workload-name.txt"
+echo "Remote workload name: ${WORKLOAD_NAME}"
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  {
+    echo "### Remote benchmark: ${GPU_ARCH}"
+    echo ""
+    echo "| | |"
+    echo "|---|---|"
+    echo "| Workload | \`${WORKLOAD_NAME}\` |"
+    echo "| Image tag | \`${IMAGE_TAG}\` |"
+    echo ""
+    echo "Inspect or stop it with:"
+    echo '```bash'
+    echo "kubectl get workload ${WORKLOAD_NAME} -o yaml"
+    echo "kubectl delete workload ${WORKLOAD_NAME}"
+    echo '```'
+  } >> "$GITHUB_STEP_SUMMARY"
+fi
+
 echo "Submitting remote benchmark: image_tag=${IMAGE_TAG} arch=${GPU_ARCH} flags=${BENCHMARK_FLAGS:-<none>}"
 cat > "${REQUESTS_DIR}/job-${RUN_KEY}.json" <<EOF
 {"image_tag":"${IMAGE_TAG}","gpu_arch":"${GPU_ARCH}","run_id":"${RUN_KEY}","commit_sha":"${GITHUB_SHA}","benchmark_flags":"${BENCHMARK_FLAGS}"}
 EOF
 
-DEADLINE=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
 LINES_SEEN=0
 IN_ARCHIVE=0
+MANIFEST_SHOWN=0
 
 # Cancelling the workflow only kills this step; without a marker the executor
 # would keep the cluster workload running and holding GPUs to its own timeout.
@@ -104,10 +129,21 @@ flush_output() {
   LINES_SEEN=$total
 }
 
-collect_results() {
-  # Copied before the log check: a missing log is exactly the case where the
-  # submitted manifest is the only evidence of what went wrong.
+# The executor writes this before submitting, so showing it as soon as it
+# appears makes the manifest inspectable while the job is still queueing.
+publish_manifest() {
+  (( MANIFEST_SHOWN )) && return 0
+  [ -f "${RESULT_DIR}/workload.yaml" ] || return 0
+
   cp "${RESULT_DIR}/workload.yaml" "$OUTPUT_PATH/" 2>/dev/null || true
+  MANIFEST_SHOWN=1
+  echo "::group::Submitted workload manifest"
+  cat "${RESULT_DIR}/workload.yaml"
+  echo "::endgroup::"
+}
+
+collect_results() {
+  publish_manifest
 
   [ -f "${RESULT_DIR}/output.log" ] || return 0
 
@@ -139,13 +175,7 @@ collect_results() {
 
 echo "Waiting for remote executor to pick up request..."
 while true; do
-  if (( $(date +%s) >= DEADLINE )); then
-    echo "::error::Timed out after ${TIMEOUT_MINUTES} minutes waiting for the remote benchmark"
-    flush_output
-    collect_results
-    exit 1
-  fi
-
+  publish_manifest
   flush_output
 
   if [ -f "${RESULT_DIR}/status" ]; then

@@ -19,10 +19,6 @@ inputs:
     description: 'Output directory name for benchmark results'
     required: false
     default: 'remote-benchmarks'
-  timeout_minutes:
-    description: 'Maximum time to wait for the remote job'
-    required: false
-    default: '1440'
   artifact_name:
     description: 'Full artifact name for upload'
     required: true
@@ -37,11 +33,33 @@ runs:
         GPU_ARCH: ${{ inputs.gpu_arch }}
         BENCHMARK_FLAGS: ${{ inputs.benchmark_flags }}
         OUTPUT_PATH: ${{ github.workspace }}/${{ inputs.output_dir }}/${{ inputs.gpu_arch }}
-        TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         RUN_ID: ${{ github.run_id }}
       # Invoked through bash so the step does not depend on the checkout
       # preserving the executable bit.
       run: bash "${{ github.action_path }}/scripts/run-remote-benchmark.sh"
+
+    # Runs even when the job is cancelled, unlike the script's signal trap.
+    # Writes the marker rather than calling kubectl: this container holds no
+    # cluster credential and has no route to the cluster, by design.
+    - name: Stop remote workload
+      if: cancelled() || failure()
+      shell: bash
+      env:
+        GPU_ARCH: ${{ inputs.gpu_arch }}
+        RUN_ID: ${{ github.run_id }}
+      run: |
+        REQUESTS_DIR="/home/runner/kube-requests"
+        RUN_KEY="${RUN_ID}-${GPU_ARCH}"
+        if [ ! -d "$REQUESTS_DIR" ]; then
+          echo "No request volume on this runner; nothing to stop."
+          exit 0
+        fi
+        if [ ! -f "${REQUESTS_DIR}/job-${RUN_KEY}.json" ]; then
+          echo "No request was submitted; nothing to stop."
+          exit 0
+        fi
+        : > "${REQUESTS_DIR}/cancel-${RUN_KEY}"
+        echo "Asked the executor to stop the remote workload for ${RUN_KEY}."
 
     - name: Upload benchmark results
       if: always()

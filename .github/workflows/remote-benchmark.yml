@@ -23,10 +23,6 @@ on:
         description: 'Label of the runner hosting the remote executor'
         required: false
         default: 'kube-bridge'
-      timeout_minutes:
-        description: 'Maximum time to wait for each remote job (minutes)'
-        required: false
-        default: '1440'
 
 permissions:
   contents: read
@@ -89,5 +85,4 @@ jobs:
           image_tag: ${{ steps.resolve.outputs.tag }}
           gpu_arch: ${{ matrix.arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
-          timeout_minutes: ${{ inputs.timeout_minutes }}
           artifact_name: ${{ github.run_number }}-remote-benchmarks-${{ matrix.arch }}
