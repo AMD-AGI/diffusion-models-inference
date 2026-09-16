@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from huggingface_hub import snapshot_download, scan_cache_dir, DryRunFileInfo
+from miopen_driver_commands import MIOpenDriverCommandCollector, env_enabled
 
 
 logger = logging.getLogger(__name__)
@@ -375,6 +376,7 @@ def _run_experiment(
     dry_run: bool,
     benchmark_output_directory: Path,
     collect_hipblaslt_logs: bool = False,
+    collect_miopen_driver_commands: bool = False,
 ) -> bool:
     """Runs a single experiment."""
 
@@ -385,6 +387,8 @@ def _run_experiment(
     benchmark_output_directory.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["TQDM_DISABLE"] = "1"
+    if collect_miopen_driver_commands:
+        env["MIOPEN_ENABLE_LOGGING_CMD"] = "1"
     if collect_hipblaslt_logs:
         # %i is substituted with the worker process ID by hipBLASLt at runtime,
         # so multi-rank benchmarks (e.g. ulysses_degree > 1) get one file per process.
@@ -627,6 +631,20 @@ def main():
         logger.warning("No experiments matched the given filters.")
         return
 
+    collect_miopen_driver_commands = env_enabled(
+        os.environ.get("CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS", "0")
+    )
+    miopen_command_collector = None
+    if collect_miopen_driver_commands:
+        try:
+            miopen_command_collector = MIOpenDriverCommandCollector(
+                Path(args.results_directory), (exp.name for exp in experiments)
+            )
+        except OSError as exc:
+            logger.warning(
+                "Failed to initialize MIOpenDriver command collection: %s", exc
+            )
+
     # Write Experiment configurations to file
     if args.export_config_path:
         _export_config(experiments, args.export_config_path)
@@ -671,13 +689,22 @@ def main():
             cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + ["--output-directory", benchmark_output_directory]
 
             t0 = time.monotonic()
-            if not _run_experiment(
+            process_succeeded = _run_experiment(
                 exp,
                 cmd,
                 args.dry_run,
                 benchmark_output_directory,
                 collect_hipblaslt_logs=args.collect_hipblaslt_logs,
-            ):
+                collect_miopen_driver_commands=collect_miopen_driver_commands,
+            )
+            if miopen_command_collector is not None and not args.dry_run:
+                miopen_command_collector.collect(
+                    exp.name,
+                    benchmark_output_directory / "stderr.txt",
+                    process_succeeded,
+                )
+
+            if not process_succeeded:
                 timing["experiments"].append({"name": exp.name, "seconds": round(time.monotonic() - t0, 2)})
                 msg = f"Experiment {exp.name} failed to complete. Reason: Failed to run command: {cmd}. See {benchmark_output_directory}/stderr.txt for stderr logs."
                 errors.append(msg)
@@ -690,6 +717,8 @@ def main():
                 latency_output_filepath = Path(benchmark_output_directory) / "timings.json" # benchmark scripts are expected to write latencies to "timings.json"
                 median_latency = _get_median_latency(latency_output_filepath)
                 if not median_latency:
+                    if miopen_command_collector is not None:
+                        miopen_command_collector.mark_metrics_failed(exp.name)
                     msg = f"Experiment {exp.name} failed to complete. Reason: Failed to compute median latency from output files. See logs for more details."
                     errors.append(msg)
                     logger.error(msg)
@@ -701,6 +730,8 @@ def main():
                 logger.info(f"Median latency for {exp.name}: {median_latency} seconds")
 
                 _save_mad_latency_metric(args.csv_output_path, exp.name, median_latency)
+                if miopen_command_collector is not None:
+                    miopen_command_collector.mark_succeeded(exp.name)
 
         should_clear_cache = args.clear_model_cache or (
             preserve_original_state and not model_existed_before
