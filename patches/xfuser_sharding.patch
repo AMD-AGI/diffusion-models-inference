@@ -1,0 +1,320 @@
+diff --git a/xfuser/core/distributed/sharding.py b/xfuser/core/distributed/sharding.py
+index 28877b4..0af2ba3 100644
+--- a/xfuser/core/distributed/sharding.py
++++ b/xfuser/core/distributed/sharding.py
+@@ -87,6 +87,38 @@ def _collective_quantize_call(operation, process_group, context):
+     return result
+ 
+ 
++_UNQUANTIZED_DTYPES = (
++    torch.float32,
++    torch.float64,
++    torch.float16,
++    torch.bfloat16,
++)
++
++
++def _holds_quantized_parameters(module: torch.nn.Module) -> bool:
++    """Whether any parameter is already in a quantized storage form FSDP1 cannot flatten.
++
++    FSDP1 puts a unit's parameters in one flat allocation of one dtype, and neither shape of
++    quantized weight fits that. A TorchAO layout is a tensor subclass with no flattenable storage,
++    so the wrap dies inside handle.shard() with "Attempted to call resize_() on an invalid python
++    storage"; AITER's float8 weight is an ordinary tensor, but a narrow dtype that cannot share a
++    flat parameter with the bf16 weights beside it. FSDP2 shards each parameter as its own
++    DTensor, and is the path xDiT's Float8Tensor patches exist for.
++
++    Asked of the component rather than taken from the caller because it is a fact about the
++    weights: a quantize_fn says this sharding is about to produce quantized tensors, while a
++    component quantized on the way in from disk already holds them and needs no conversion.
++    """
++    from torch.utils._python_dispatch import is_traceable_wrapper_subclass  # noqa: PLC0415
++
++    return any(
++        is_traceable_wrapper_subclass(parameter)
++        or is_traceable_wrapper_subclass(parameter.data)
++        or parameter.dtype not in _UNQUANTIZED_DTYPES
++        for parameter in module.parameters(recurse=True)
++    )
++
++
+ def _make_mesh(
+     process_group: Optional[torch.distributed.ProcessGroup],
+     device_type: str = "cuda",
+@@ -294,7 +326,8 @@ def shard_component(
+     Uses FSDP1 when quantize_fn is None and memory_efficient_init is False (O(1)
+     flat-param hooks, no DTensor bookkeeping, fastest for non-quantized inference).
+     Uses FSDP2 (composable fully_shard) when quantize_fn is provided (required: FSDP1
+-    cannot flatten torchao quantized tensor subtypes) or memory_efficient_init is True)
++    cannot flatten torchao quantized tensor subtypes), when the component already holds
++    such tensors because the load quantized them, or when memory_efficient_init is True.
+ 
+     Args:
+         component (nn.Module): The transformer model to wrap with FSDP.
+@@ -371,6 +404,14 @@ def shard_component(
+         - Requires PyTorch distributed to be initialized before calling
+     """
+     use_fsdp2 = quantize_fn is not None or memory_efficient_init or meta_init or load_block_fn is not None
++    if not use_fsdp2 and _holds_quantized_parameters(component):
++        # Already-quantized weights (an eager load that quantized on the way in) need FSDP2 just
++        # as much as weights this call is about to quantize.
++        use_fsdp2 = True
++        logger.debug(
++            "Sharding with FSDP2: the component already holds quantized weights, which FSDP1 "
++            "cannot flatten."
++        )
+ 
+     if device_id is None and torch.cuda.is_available():
+         device_id = torch.cuda.current_device()
+diff --git a/xfuser/model_executor/models/runner_models/loading/quantization_ledger.py b/xfuser/model_executor/models/runner_models/loading/quantization_ledger.py
+index 54779a5..edaa621 100644
+--- a/xfuser/model_executor/models/runner_models/loading/quantization_ledger.py
++++ b/xfuser/model_executor/models/runner_models/loading/quantization_ledger.py
+@@ -10,6 +10,13 @@ Two things are tracked, and they answer different questions. The described compo
+ plan has already been logged, so a walk that finds an undescribed component knows it is looking
+ at a fallback nobody announced. The streamed paths say which module paths already hold quantized
+ weights, so a walk skips them.
++
++The streamed paths are recorded at two different moments, which is why ``on_load`` splits them. A
++native quantize-on-load has already converted its weights when it records, while a blockwise route
++records what its fill is about to convert, before the first block is read. A post-load walk runs
++after both have finished and so may ask the combined question; anything running mid-load (the
++per-block quantizer in ``shard``, which is itself the blockwise half) has to ask the narrower one,
++or it would either re-quantize what the load converted or skip what nothing has converted yet.
+ """
+ 
+ from dataclasses import dataclass, field
+@@ -36,6 +43,8 @@ class QuantizationLedger:
+     fp8_descriptor_components: set = field(default_factory=set)
+     streaming_targets: set = field(default_factory=set)
+     fp8_streaming_targets: set = field(default_factory=set)
++    on_load_targets: set = field(default_factory=set)
++    fp8_on_load_targets: set = field(default_factory=set)
+ 
+     def describe(self, component_name, *, fp8, any_format=True):
+         """Record that this component's quantization plan has been logged.
+@@ -61,14 +70,26 @@ class QuantizationLedger:
+         described.add(component_name)
+         return True
+ 
+-    def record_streamed(self, component_name, targets, *, fp8, any_format=True):
+-        """Record the module paths that will hold quantized weights once this route finishes."""
++    def record_streamed(
++        self, component_name, targets, *, fp8, any_format=True, on_load=False
++    ):
++        """Record the module paths that will hold quantized weights once this route finishes.
++
++        ``on_load=True`` says the conversion has already happened, because the loader itself
++        performed it (a ``from_pretrained`` carrying a quantization config, or the text-encoder
++        framework's own quantizer). Leave it False for a route that records its targets up front
++        and converts them later, per block.
++        """
+ 
+         paths = component_target_paths(component_name, targets)
+         if any_format:
+             self.streaming_targets.update(paths)
++            if on_load:
++                self.on_load_targets.update(paths)
+         if fp8:
+             self.fp8_streaming_targets.update(paths)
++            if on_load:
++                self.fp8_on_load_targets.update(paths)
+ 
+     def already_quantized(self, *, fp8=False):
+         """The paths a walk should skip, as one set."""
+@@ -78,3 +99,16 @@ class QuantizationLedger:
+             if fp8
+             else set(self.streaming_targets)
+         )
++
++    def quantized_on_load(self, *, fp8=False):
++        """The paths whose weights are quantized storage already, before placement or sharding.
++
++        The subset of ``already_quantized`` that a mid-load quantizer must skip: a blockwise
++        route's targets are excluded because it is the thing that still has to convert them.
++        """
++
++        return (
++            self.on_load_targets | self.fp8_on_load_targets
++            if fp8
++            else set(self.on_load_targets)
++        )
+diff --git a/xfuser/model_executor/models/runner_models/loading/shard.py b/xfuser/model_executor/models/runner_models/loading/shard.py
+index 96c3e01..9053f6c 100644
+--- a/xfuser/model_executor/models/runner_models/loading/shard.py
++++ b/xfuser/model_executor/models/runner_models/loading/shard.py
+@@ -185,6 +185,33 @@ def _has_unowned_target(targets, owners):
+     )
+ 
+ 
++def _drop_quantized(targets, quantized_paths):
++    """The targets no already-quantized path wholly covers."""
++    return {
++        target
++        for target in targets
++        if not any(
++            module_path_is_covered(target, quantized)
++            for quantized in quantized_paths
++        )
++    }
++
++
++def _remaining_block_targets(targets, quantized_paths, block_path):
++    """One block's local targets, and the paths inside it that are already quantized.
++
++    Targets are None when this block has nothing left to convert: either none was requested here,
++    or a load-time quantization already covers the whole block. A target surviving
++    ``_drop_quantized`` can still be partly covered, since a quantized path may sit below it (one
++    block of a wrapped list, or one Linear inside a block), which is what the exclusions carry.
++    """
++    local = _block_local_targets(targets, block_path)
++    quantized = _block_local_targets(quantized_paths, block_path)
++    if local is None or quantized == ("",):
++        return None, ()
++    return local, quantized or ()
++
++
+ def build_block_quantize_fn(
+     loader,
+     component_name: str,
+@@ -194,7 +221,7 @@ def build_block_quantize_fn(
+     component=None,
+ ):
+     """Return a per-block quantize callable (block, block_idx) -> None for this component, or None
+-    if no quantization is configured for it.
++    if no quantization is configured for it, or if the load already did all of it.
+ 
+     Quantization targets are resolved against each block's actual
+     ``component.wrap_attr.local_index`` path. The callback index remains flattened
+@@ -203,6 +230,10 @@ def build_block_quantize_fn(
+ 
+     Suffix patterns (e.g. .net.0.proj) are block-local FQNs and are passed through unchanged on
+     every block; only prefix patterns are stripped.
++
++    Targets the load already quantized are dropped, whether they cover a whole component, a whole
++    block, or a single Linear inside one, so an eagerly quantized component is sharded as it is
++    rather than quantized a second time.
+     """
+     model = loader.model
+     config, settings = model.config, model.settings
+@@ -210,11 +241,24 @@ def build_block_quantize_fn(
+         return None
+ 
+     device = f"cuda:{local_rank}"
+-    fp4_list = set(loader.quantization_plan.module_list("fp4"))
+-    fp8_list = set(loader.quantization_plan.module_list())
++    # What the load itself already converted. Without this an eager sharded run (fully_shard_degree
++    # > 1 and no --memory_efficient_sharding) quantizes twice: from_pretrained carries a native
++    # quantization config and returns FP8 storage, then this quantizer runs over the same block
++    # while FSDP wraps it. The second pass is not a no-op, because TorchAO derives its scale from
++    # weight.abs() and CUDA has no abs kernel for float8_e4m3fn, so the run dies at the first block
++    # with 'abs_cuda not implemented for Float8_e4m3fn'.
++    # Only the on-load half is excluded: the blockwise routes record their targets before their
++    # fill converts them, and this function is what performs that conversion.
++    format_quantized = loader.quantization_ledger.quantized_on_load()
++    fp8_quantized = loader.quantization_ledger.quantized_on_load(fp8=True)
++    fp4_requested = set(loader.quantization_plan.module_list("fp4"))
++    fp8_requested = set(loader.quantization_plan.module_list())
++    int8_requested = set(loader.quantization_plan.module_list("int8"))
++    fp4_list = _drop_quantized(fp4_requested, format_quantized)
++    fp8_list = _drop_quantized(fp8_requested, fp8_quantized)
++    int8_list = _drop_quantized(int8_requested, format_quantized)
+     fp8_overrides = settings.fp8_precision_overrides or ()
+     fp8_suffix_overrides = settings.fp8_precision_override_suffixes
+-    int8_list = set(loader.quantization_plan.module_list("int8"))
+ 
+     paths = [f"{component_name}.{a}" for a in wrap_attrs]
+ 
+@@ -231,6 +275,15 @@ def build_block_quantize_fn(
+     use_int8_here = config.use_int8_gemms and overlaps_any(int8_list)
+ 
+     if not use_fp4_here and not use_fp8_here and not use_int8_here:
++        if overlaps_any(
++            (fp4_requested - fp4_list)
++            | (fp8_requested - fp8_list)
++            | (int8_requested - int8_list)
++        ):
++            log(
++                f"{component_name} was quantized while it loaded; sharding it without a "
++                "per-block quantize so its weights are not converted twice."
++            )
+         return None
+ 
+     block_paths = (
+@@ -250,9 +303,15 @@ def build_block_quantize_fn(
+             if block_paths is not None
+             else f"{component_name}.{wrap_attrs[0]}.{block_idx}"
+         )
+-        local_fp4_targets = _block_local_targets(fp4_list, block_path)
+-        local_fp8_targets = _block_local_targets(fp8_list, block_path)
+-        local_int8_targets = _block_local_targets(int8_list, block_path)
++        local_fp4_targets, fp4_done = _remaining_block_targets(
++            fp4_list, format_quantized, block_path
++        )
++        local_fp8_targets, fp8_done = _remaining_block_targets(
++            fp8_list, fp8_quantized, block_path
++        )
++        local_int8_targets, int8_done = _remaining_block_targets(
++            int8_list, format_quantized, block_path
++        )
+         use_fp4_block = config.use_fp4_gemms and local_fp4_targets is not None
+         use_fp8_block = (config.use_fp8_gemms and local_fp8_targets is not None) or (
+             config.use_fp4_gemms
+@@ -288,7 +347,7 @@ def build_block_quantize_fn(
+                 fp8_suffix_layers=fp8_suffix_overrides,
+                 hybrid=config.use_hybrid_gemm_schedule,
+                 device=device,
+-                filter_fn=_target_filter(local_fp4_targets),
++                filter_fn=_target_filter(local_fp4_targets, fp4_done),
+             )
+         if use_fp8_block:
+             adapter = loader.backends.blockwise_fp8
+@@ -301,7 +360,7 @@ def build_block_quantize_fn(
+                 device=device,
+                 filter_fn=_target_filter(
+                     local_fp8_targets,
+-                    (local_fp4_targets if use_fp4_block else ()),
++                    tuple(local_fp4_targets if use_fp4_block else ()) + tuple(fp8_done),
+                     getattr(settings, "fp8_gemm_include_suffixes", None),
+                 ),
+             )
+@@ -314,7 +373,7 @@ def build_block_quantize_fn(
+             adapter.convert_block(
+                 block,
+                 device=device,
+-                filter_fn=_target_filter(local_int8_targets),
++                filter_fn=_target_filter(local_int8_targets, int8_done),
+             )
+ 
+     return quantize_fn
+diff --git a/xfuser/model_executor/models/runner_models/loading/text_encoder_plan.py b/xfuser/model_executor/models/runner_models/loading/text_encoder_plan.py
+index 4ca4a98..2b588a7 100644
+--- a/xfuser/model_executor/models/runner_models/loading/text_encoder_plan.py
++++ b/xfuser/model_executor/models/runner_models/loading/text_encoder_plan.py
+@@ -93,8 +93,10 @@ def plan_text_encoders(loader, existing_quantization_config=None):
+             # the format-agnostic walks iterate.
+             ledger.describe(component_name, fp8=True, any_format=False)
+             if prepared.descriptor.materialization_mode == "streaming":
++                # on_load: the framework's quantizer converts these while the pipeline loads
++                # them, so an encoder that is then sharded must not be quantized again per block.
+                 ledger.record_streamed(
+-                    component_name, targets, fp8=True, any_format=False
++                    component_name, targets, fp8=True, any_format=False, on_load=True
+                 )
+             if prepared.quantization_config is not None:
+                 component_configs[component_name] = prepared.quantization_config
+diff --git a/xfuser/model_executor/models/runner_models/loading/transformer_load.py b/xfuser/model_executor/models/runner_models/loading/transformer_load.py
+index 454bc8c..b5f1962 100644
+--- a/xfuser/model_executor/models/runner_models/loading/transformer_load.py
++++ b/xfuser/model_executor/models/runner_models/loading/transformer_load.py
+@@ -150,7 +150,9 @@ def _record_native_quantization(ledger, adapter, component_name, prepared, targe
+     # Only a format load narrows the streamed set; an FP8 one has no such field and owns
+     # everything it was given.
+     streamed = getattr(prepared, "streamed_targets", ()) or targets
+-    ledger.record_streamed(component_name, streamed, fp8=is_fp8)
++    # on_load: from_pretrained returns with these weights already in quantized storage, so the
++    # per-block quantizer that runs during sharding has to leave them alone.
++    ledger.record_streamed(component_name, streamed, fp8=is_fp8, on_load=True)
+ 
+ 
+ def load_transformer(
