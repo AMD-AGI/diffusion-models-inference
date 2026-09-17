@@ -122,6 +122,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git apply /patches/xfuser_runner_utils.patch && \
     git apply /patches/xfuser_flux.patch && \
     git apply /patches/xfuser_minimax_h3.patch && \
+    git apply /patches/fix-torchao-quant-sharding.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 
