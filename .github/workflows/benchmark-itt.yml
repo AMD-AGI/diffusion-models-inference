@@ -1,0 +1,164 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Benchmark xDiT ITT
+
+# Benchmarking only: no image build, no MIOpen tuning. Runs an existing image
+# through the inference-testing driver, which requires a runner deployed with
+# the ITT compose override. Target it by label via gpu_runners.
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_image:
+        description: 'Image tag or full Docker Hub path to benchmark'
+        required: true
+        default: ''
+      gpu_runners:
+        description: 'Comma-separated list of ITT runner labels'
+        required: true
+        default: ''
+      benchmark_flags:
+        description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
+        required: false
+        default: ''
+      job_timeout_minutes:
+        description: 'Driver-side timeout for the whole benchmark job'
+        required: false
+        default: '720'
+      mlflow_experiment_prefix:
+        description: 'Databricks workspace folder for MLflow experiments; must already exist.'
+        required: false
+        default: '/'
+
+permissions:
+  contents: read
+
+env:
+  STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+
+jobs:
+  validate:
+    name: Validate inputs
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      - name: Resolve benchmark image
+        id: resolve
+        uses: ./.github/actions/resolve-benchmark-image
+        with:
+          benchmark_image: ${{ inputs.benchmark_image }}
+          staging_image: ${{ env.STAGING_IMAGE }}
+
+      - name: Validate benchmark image exists
+        uses: ./.github/actions/validate-image-exists
+        with:
+          image: ${{ steps.resolve.outputs.image }}
+
+      - name: Generate matrix
+        id: generate
+        uses: ./.github/actions/generate-architecture-matrix
+        with:
+          workflow_inputs: ${{ toJSON(inputs) }}
+
+      - name: Write summary
+        uses: ./.github/actions/write-workflow-summary
+        with:
+          title: 'Benchmark Configuration'
+          tables: |
+            {
+              "Workflow Inputs": {
+                "benchmark_image": "${{ inputs.benchmark_image }}",
+                "gpu_runners": "${{ inputs.gpu_runners }}",
+                "benchmark_flags": "${{ inputs.benchmark_flags }}",
+                "job_timeout_minutes": "${{ inputs.job_timeout_minutes }}"
+              }
+            }
+          code: |
+            {
+              "Matrix Configuration": ${{ toJSON(fromJSON(steps.generate.outputs.matrix)) }}
+            }
+
+  benchmark:
+    name: ${{ matrix.arch }} benchmarking
+    needs: [validate]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      - name: Resolve benchmark image
+        id: resolve
+        uses: ./.github/actions/resolve-benchmark-image
+        with:
+          benchmark_image: ${{ inputs.benchmark_image }}
+          staging_image: ${{ env.STAGING_IMAGE }}
+
+      - name: Pull image and extract version information
+        env:
+          BENCHMARK_IMAGE: ${{ steps.resolve.outputs.image }}
+        run: |
+          mkdir -p versions
+          git rev-parse HEAD > versions/repository.txt
+          docker pull "$BENCHMARK_IMAGE"
+          docker create --name core "$BENCHMARK_IMAGE"
+          docker cp core:/opt/rocm/share/therock/ versions/ || true
+          docker rm core
+
+      - name: Upload version artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ github.run_number }}-versions-${{ matrix.arch }}
+          path: versions/**
+          overwrite: true
+
+      - name: Run benchmarks (inference-testing)
+        uses: ./.github/actions/run-benchmarks-v2
+        with:
+          image: ${{ steps.resolve.outputs.image }}
+          arch: ${{ matrix.arch }}
+          gfx_arch: ${{ matrix.gfx_arch }}
+          benchmark_flags: ${{ inputs.benchmark_flags }}
+          benchmark_only: 'true'
+          hf_token: ${{ secrets.HF_TOKEN }}
+          artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
+          job_timeout_minutes: ${{ inputs.job_timeout_minutes }}
+          databricks_host: ${{ secrets.DATABRICKS_HOST }}
+          databricks_token: ${{ secrets.DATABRICKS_TOKEN }}
+          mlflow_experiment_prefix: ${{ inputs.mlflow_experiment_prefix }}
+
+      - name: Image cleanup
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: '${{ steps.resolve.outputs.image }}'
+          containers: 'core'
+          skip_workspace_cleanup: 'true'
+
+      - name: Workspace cleanup
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          skip_workspace_cleanup: 'false'
