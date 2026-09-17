@@ -53,7 +53,6 @@ RUN curl --fail --location --retry 3 \
     https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
 # Copy CI scripts and benchmark configs
 COPY .ci/run.py /app/.ci/run.py
-COPY .ci/integrations/vllm_omni/runner.py /app/.ci/runner.py
 COPY .ci/integrations/vllm_omni/online_runner.py /app/.ci/online_runner.py
 COPY benchmark_configs/omni/ /app/.ci/benchmark_configs/
 
