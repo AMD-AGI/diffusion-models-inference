@@ -116,7 +116,9 @@ jobs:
           BUILDKIT_PROGRESS: plain
           PLATFORM: ${{ inputs.platform }}
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
+          IMAGE_NAME: ${{ inputs.image_name }}
           IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          TAG_SUFFIX: ${{ inputs.image_tag_suffix }}
           FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
         run: |
           NO_CACHE_FLAG=""
@@ -129,13 +131,30 @@ jobs:
             EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}"
           fi
           
+          # IMAGE_TAG carries the commit SHA, so it never exists before a build
+          # of a new commit and can only seed cache when the same tag is rebuilt.
+          # This per-platform ref is stable across commits and is what lets a
+          # build reuse the previous commit's layers, on any runner.
+          CACHE_REF="${IMAGE_NAME}:buildcache${TAG_SUFFIX}"
+          
           # The remote builder imports cache straight from the registry, so a
-          # missing tag must not fail the build.
-          CACHE_FROM_FLAG=""
-          if docker buildx imagetools inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
-            CACHE_FROM_FLAG="--cache-from ${IMAGE_TAG}"
+          # missing ref must not fail the build.
+          CACHE_FROM_FLAGS=""
+          if [ "${DISABLE_CACHE}" != "true" ]; then
+            for REF in "${CACHE_REF}" "${IMAGE_TAG}"; do
+              if docker buildx imagetools inspect --raw "${REF}" >/dev/null 2>&1; then
+                CACHE_FROM_FLAGS="${CACHE_FROM_FLAGS} --cache-from type=registry,ref=${REF}"
+              else
+                echo "No cache to import from ${REF}"
+              fi
+            done
           fi
 
+          # Exported even when the cache is disabled, so that a --no-cache run
+          # repopulates the cache instead of leaving it stale. Cache blobs are
+          # the image's own layers pushed to the same repository, so the
+          # registry deduplicates them; do not re-compress them here or the
+          # digests change and dedup is lost.
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.cuda \
@@ -143,9 +162,9 @@ jobs:
             --pull \
             --push \
             ${NO_CACHE_FLAG} \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
             ${EXTRA_BUILD_ARGS} \
-            ${CACHE_FROM_FLAG} \
+            ${CACHE_FROM_FLAGS} \
+            --cache-to "type=registry,ref=${CACHE_REF},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true" \
             -t "${IMAGE_TAG}" \
             .
       
