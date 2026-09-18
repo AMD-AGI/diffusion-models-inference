@@ -58,6 +58,10 @@ on:
         type: boolean
         required: false
         default: false
+      cache_scope:
+        description: 'Layer cache scope. Defaults to the built branch, so only builds of main touch the mainline cache; set it to isolate a test build launched from main.'
+        required: false
+        default: ''
       gpu_runners:
         description: 'Comma-separated list of GPU runner labels'
         required: true
@@ -70,6 +74,7 @@ permissions:
 env:
   CORE_IMAGE: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
   STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+  BUILDCACHE_IMAGE: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
 
 jobs:
   validate:
@@ -167,7 +172,9 @@ jobs:
                 "force_retuning": "${{ inputs.force_retuning }}",
                 "benchmark_image": "${{ inputs.benchmark_image }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag }}",
-                "prebuilt_untuned_image_tag": "${{ inputs.prebuilt_untuned_image_tag }}"
+                "prebuilt_untuned_image_tag": "${{ inputs.prebuilt_untuned_image_tag }}",
+                "cache_scope": "${{ inputs.cache_scope || inputs.git_branch || github.ref_name }}",
+                "cache_image_name": "${{ env.BUILDCACHE_IMAGE }}"
               },
               "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
               "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
@@ -183,6 +190,8 @@ jobs:
       image_tag: ${{ needs.validate.outputs.image_tag }}
       core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
       staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      cache_scope: ${{ inputs.cache_scope }}
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache }}
@@ -362,17 +371,30 @@ jobs:
       - name: Pull untuned image
         run: docker pull ${{ steps.metadata.outputs.untuned_image }} || true
       
+      # Import only. The untuned image is not listed as a cache source: it
+      # carries no cache records, and the deps stage it would have to describe
+      # rebuilds here regardless, because this build feeds the final stage the
+      # freshly tuned MIOpen databases instead of the ones committed to the repo.
+      - name: Resolve final build cache
+        id: final_cache
+        uses: ./.github/actions/resolve-build-cache
+        with:
+          cache_image_name: ${{ env.BUILDCACHE_IMAGE }}
+          channel: 'core'
+          ref: ${{ inputs.git_branch || github.ref_name }}
+          cache_scope: ${{ inputs.cache_scope }}
+          export: 'false'
+
       - name: Build final tuned image
         env:
           BUILDKIT_PROGRESS: plain
-          UNTUNED_IMAGE: ${{ steps.metadata.outputs.untuned_image }}
           IMAGE_TAG: ${{ steps.metadata.outputs.staging_image_with_tag }}
+          CACHE_FROM_FLAGS: ${{ steps.final_cache.outputs.cache_from_flags }}
         run: |
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from "${UNTUNED_IMAGE}" \
+            ${CACHE_FROM_FLAGS} \
             -t "${IMAGE_TAG}" \
             --push \
             .

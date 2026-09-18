@@ -40,6 +40,10 @@ on:
         type: boolean
         required: false
         default: false
+      cache_scope:
+        description: "Layer cache scope. Defaults to the branch name, so only builds of main touch the mainline cache; set it to isolate a test build launched from main."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -70,6 +74,8 @@ jobs:
                 "runner": "${{ inputs.runner || 'build-only' }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
                 "force_trigger_tuning": "${{ inputs.force_trigger_tuning || 'false' }}",
+                "cache_scope": "${{ inputs.cache_scope || github.ref_name }}",
+                "cache_image_name": "${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}",
                 "short_sha": "${{ steps.short_sha.outputs.sha }}"
               }
             }
@@ -83,6 +89,8 @@ jobs:
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
       core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
       staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      cache_scope: ${{ inputs.cache_scope }}
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
