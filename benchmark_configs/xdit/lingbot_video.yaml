@@ -1,0 +1,37 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: lingbot_video_dense.default
+  tags: [release, instinct, gfx942, gfx950]
+  model: robbyant/lingbot-video-dense-1.3b
+  runner: xdit
+  args:
+    seed: 42
+    prompt: /app/data/lingbot_t2v_prompt.json
+    height: 480
+    width: 832
+    num_frames: 81
+    num_inference_steps: 40
+    guidance_scale: 3.0
+    use_torch_compile: true
+    num_iterations: 1
+    attention_backend: aiter
+
+- name: lingbot_video_moe.default
+  tags: [release, instinct, gfx942, gfx950]
+  model: robbyant/lingbot-video-moe-30b-a3b
+  runner: xdit
+  args:
+    seed: 42
+    prompt: /app/data/lingbot_t2v_prompt.json
+    height: 480
+    width: 832
+    num_frames: 81
+    num_inference_steps: 40
+    guidance_scale: 3.0
+    ulysses_degree: 4
+    use_cfg_parallel: true
+    use_parallel_vae: true
+    use_torch_compile: true
+    num_iterations: 1
+    attention_backend: aiter
