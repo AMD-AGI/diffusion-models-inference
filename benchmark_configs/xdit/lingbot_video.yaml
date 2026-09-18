@@ -12,7 +12,7 @@
     width: 832
     num_frames: 81
     num_inference_steps: 40
-    guidance_scale: 1.0
+    guidance_scale: 3.0
     use_torch_compile: true
     num_iterations: 1
     attention_backend: aiter
@@ -24,8 +24,8 @@
   args:
     seed: 42
     prompt: /app/data/lingbot_t2v_prompt.json
-    height: 1088
-    width: 1920
+    height: 480
+    width: 832
     num_frames: 81
     num_inference_steps: 40
     guidance_scale: 3.0

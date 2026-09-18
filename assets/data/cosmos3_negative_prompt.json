@@ -1,68 +1,110 @@
 {
   "subjects": [
     {
-      "description": "Broken, unrecognizable animals with extra limbs, melted faces, and anatomy that changes from frame to frame.",
-      "appearance_details": "Smeared fur, missing eyes, duplicate tails, and textures that crawl independently of the body.",
-      "relationship": "Subjects fail to occupy a stable place in the scene and drift through snow or trunks.",
-      "location": "Random placement, often cropped by the frame",
-      "relative_size": "Scale jumps without cause",
-      "orientation": "Twisted or inverted poses",
-      "pose": "Joints bending the wrong way",
-      "action": "Teleports, slides without footsteps, or freezes while the background continues",
-      "state_changes": "Species, color, and limb count change mid-shot",
+      "description": "An animal subject whose body plan never resolves: the limb count changes between frames, the spine stretches and compresses at random, and the silhouette dissolves wherever it overlaps something of a similar brightness.",
+      "appearance_details": "The coat is an airbrushed gradient with no individual strands, and wherever fine detail is attempted it boils and reshuffles every frame instead of holding still. Highlights sit on the surface like wet varnish rather than following the form underneath.",
+      "relationship": "Never grounded in the environment. The body intersects the terrain and nearby scenery instead of resting on it or passing around it, and nothing in the surroundings reacts to its presence.",
+      "location": "Wanders around the frame without motivation, frequently clipped by an edge or lost entirely against a background of the same value.",
+      "relative_size": "Scale is unstable. The subject grows and shrinks relative to fixed scenery while the camera distance stays constant.",
+      "orientation": "Facing direction flips without a turn. The torso points one way while the head and limbs point another.",
+      "pose": "Joints hinge backwards, limbs pass through the torso, and the body's weight is never carried by whichever leg is actually touching the ground.",
+      "action": "Locomotion alternates between sliding and snapping: the body translates forward while the feet stay planted, then the feet teleport ahead to catch up. Stride timing bears no relationship to the distance covered.",
+      "state_changes": "Coat length, colour, and markings reshuffle mid-shot. The subject intermittently takes on the texture of whatever is directly behind it.",
       "clothing": "",
-      "expression": "Blank or rapidly switching expressions",
+      "expression": "Affectless and frozen, or cycling between expressions with no transition frames in between.",
+      "gender": "",
+      "age": "",
+      "skin_tone_and_texture": "Uniformly rubbery and equally glossy everywhere, reading as moulded plastic rather than anything organic.",
+      "facial_features": "Duplicated or absent features, pupils that fail to track anything, and a jaw that swims independently of the skull.",
+      "number_of_subjects": 0,
+      "number_of_arms": 0,
+      "number_of_legs": 0
+    },
+    {
+      "description": "Secondary scene elements rendered as flat cardboard stand-ins, correct in outline but empty of volume and unaffected by anything happening around them.",
+      "appearance_details": "Cut-out edges with a visible halo of background colour, interiors filled by a single stretched texture, and no self-shadowing to suggest thickness.",
+      "relationship": "Arranged beside the main subject rather than sharing space with it, with no occlusion or contact anywhere the two should meet.",
+      "location": "Distributed evenly across the frame with no regard for depth, so foreground and far distance read at the same apparent scale.",
+      "relative_size": "Proportions disagree with their distance from the camera, collapsing any sense of perspective.",
+      "orientation": "Elements lean at inconsistent angles that contradict the ground plane beneath them.",
+      "pose": "",
+      "action": "Pop in and out of existence between frames, most visibly toward the edges of the field of view.",
+      "state_changes": "Detail level switches abruptly as the camera moves, with visible jumps between coarse and fine versions of the same element.",
+      "clothing": "",
+      "expression": "",
       "gender": "",
       "age": "",
       "skin_tone_and_texture": "",
-      "facial_features": "Asymmetry, extra mouths, collapsed snouts",
+      "facial_features": "",
       "number_of_subjects": 0,
       "number_of_arms": 0,
       "number_of_legs": 0
     }
   ],
-  "background_setting": "A collapsed forest with repeating tiled snow, swimming bark textures, and trees that pop in and out. No coherent ground plane.",
+  "background_setting": "An environment assembled from one repeating texture patch with the seams left visible, so the same cluster of detail recurs at fixed intervals across the whole frame. There is no coherent ground plane: the surface underfoot shifts height between frames and offers no consistent horizon to read against. Granular surfaces crawl and simmer rather than holding still, and their apparent grain size changes with camera distance instead of staying fixed to the geometry. Distant elements are rendered at a visibly coarser resolution than near ones, producing a hard band across the middle distance where quality drops. Vertical elements are spaced with mechanical regularity and duplicated at identical heights. Depth cues contradict each other, with atmospheric haze applied to near objects and omitted from far ones.",
   "lighting": {
-    "conditions": "Flat, flickering illumination with sudden day-to-night cuts",
-    "direction": "Shadow directions that disagree with any single sun",
-    "shadows": "Missing contact shadows, crawling shadow maps, and strobing under the subject",
-    "illumination_effect": "Harsh digital look with no atmospheric depth"
+    "conditions": "A single flat overhead source with no falloff, so every surface returns the same value and the image reads as one plane with no depth.",
+    "direction": "Unresolvable. Highlights imply a source in one position while shadows imply another, and both wander during the shot without any change in the scene.",
+    "shadows": "Contact shadows are missing entirely, so everything appears to hover just above the surface it should be resting on. The cast shadows that do exist have hard aliased edges, fall at angles that match no light source, and shimmer frame to frame even where nothing is moving.",
+    "illumination_effect": "No bounce, no ambient occlusion, no gradient between lit and unlit areas. The result looks like a viewport preview with lighting disabled rather than a photographed scene."
   },
   "aesthetics": {
-    "composition": "No subject, horizon tilt, and important action cut off by the frame",
-    "color_scheme": "Neon oversaturation, banding, and color that does not match a winter dawn",
-    "mood_atmosphere": "Uncanny, noisy, and unfinished",
-    "patterns": "Visible tiling, moire, and aliasing on snow and needles"
+    "composition": "No focal point anywhere. The intended subject is pushed into a corner or cropped through while the centre of the frame is given to empty scenery. The horizon tilts and rights itself at random.",
+    "color_scheme": "Crushed blacks and clipped highlights with heavy banding across every gradient. The overall cast swings between warm and cool during the shot with nothing in the scene to motivate it.",
+    "mood_atmosphere": "Inert and synthetic. Nothing in the frame communicates temperature, weather, air, or time of day.",
+    "patterns": "Obvious texture tiling, moire across fine repeating detail, and stair-stepped aliasing along every high-contrast edge."
   },
   "cinematography": {
-    "camera_motion": "Jerky handheld shake, sudden cuts, and camera clipping through trunks",
-    "framing": "Unbalanced, with the subject lost in empty snow or jammed against a corner",
-    "camera_angle": "Disorienting Dutch angles and accidental ceiling shots",
-    "depth_of_field": "Everything equally soft or equally sharp with no focus plane",
-    "focus": "Hunting autofocus, chromatic fringing, and smear on motion",
-    "lens_focal_length": "Extreme wide-angle distortion or random zoom"
+    "camera_motion": "High-frequency judder layered over a move that starts and stops instantly with no ease in or out. The path is a straight line between keyframes, ignoring anything it passes through, and the camera occasionally clips through solid geometry.",
+    "framing": "Headroom and lead space are wrong throughout. The subject is either cut through by an edge or marooned in dead space with the action happening off-screen.",
+    "camera_angle": "Unmotivated Dutch tilts and viewpoints that conceal the action rather than reveal it, including stretches aimed at empty ground or empty sky.",
+    "depth_of_field": "One flat focal plane covering the entire frame, or a blur applied without regard to distance so that near and far are softened by the same amount.",
+    "focus": "Focus hunts continuously and never settles. Purple and green fringing on every high-contrast edge, with smearing across anything in motion.",
+    "lens_focal_length": "Mismatched perspective, combining wide-angle stretching at the frame edges with long-lens compression through the centre of the same image."
   },
-  "style_medium": "Heavily compressed video with block artifacts",
-  "artistic_style": "Inconsistent amateur CGI",
-  "context": "A failed generation that should be avoided",
+  "style_medium": "Low-bitrate video with visible macroblocking and mosquito noise around moving edges",
+  "artistic_style": "Unfinished real-time render populated with placeholder assets",
+  "context": "A catalogue of the failure modes this generation must avoid",
   "actions": [
     {
-      "time": "0:00-0:05",
-      "description": "Subjects morph, stutter, and lose temporal continuity while the background wobbles"
+      "time": "0:00-0:02",
+      "description": "The subject slides forward without its feet driving the motion while the surrounding elements jitter at a different rate, establishing immediately that nothing shares a single physical space."
+    },
+    {
+      "time": "0:02-0:03",
+      "description": "Motion stalls into a held frame while the background continues to churn, then resumes with a jump cut that discards the intervening movement."
+    },
+    {
+      "time": "0:03-0:05",
+      "description": "Detail degrades progressively as compression artifacts accumulate, the colour cast swings, and the subject's proportions settle into a different configuration than they started in."
     }
   ],
   "text_and_signage_elements": [],
   "segments": [
     {
       "segment_index": 0,
-      "time_range": "0:00-0:05",
-      "description": "One unbroken shot of unstable geometry and flicker",
-      "key_changes": "Quality degrades; no readable action",
-      "camera": "Unstable interpolation between random viewpoints"
+      "time_range": "0:00-0:02",
+      "description": "Opening stretch in which the subject and its surroundings move on unrelated timelines, with no contact shadows to tie them together.",
+      "key_changes": "Body proportions begin changing; background texture starts to crawl.",
+      "camera": "Juddering move with instant acceleration and no settling."
+    },
+    {
+      "segment_index": 1,
+      "time_range": "0:02-0:03",
+      "description": "A frozen subject against a moving background, broken by an abrupt cut that loses continuity of position and pose.",
+      "key_changes": "Temporal coherence fails outright; the subject reappears in a different configuration.",
+      "camera": "Unmotivated zoom with no corresponding change in perspective."
+    },
+    {
+      "segment_index": 2,
+      "time_range": "0:03-0:05",
+      "description": "Closing stretch dominated by accumulating encode artifacts, banding across flat areas, and a subject whose silhouette no longer separates from the background.",
+      "key_changes": "Overall fidelity degrades steadily through to the final frame.",
+      "camera": "Wandering move that ends mid-gesture with the action out of frame."
     }
   ],
   "transitions": [],
-  "temporal_caption": "The clip is temporally broken from the first frame: shapes smear, frames drop, and the scene never settles into a readable walk through a forest.",
+  "temporal_caption": "Nothing in this clip holds together across time. From the opening frames the subject and its surroundings move on unrelated clocks, so forward motion never matches the effort that should be producing it. Around the two-second mark the subject freezes while everything behind it keeps churning, and the shot then cuts abruptly to a different configuration without showing the movement in between. Through the final seconds the image degrades steadily: fine texture simmers instead of holding still, flat areas break into visible bands, edges accumulate fringing and blocking, and the subject's proportions wander far enough that it ends the clip as a different shape than it began.",
   "audio_description": "",
-  "physical_realism": "Snow does not compress under paws, bodies pass through trees, and motion ignores weight and friction."
+  "physical_realism": "No consistent physics anywhere in the shot. Contact is never resolved, so bodies intersect surfaces and pass through obstacles instead of being stopped by them. Loose material neither compresses under weight nor scatters on impact, and disturbed particles hang in place rather than settling. Momentum appears and disappears without cause, with instant starts, instant stops, and direction changes that require forces nothing in the scene could supply. Friction is inconsistent across identical surfaces, and anything displaced fails to return to rest in a stable position."
 }
