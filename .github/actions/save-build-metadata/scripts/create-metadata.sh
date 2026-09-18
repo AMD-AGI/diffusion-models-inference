@@ -13,27 +13,10 @@ CORE_IMAGE=$(echo "$INPUT_CORE_IMAGE" | xargs)
 CORE_IMAGE_WITH_TAG=$(echo "$INPUT_CORE_IMAGE_WITH_TAG" | xargs)
 STAGING_IMAGE=$(echo "$INPUT_STAGING_IMAGE" | xargs)
 STAGING_IMAGE_WITH_TAG=$(echo "$INPUT_STAGING_IMAGE_WITH_TAG" | xargs)
-BENCHMARK_IMAGE=$(echo "$INPUT_BENCHMARK_IMAGE" | xargs)
-BENCHMARK_IMAGE_TAG=$(echo "$INPUT_BENCHMARK_IMAGE_TAG" | xargs)
-PREBUILT_CORE_TAG=$(echo "$INPUT_PREBUILT_CORE_IMAGE_TAG" | xargs)
-PREBUILT_UNTUNED_TAG=$(echo "$INPUT_PREBUILT_UNTUNED_IMAGE_TAG" | xargs)
+SHOULD_REBUILD=$(echo "$INPUT_SHOULD_REBUILD" | xargs)
+WORKING_IMAGE=$(echo "$INPUT_WORKING_IMAGE" | xargs)
+BASE_IMAGE=$(echo "$INPUT_BASE_IMAGE" | xargs)
 GIT_BRANCH=$(echo "$INPUT_GIT_BRANCH" | xargs)
-
-# Determine tune and benchmark image
-if [ -n "${BENCHMARK_IMAGE}" ]; then
-  TUNE_AND_BENCHMARK_IMAGE="${BENCHMARK_IMAGE}"
-elif [ -n "${PREBUILT_UNTUNED_TAG}" ]; then
-  TUNE_AND_BENCHMARK_IMAGE="${STAGING_IMAGE}:${PREBUILT_UNTUNED_TAG}"
-else
-  TUNE_AND_BENCHMARK_IMAGE="${STAGING_IMAGE_WITH_TAG}-temp"
-fi
-
-# Determine untuned image
-if [ -n "${PREBUILT_UNTUNED_TAG}" ]; then
-  UNTUNED_IMAGE="${STAGING_IMAGE}:${PREBUILT_UNTUNED_TAG}"
-else
-  UNTUNED_IMAGE="${STAGING_IMAGE_WITH_TAG}-temp"
-fi
 
 mkdir -p build-metadata
 cat > build-metadata/tags.json << EOF
@@ -45,12 +28,9 @@ cat > build-metadata/tags.json << EOF
   "staging_image": "${STAGING_IMAGE}",
   "staging_image_tag": "${IMAGE_TAG}",
   "staging_image_with_tag": "${STAGING_IMAGE_WITH_TAG}",
-  "benchmark_image": "${BENCHMARK_IMAGE}",
-  "benchmark_image_tag": "${BENCHMARK_IMAGE_TAG}",
-  "prebuilt_core_image_tag": "${PREBUILT_CORE_TAG}",
-  "prebuilt_untuned_image_tag": "${PREBUILT_UNTUNED_TAG}",
-  "git_branch": "${GIT_BRANCH}",
-  "tune_and_benchmark_image": "${TUNE_AND_BENCHMARK_IMAGE}",
-  "untuned_image": "${UNTUNED_IMAGE}"
+  "should_rebuild": "${SHOULD_REBUILD}",
+  "working_image": "${WORKING_IMAGE}",
+  "base_image": "${BASE_IMAGE}",
+  "git_branch": "${GIT_BRANCH}"
 }
 EOF

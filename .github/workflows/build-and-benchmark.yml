@@ -10,23 +10,35 @@ on:
         description: 'Git branch to build from (optional)'
         required: false
         default: ''
-      prebuilt_core_image_tag:
-        description: 'Prebuilt core image tag (skips core build)'
+      base_image:
+        description: 'Image tag or full Docker Hub path'
         required: false
         default: ''
-      prebuilt_untuned_image_tag:
-        description: 'Prebuilt untuned image tag (skips core and untuned builds)'
+      rebuild:
+        description: '(Re)build the image, on by default if base_image is empty'
+        type: boolean
         required: false
-        default: ''
-      run_mode:
-        description: 'Workflow execution mode'
-        type: choice
-        options:
-          - 'Standard run'
-          - 'MIOpen tuning only'
-          - 'MIOpen tuning + benchmarking'
+        default: false
+      run_miopen_tuning:
+        description: 'Run MIOpen tuning'
+        type: boolean
         required: false
-        default: 'Standard run'
+        default: true
+      run_benchmarks:
+        description: 'Run benchmarks'
+        type: boolean
+        required: false
+        default: true
+      build_final:
+        description: 'Build the final tuned image'
+        type: boolean
+        required: false
+        default: true
+      create_miopen_db_pr:
+        description: 'Create MIOpen DB pull request'
+        type: boolean
+        required: false
+        default: false
       miopen_find_mode:
         description: 'MIOpen find mode (integer)'
         required: false
@@ -49,10 +61,6 @@ on:
         type: boolean
         required: false
         default: false
-      benchmark_image:
-        description: 'Image tag or full Docker Hub path for benchmark-only mode'
-        required: false
-        default: ''
       disable_docker_cache:
         description: 'Disable Docker cache on core build'
         type: boolean
@@ -80,6 +88,7 @@ jobs:
       image_tag: ${{ steps.generate_tag.outputs.tag }}
       core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
       staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
+      should_rebuild: ${{ steps.rebuild.outputs.should_rebuild }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -114,32 +123,45 @@ jobs:
           fi
           echo "any_enabled=true" >> $GITHUB_OUTPUT
       
-      - name: Validate prebuilt untuned image exists
-        if: ${{ inputs.prebuilt_untuned_image_tag != '' && inputs.benchmark_image == '' }}
-        uses: ./.github/actions/validate-image-exists
-        with:
-          image: ${{ env.STAGING_IMAGE }}:${{ inputs.prebuilt_untuned_image_tag }}
-      
-      - name: Validate prebuilt core image exists
-        if: ${{ inputs.prebuilt_core_image_tag != '' && inputs.prebuilt_untuned_image_tag == '' && inputs.benchmark_image == '' }}
-        uses: ./.github/actions/validate-image-exists
-        with:
-          image: ${{ env.CORE_IMAGE }}:${{ inputs.prebuilt_core_image_tag }}
-      
-      - name: Determine benchmark image
-        id: determine_benchmark
+      - name: Resolve base image
+        id: resolve_base
         uses: ./.github/actions/resolve-benchmark-image
         with:
-          benchmark_image: ${{ inputs.benchmark_image }}
+          benchmark_image: ${{ inputs.base_image }}
           staging_image: ${{ env.STAGING_IMAGE }}
           # Empty means "build from source" here, unlike the benchmark-only workflow.
           require_image: 'false'
       
-      - name: Validate benchmark image exists
-        if: ${{ inputs.benchmark_image != '' }}
+      - name: Determine rebuild
+        id: rebuild
+        env:
+          REBUILD_INPUT: ${{ inputs.rebuild }}
+          BASE_IMAGE: ${{ steps.resolve_base.outputs.image }}
+        run: |
+          if [ "$REBUILD_INPUT" = "true" ] || [ -z "$BASE_IMAGE" ]; then
+            echo "should_rebuild=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_rebuild=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Validate base image exists
+        if: ${{ steps.rebuild.outputs.should_rebuild == 'false' }}
         uses: ./.github/actions/validate-image-exists
         with:
-          image: ${{ steps.determine_benchmark.outputs.image }}
+          image: ${{ steps.resolve_base.outputs.image }}
+      
+      - name: Determine working image
+        id: working_image
+        env:
+          SHOULD_REBUILD: ${{ steps.rebuild.outputs.should_rebuild }}
+          STAGING_TEMP_IMAGE: ${{ env.STAGING_IMAGE }}:${{ steps.generate_tag.outputs.tag }}-temp
+          BASE_IMAGE: ${{ steps.resolve_base.outputs.image }}
+        run: |
+          if [ "$SHOULD_REBUILD" = "true" ]; then
+            echo "image=${STAGING_TEMP_IMAGE}" >> $GITHUB_OUTPUT
+          else
+            echo "image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
+          fi
       
       - name: Store build metadata
         uses: ./.github/actions/save-build-metadata
@@ -149,10 +171,9 @@ jobs:
           core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
           staging_image: ${{ env.STAGING_IMAGE }}
           staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
-          benchmark_image: ${{ steps.determine_benchmark.outputs.image }}
-          benchmark_image_tag: ${{ steps.determine_benchmark.outputs.image_tag }}
-          prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
-          prebuilt_untuned_image_tag: ${{ inputs.prebuilt_untuned_image_tag }}
+          should_rebuild: ${{ steps.rebuild.outputs.should_rebuild }}
+          working_image: ${{ steps.working_image.outputs.image }}
+          base_image: ${{ inputs.base_image }}
           git_branch: ${{ inputs.git_branch }}
           run_number: ${{ github.run_number }}
           
@@ -163,11 +184,17 @@ jobs:
           tables: |
             {
               "Workflow Inputs": {
-                "run_mode": "${{ inputs.run_mode }}",
-                "force_retuning": "${{ inputs.force_retuning }}",
-                "benchmark_image": "${{ inputs.benchmark_image }}",
-                "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag }}",
-                "prebuilt_untuned_image_tag": "${{ inputs.prebuilt_untuned_image_tag }}"
+                "base_image": "${{ inputs.base_image }}",
+                "rebuild": "${{ inputs.rebuild }}",
+                "run_miopen_tuning": "${{ inputs.run_miopen_tuning }}",
+                "run_benchmarks": "${{ inputs.run_benchmarks }}",
+                "build_final": "${{ inputs.build_final }}",
+                "create_miopen_db_pr": "${{ inputs.create_miopen_db_pr }}",
+                "force_retuning": "${{ inputs.force_retuning }}"
+              },
+              "Resolved": {
+                "should_rebuild": "${{ steps.rebuild.outputs.should_rebuild }}",
+                "working_image": "${{ steps.working_image.outputs.image }}"
               },
               "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
               "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
@@ -176,14 +203,14 @@ jobs:
   build-core:
     name: Build core and untuned images
     needs: [validate]
-    if: ${{ inputs.benchmark_image == '' && inputs.prebuilt_untuned_image_tag == '' }}
+    if: ${{ needs.validate.outputs.should_rebuild == 'true' }}
     uses: ./.github/workflows/build-core-image-reusable.yml
     with:
       git_ref: ${{ inputs.git_branch || github.ref_name }}
       image_tag: ${{ needs.validate.outputs.image_tag }}
       core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
       staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
-      prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
+      prebuilt_core_image_tag: ${{ inputs.base_image }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache }}
       runner: ${{ vars.BUILD_RUNNER || 'build-only' }}
@@ -229,9 +256,10 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
     if: |
       needs.validate.outputs.any_arch_enabled == 'true' && 
+      (inputs.run_miopen_tuning || inputs.run_benchmarks) &&
       !cancelled() && 
-      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped') &&
-      (!failure() || inputs.benchmark_image != '')
+      needs.validate.result == 'success' &&
+      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped')
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
@@ -257,8 +285,8 @@ jobs:
         run: |
           mkdir -p versions
           git rev-parse HEAD > versions/repository.txt
-          docker pull ${{ steps.metadata.outputs.tune_and_benchmark_image }}
-          docker create --name core ${{ steps.metadata.outputs.tune_and_benchmark_image }}
+          docker pull ${{ steps.metadata.outputs.working_image }}
+          docker create --name core ${{ steps.metadata.outputs.working_image }}
           docker cp core:/opt/rocm/share/therock/ versions/ || true
           docker rm core
       
@@ -269,29 +297,11 @@ jobs:
           path: versions/**
           overwrite: true
 
-      - name: Determine step conditions
-        id: conditions
-        env:
-          BENCHMARK_IMAGE: ${{ steps.metadata.outputs.benchmark_image }}
-          RUN_MODE: ${{ inputs.run_mode }}
-        run: |
-          if [ -z "$BENCHMARK_IMAGE" ]; then
-            echo "should_run_miopen_tuning=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_run_miopen_tuning=false" >> $GITHUB_OUTPUT
-          fi
-          
-          if [ "$RUN_MODE" != "MIOpen tuning only" ]; then
-            echo "should_run_benchmarks=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_run_benchmarks=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Run MIOpen tuning
-        if: ${{ steps.conditions.outputs.should_run_miopen_tuning == 'true' }}
+        if: ${{ inputs.run_miopen_tuning }}
         uses: ./.github/actions/run-miopen-tuning
         with:
-          image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
+          image: ${{ steps.metadata.outputs.working_image }}
           arch: ${{ matrix.arch }}
           artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
           miopen_find_mode: ${{ inputs.miopen_find_mode }}
@@ -299,13 +309,13 @@ jobs:
           force_retuning: ${{ inputs.force_retuning }}
       
       - name: Run benchmarks
-        if: ${{ steps.conditions.outputs.should_run_benchmarks == 'true' }}
+        if: ${{ inputs.run_benchmarks }}
         uses: ./.github/actions/run-benchmarks
         with:
-          image: ${{ steps.metadata.outputs.tune_and_benchmark_image }}
+          image: ${{ steps.metadata.outputs.working_image }}
           arch: ${{ matrix.arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
-          benchmark_only: ${{ steps.metadata.outputs.benchmark_image != '' }}
+          benchmark_only: ${{ !inputs.run_miopen_tuning }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
@@ -317,7 +327,7 @@ jobs:
         continue-on-error: true
         uses: ./.github/actions/cleanup-workspace
         with:
-          images: '${{ steps.metadata.outputs.tune_and_benchmark_image }}'
+          images: '${{ steps.metadata.outputs.working_image }}'
           containers: 'xdit-bench miopen-tune'
           skip_workspace_cleanup: 'true'
       
@@ -333,7 +343,7 @@ jobs:
     name: Build final tuned image
     needs: [validate, build-core, tune-and-benchmark]
     runs-on: ${{ vars.BUILD_RUNNER || 'build-only' }}
-    if: ${{ inputs.benchmark_image == '' && !cancelled() && !failure() }}
+    if: ${{ inputs.build_final && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -347,6 +357,7 @@ jobs:
           run_number: ${{ github.run_number }}
 
       - name: Download all MIOpen artifacts
+        if: ${{ inputs.run_miopen_tuning }}
         uses: actions/download-artifact@v8
         with:
           pattern: ${{ github.run_number }}-miopen-*
@@ -359,20 +370,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
           password: ${{ secrets.DOCKERHUB_OAT }}
       
-      - name: Pull untuned image
-        run: docker pull ${{ steps.metadata.outputs.untuned_image }} || true
+      - name: Pull working image
+        run: docker pull ${{ steps.metadata.outputs.working_image }} || true
       
       - name: Build final tuned image
         env:
           BUILDKIT_PROGRESS: plain
-          UNTUNED_IMAGE: ${{ steps.metadata.outputs.untuned_image }}
+          WORKING_IMAGE: ${{ steps.metadata.outputs.working_image }}
           IMAGE_TAG: ${{ steps.metadata.outputs.staging_image_with_tag }}
         run: |
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from "${UNTUNED_IMAGE}" \
+            --cache-from "${WORKING_IMAGE}" \
             -t "${IMAGE_TAG}" \
             --push \
             .
@@ -381,7 +392,7 @@ jobs:
         if: always()
         uses: ./.github/actions/cleanup-workspace
         with:
-          images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ env.STAGING_IMAGE }}:${{ steps.metadata.outputs.prebuilt_untuned_image_tag }}'
+          images: '${{ steps.metadata.outputs.staging_image_with_tag }} ${{ steps.metadata.outputs.working_image }}'
           containers: 'core'
 
   create-miopen-branch:
@@ -389,9 +400,10 @@ jobs:
     needs: [validate, generate-matrix, tune-and-benchmark]
     runs-on: build-only
     if: |
+      inputs.create_miopen_db_pr &&
+      inputs.run_miopen_tuning &&
       !cancelled() &&
-      needs.tune-and-benchmark.result == 'success' &&
-      (inputs.run_mode == 'MIOpen tuning only' || inputs.run_mode == 'MIOpen tuning + benchmarking')
+      needs.tune-and-benchmark.result == 'success'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
