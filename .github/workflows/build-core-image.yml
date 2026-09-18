@@ -118,7 +118,7 @@ jobs:
 
   tuning-matrix:
     name: Generate tuning matrix
-    needs: [check-changes, build-xdit-images]
+    needs: [get-short-sha, check-changes, build-xdit-images]
     runs-on: ubuntu-latest
     if: |
       !cancelled() &&
@@ -149,7 +149,7 @@ jobs:
               "Trigger": {
                 "forced": "${{ inputs.force_trigger_tuning || 'false' }}",
                 "qualifying_paths": "${{ needs.check-changes.outputs.changed_paths }}",
-                "untuned_image": "${{ needs.build-xdit-images.outputs.staging_image_with_tag }}",
+                "untuned_image": "${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}:${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}-temp",
                 "gpu_runners": "${{ inputs.gpu_runners || 'gfx942,gfx950' }}"
               }
             }
@@ -160,7 +160,7 @@ jobs:
 
   tune:
     name: ${{ matrix.arch }} tuning
-    needs: [build-xdit-images, tuning-matrix]
+    needs: [get-short-sha, build-xdit-images, tuning-matrix]
     if: ${{ !cancelled() && needs.tuning-matrix.result == 'success' }}
     strategy:
       fail-fast: false
@@ -168,7 +168,7 @@ jobs:
     uses: ./.github/workflows/miopen-tune-reusable.yml
     with:
       git_ref: ${{ github.ref_name }}
-      image: ${{ needs.build-xdit-images.outputs.staging_image_with_tag }}
+      image: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}:${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}-temp
       arch: ${{ matrix.arch }}
       runner: ${{ matrix.runner }}
       timeout_minutes: ${{ matrix.timeout }}
