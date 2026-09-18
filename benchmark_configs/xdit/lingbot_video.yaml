@@ -7,7 +7,7 @@
   runner: xdit
   args:
     seed: 42
-    prompt: /app/data/prompt.json
+    prompt: /app/data/lingbot_t2v_prompt.json
     height: 480
     width: 832
     num_frames: 81
@@ -23,7 +23,7 @@
   runner: xdit
   args:
     seed: 42
-    prompt: /app/data/prompt.json
+    prompt: /app/data/lingbot_t2v_prompt.json
     height: 1088
     width: 1920
     num_frames: 81

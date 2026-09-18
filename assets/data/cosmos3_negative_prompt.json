@@ -1,0 +1,68 @@
+{
+  "subjects": [
+    {
+      "description": "Broken, unrecognizable animals with extra limbs, melted faces, and anatomy that changes from frame to frame.",
+      "appearance_details": "Smeared fur, missing eyes, duplicate tails, and textures that crawl independently of the body.",
+      "relationship": "Subjects fail to occupy a stable place in the scene and drift through snow or trunks.",
+      "location": "Random placement, often cropped by the frame",
+      "relative_size": "Scale jumps without cause",
+      "orientation": "Twisted or inverted poses",
+      "pose": "Joints bending the wrong way",
+      "action": "Teleports, slides without footsteps, or freezes while the background continues",
+      "state_changes": "Species, color, and limb count change mid-shot",
+      "clothing": "",
+      "expression": "Blank or rapidly switching expressions",
+      "gender": "",
+      "age": "",
+      "skin_tone_and_texture": "",
+      "facial_features": "Asymmetry, extra mouths, collapsed snouts",
+      "number_of_subjects": 0,
+      "number_of_arms": 0,
+      "number_of_legs": 0
+    }
+  ],
+  "background_setting": "A collapsed forest with repeating tiled snow, swimming bark textures, and trees that pop in and out. No coherent ground plane.",
+  "lighting": {
+    "conditions": "Flat, flickering illumination with sudden day-to-night cuts",
+    "direction": "Shadow directions that disagree with any single sun",
+    "shadows": "Missing contact shadows, crawling shadow maps, and strobing under the subject",
+    "illumination_effect": "Harsh digital look with no atmospheric depth"
+  },
+  "aesthetics": {
+    "composition": "No subject, horizon tilt, and important action cut off by the frame",
+    "color_scheme": "Neon oversaturation, banding, and color that does not match a winter dawn",
+    "mood_atmosphere": "Uncanny, noisy, and unfinished",
+    "patterns": "Visible tiling, moire, and aliasing on snow and needles"
+  },
+  "cinematography": {
+    "camera_motion": "Jerky handheld shake, sudden cuts, and camera clipping through trunks",
+    "framing": "Unbalanced, with the subject lost in empty snow or jammed against a corner",
+    "camera_angle": "Disorienting Dutch angles and accidental ceiling shots",
+    "depth_of_field": "Everything equally soft or equally sharp with no focus plane",
+    "focus": "Hunting autofocus, chromatic fringing, and smear on motion",
+    "lens_focal_length": "Extreme wide-angle distortion or random zoom"
+  },
+  "style_medium": "Heavily compressed video with block artifacts",
+  "artistic_style": "Inconsistent amateur CGI",
+  "context": "A failed generation that should be avoided",
+  "actions": [
+    {
+      "time": "0:00-0:05",
+      "description": "Subjects morph, stutter, and lose temporal continuity while the background wobbles"
+    }
+  ],
+  "text_and_signage_elements": [],
+  "segments": [
+    {
+      "segment_index": 0,
+      "time_range": "0:00-0:05",
+      "description": "One unbroken shot of unstable geometry and flicker",
+      "key_changes": "Quality degrades; no readable action",
+      "camera": "Unstable interpolation between random viewpoints"
+    }
+  ],
+  "transitions": [],
+  "temporal_caption": "The clip is temporally broken from the first frame: shapes smear, frames drop, and the scene never settles into a readable walk through a forest.",
+  "audio_description": "",
+  "physical_realism": "Snow does not compress under paws, bodies pass through trees, and motion ignores weight and friction."
+}

@@ -12,8 +12,8 @@
     use_parallel_vae: true
     enable_tiling: true
     use_fp8_gemms: true
-    prompt: /app/data/example_t2v_prompt.json
-    negative_prompt: /app/data/negative_prompt.json
+    prompt: /app/data/cosmos3_t2v_prompt.json
+    negative_prompt: /app/data/cosmos3_negative_prompt.json
     num_frames: 121
     height: 720
     width: 1280
@@ -31,8 +31,8 @@
     use_parallel_vae: true
     enable_tiling: true
     use_fp8_gemms: true
-    prompt: /app/data/example_t2v_prompt.json
-    negative_prompt: /app/data/negative_prompt.json
+    prompt: /app/data/cosmos3_t2v_prompt.json
+    negative_prompt: /app/data/cosmos3_negative_prompt.json
     num_frames: 121
     height: 720
     width: 1280
