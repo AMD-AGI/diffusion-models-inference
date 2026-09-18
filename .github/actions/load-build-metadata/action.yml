@@ -33,27 +33,18 @@ outputs:
   staging_image_with_tag:
     description: 'Full staging image name with tag'
     value: ${{ steps.parse.outputs.staging_image_with_tag }}
-  benchmark_image:
-    description: 'Benchmark image for benchmark-only mode (if specified)'
-    value: ${{ steps.parse.outputs.benchmark_image }}
-  benchmark_image_tag:
-    description: 'Benchmark image tag (if specified)'
-    value: ${{ steps.parse.outputs.benchmark_image_tag }}
-  prebuilt_core_image_tag:
-    description: 'Prebuilt core image tag (if specified)'
-    value: ${{ steps.parse.outputs.prebuilt_core_image_tag }}
-  prebuilt_untuned_image_tag:
-    description: 'Prebuilt untuned image tag (if specified)'
-    value: ${{ steps.parse.outputs.prebuilt_untuned_image_tag }}
+  should_rebuild:
+    description: 'Whether the core/untuned images were rebuilt this run'
+    value: ${{ steps.parse.outputs.should_rebuild }}
+  working_image:
+    description: 'Image used for tuning, benchmarking, and as the build-final cache source'
+    value: ${{ steps.parse.outputs.working_image }}
+  base_image:
+    description: 'Raw base_image input (if specified)'
+    value: ${{ steps.parse.outputs.base_image }}
   git_branch:
     description: 'Git branch name'
     value: ${{ steps.parse.outputs.git_branch }}
-  tune_and_benchmark_image:
-    description: 'Image used for tuning and benchmarking (if specified)'
-    value: ${{ steps.parse.outputs.tune_and_benchmark_image }}
-  untuned_image:
-    description: 'Untuned image (if specified)'
-    value: ${{ steps.parse.outputs.untuned_image }}
 runs:
   using: 'composite'
   steps:
