@@ -50,6 +50,7 @@ Supported optional fields:
 --field benchmark_flags="BENCHMARK_FLAGS"
 --field collect_hipblaslt_logs=true
 --field disable_docker_cache=true
+--field build_runner="BUILD_RUNNER"
 --field cache_scope="CACHE_SCOPE"
 ```
 

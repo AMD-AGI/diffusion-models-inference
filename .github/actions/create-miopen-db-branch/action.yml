@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 name: 'Create MIOpen Database branch'
-description: 'Creates a branch with MIOpen database changes and pushes it'
+description: 'Creates a branch with MIOpen database changes, pushes it, and opens a pull request'
 
 inputs:
   branch_name:
@@ -11,6 +11,22 @@ inputs:
   run_number:
     description: 'GitHub Actions run number'
     required: true
+  base_branch:
+    description: 'Branch the pull request targets'
+    required: false
+    default: ${{ github.ref_name }}
+  gh_token:
+    description: 'Token used to open the pull request'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  has_changes:
+    description: 'Whether the tuning run produced database changes'
+    value: ${{ steps.check_changes.outputs.has_changes }}
+  pull_request_url:
+    description: 'URL of the opened pull request, empty when none was created'
+    value: ${{ steps.pull_request.outputs.url }}
 
 runs:
   using: 'composite'
@@ -62,3 +78,16 @@ runs:
       run: |
         echo "Pushing branch: ${BRANCH_NAME}"
         git push origin "${BRANCH_NAME}"
+
+    - name: Create pull request
+      id: pull_request
+      if: steps.check_changes.outputs.has_changes == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_token }}
+        BRANCH_NAME: ${{ inputs.branch_name }}
+        BASE_BRANCH: ${{ inputs.base_branch }}
+        RUN_NUMBER: ${{ inputs.run_number }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        API_URL: ${{ github.api_url }}/repos/${{ github.repository }}/pulls
+      run: ${{ github.action_path }}/scripts/create-pull-request.sh

@@ -66,6 +66,10 @@ on:
         type: boolean
         required: false
         default: false
+      build_runner:
+        description: 'Runner label for the build jobs. Leave empty for the repository default.'
+        required: false
+        default: 'build-only'
       cache_scope:
         description: 'Layer cache scope. Defaults to the built branch, so only builds of main touch the mainline cache; set it to isolate a test build launched from main.'
         required: false
@@ -222,7 +226,7 @@ jobs:
       prebuilt_core_image_tag: ${{ inputs.base_image }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache }}
-      runner: ${{ vars.BUILD_RUNNER || 'build-only' }}
+      runner: ${{ inputs.build_runner || vars.BUILD_RUNNER || 'build-only' }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
@@ -351,7 +355,7 @@ jobs:
   build-final:
     name: Build final tuned image
     needs: [validate, build-core, tune-and-benchmark]
-    runs-on: ${{ vars.BUILD_RUNNER || 'build-only' }}
+    runs-on: ${{ inputs.build_runner || vars.BUILD_RUNNER || 'build-only' }}
     if: ${{ inputs.build_final && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
@@ -421,12 +425,15 @@ jobs:
   create-miopen-branch:
     name: Create MIOpen branch
     needs: [validate, generate-matrix, tune-and-benchmark]
-    runs-on: build-only
+    runs-on: ${{ inputs.build_runner || vars.BUILD_RUNNER || 'build-only' }}
     if: |
       inputs.create_miopen_db_pr &&
       inputs.run_miopen_tuning &&
       !cancelled() &&
       needs.tune-and-benchmark.result == 'success'
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -446,4 +453,5 @@ jobs:
         with:
           branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
           run_number: ${{ github.run_number }}
+          base_branch: ${{ inputs.git_branch || github.ref_name }}
 

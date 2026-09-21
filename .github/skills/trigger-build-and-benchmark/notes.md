@@ -19,7 +19,7 @@ When presenting the command, highlight:
 - `base_image` and effective rebuild behavior
 - Comma-separated GPU runner labels
 - Any non-default step checkboxes or overrides
-- Whether `create_miopen_db_pr` will create a `miopen/<run_number>-<run_attempt>` branch
+- Whether `create_miopen_db_pr` will push a `miopen/<run_number>-<run_attempt>` branch and open a pull request
 
 ## 3. Validation rules
 
@@ -33,7 +33,7 @@ When presenting the command, highlight:
 - Each step checkbox (`rebuild`, `run_miopen_tuning`, `run_benchmarks`, `build_final`,
   `create_miopen_db_pr`) is independent; there is no implicit run-mode coupling.
 - `base_image` empty forces `rebuild` on regardless of the checkbox value.
-- `create_miopen_db_pr` creates the branch only if tuning produced database changes.
+- `create_miopen_db_pr` pushes the branch and opens the pull request only if tuning produced database changes.
 
 ## 5. Runner label overlap
 

@@ -25,7 +25,7 @@ base_image set, rebuild=true    → build from source using base_image as cache
 | `run_miopen_tuning` | boolean | `true` | Run MIOpen tuning. |
 | `run_benchmarks` | boolean | `true` | Run benchmarks. |
 | `build_final` | boolean | `true` | Build the final tuned image and push it. |
-| `create_miopen_db_pr` | boolean | `false` | Create a `miopen/<run_number>-<run_attempt>` branch with the updated tuning database. |
+| `create_miopen_db_pr` | boolean | `false` | Push a `miopen/<run_number>-<run_attempt>` branch with the updated tuning database and open a pull request against the built branch. |
 
 Each checkbox is independent — there is no implicit run-mode coupling. A
 benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
@@ -47,6 +47,7 @@ benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
 | `collect_hipblaslt_logs` | boolean | `false` | Collect per-process hipBLASLt GEMM YAML logs for each benchmark. |
 | `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. The cache is still re-exported, so this is how a stale cache gets replaced. |
 | `cache_scope` | string | `''` | Layer cache scope. Defaults to the built branch, so only builds of `main` touch the mainline cache. Set it to isolate a test build launched from `main`. |
+| `build_runner` | string | `''` | Runner label for the build jobs (core/untuned build, final image build, MIOpen branch). Empty uses the repository default. |
 
 ## GPU Runners
 
