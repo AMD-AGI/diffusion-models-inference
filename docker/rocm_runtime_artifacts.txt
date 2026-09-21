@@ -46,6 +46,7 @@ rccl_run
 rocprofiler-sdk_lib
 rocprofiler-sdk_run
 rocwmma_lib
+solver_lib
 sparse_lib
 sparse_run
 sysdeps_lib
