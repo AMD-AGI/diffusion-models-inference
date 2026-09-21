@@ -213,9 +213,12 @@ ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
 ARG ROCM_SYSTEMS_COMMIT_OVERRIDE
 
 WORKDIR /app
-RUN git clone https://github.com/ROCm/TheRock.git && \
+RUN --mount=type=bind,source=patches,target=/patches \
+    git clone https://github.com/ROCm/TheRock.git && \
     cd TheRock && \
     git reset --hard ${THEROCK_COMMIT} && \
+    # Vendors ROCm/TheRock#8279 until that skip lands on the pinned commit.
+    git apply /patches/therock_skip_rccl_translate_without_gfx1250.patch && \
     if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
         echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
         git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
