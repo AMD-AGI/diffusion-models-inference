@@ -91,6 +91,8 @@ rocrtst_lib
 rocrtst_run
 rocwmma_dbg
 rocwmma_dev
+sparse_dbg
+sparse_dev
 sysdeps_dev
 sysdeps-amd-mesa_dev
 sysdeps-amd-mesa_lib
