@@ -48,6 +48,7 @@ Supported optional fields:
 --field collect_hipblaslt_logs=true
 --field benchmark_image="BENCHMARK_IMAGE"
 --field disable_docker_cache=true
+--field cache_scope="CACHE_SCOPE"
 ```
 
 ## Identify the new run

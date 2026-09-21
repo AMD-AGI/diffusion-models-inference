@@ -44,7 +44,8 @@ none set                    → full build from source
 |---|---|---|---|
 | `benchmark_flags` | string | `''` | Filter which benchmarks to run. Examples: `--tag release`, `--name CONFIG_NAME`. Empty runs all. |
 | `collect_hipblaslt_logs` | boolean | `false` | Collect per-process hipBLASLt GEMM YAML logs for each benchmark. |
-| `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. |
+| `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. The cache is still re-exported, so this is how a stale cache gets replaced. |
+| `cache_scope` | string | `''` | Layer cache scope. Defaults to the built branch, so only builds of `main` touch the mainline cache. Set it to isolate a test build launched from `main`. |
 
 ## GPU Runners
 
