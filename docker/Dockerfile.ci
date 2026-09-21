@@ -275,7 +275,7 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
     cmake --build /app/TheRock/build --target therock-artifacts && \
     echo "CCache stats:" && ccache -s -v && \
-    cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
+    mv /app/TheRock/build/artifacts /app/TheRock/artifacts
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /license-evidence \
@@ -346,7 +346,7 @@ RUN cd triton && \
     pip install -r python/requirements.txt && \
     pip wheel . --wheel-dir dist/ && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install pytorch
 RUN cd pytorch && \
     UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
@@ -363,26 +363,26 @@ RUN cd pytorch && \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install vision
 RUN cd pytorch_vision && \
     FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install audio
 RUN cd pytorch_audio && \
     PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install torchcodec
 RUN pip install --no-cache-dir pybind11 pybind11[global] && \
     cd pytorch_codec && \
     PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
     python -m build --wheel -vvv --no-isolation -o dist && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /install/license-evidence \
