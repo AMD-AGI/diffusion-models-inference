@@ -482,9 +482,11 @@ WORKDIR /app/external
 # https://github.com/ROCm/aiter/pull/3161). No-op on AITER_COMMIT pins predating
 # that PR, but safe and forward-compatible.
 ENV AITER_USE_SYSTEM_TRITON=1
-RUN git clone https://github.com/ROCm/aiter.git && \
+RUN --mount=type=bind,source=patches,target=/patches \
+    git clone https://github.com/ROCm/aiter.git && \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
+    git apply /patches/aiter_mha_functional_varlen.patch && \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
