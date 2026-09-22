@@ -35,7 +35,7 @@ on:
         type: string
         default: ''
       prebuilt_core_image_tag:
-        description: 'Prebuilt core image tag to use as cache (skips core build if provided)'
+        description: 'Prebuilt core image tag or full Docker Hub path to use as cache (skips core build if provided)'
         required: false
         type: string
         default: ''
@@ -100,7 +100,12 @@ jobs:
           
           if [ -n "$PREBUILT_CORE_TAG" ]; then
             echo "skip_core_build=true" >> $GITHUB_OUTPUT
-            echo "cache_source=${CORE_IMAGE_NAME}:${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+            # Check if tag contains "/" or ":", and if it does, assume it's a full Docker Hub path
+            if [[ "$PREBUILT_CORE_TAG" == *"/"* ]] || [[ "$PREBUILT_CORE_TAG" == *":"* ]]; then
+              echo "cache_source=${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+            else
+              echo "cache_source=${CORE_IMAGE_NAME}:${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+            fi
           else
             echo "skip_core_build=false" >> $GITHUB_OUTPUT
             echo "cache_source=${CORE_IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
