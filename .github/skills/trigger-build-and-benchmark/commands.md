@@ -43,7 +43,7 @@ Supported optional fields:
 --field run_miopen_tuning=false
 --field run_benchmarks=false
 --field build_final=false
---field create_miopen_db_pr=true
+--field create_miopen_db_branch=true
 --field miopen_find_mode="1"
 --field miopen_find_enforce="3"
 --field force_retuning=true

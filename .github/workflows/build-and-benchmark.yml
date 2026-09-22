@@ -34,8 +34,8 @@ on:
         type: boolean
         required: false
         default: true
-      create_miopen_db_pr:
-        description: 'Create MIOpen DB pull request'
+      create_miopen_db_branch:
+        description: 'Create MIOpen DB branch'
         type: boolean
         required: false
         default: false
@@ -198,7 +198,7 @@ jobs:
                 "run_miopen_tuning": "${{ inputs.run_miopen_tuning }}",
                 "run_benchmarks": "${{ inputs.run_benchmarks }}",
                 "build_final": "${{ inputs.build_final }}",
-                "create_miopen_db_pr": "${{ inputs.create_miopen_db_pr }}",
+                "create_miopen_db_branch": "${{ inputs.create_miopen_db_branch }}",
                 "force_retuning": "${{ inputs.force_retuning }}",
                 "cache_scope": "${{ inputs.cache_scope || inputs.git_branch || github.ref_name }}",
                 "cache_image_name": "${{ env.BUILDCACHE_IMAGE }}"
@@ -427,7 +427,7 @@ jobs:
     needs: [validate, generate-matrix, tune-and-benchmark]
     runs-on: ${{ inputs.build_runner || vars.BUILD_RUNNER || 'build-only' }}
     if: |
-      inputs.create_miopen_db_pr &&
+      inputs.create_miopen_db_branch &&
       inputs.run_miopen_tuning &&
       !cancelled() &&
       needs.tune-and-benchmark.result == 'success'

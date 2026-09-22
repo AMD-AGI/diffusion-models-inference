@@ -8,7 +8,7 @@ Complete reference for all `build-and-benchmark.yml` workflow_dispatch inputs.
 |---|---|---|---|
 | `git_branch` | string | `''` | Git branch to build from. Empty uses the repo default branch. |
 | `base_image` | string | `''` | Tag or full Docker Hub path to start from. Empty always forces a rebuild. |
-| `rebuild` | boolean | `false` | Rebuild the image. Forced on when `base_image` is empty. With `base_image` set, this uses it as a build cache source (bare tag against the core image) instead of using it directly. |
+| `rebuild` | boolean | `false` | Attempt to rebuild the image using `base_image` as a prebuilt core image. Forced on when `base_image` is empty. With `base_image` set, this uses it as a build cache source (bare tag against the core image) instead of using it directly. May trigger full rebuild if `base_image` has drifted from the branch the workflow has been dispatched from. |
 
 ### Build source behavior
 
@@ -25,7 +25,7 @@ base_image set, rebuild=true    → build from source using base_image as cache
 | `run_miopen_tuning` | boolean | `true` | Run MIOpen tuning. |
 | `run_benchmarks` | boolean | `true` | Run benchmarks. |
 | `build_final` | boolean | `true` | Build the final tuned image and push it. |
-| `create_miopen_db_pr` | boolean | `false` | Push a `miopen/<run_number>-<run_attempt>` branch with the updated tuning database. The run summary links a prefilled pull request form; the pull request itself is opened manually. |
+| `create_miopen_db_branch` | boolean | `false` | Push a `miopen/<run_number>-<run_attempt>` branch with the updated tuning database. The run summary links a prefilled pull request form; the pull request itself is opened manually. |
 
 Each checkbox is independent — there is no implicit run-mode coupling. A
 benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
