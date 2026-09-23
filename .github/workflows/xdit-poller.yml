@@ -1,0 +1,138 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Long-lived "loiter" poller: watches xDiT for a manually launched ROCm CI run and dispatches the
+# heavy lifter here. Deliberately a separate workflow from the heavy lifter — if the GPU job ran in
+# this run, workflow-level concurrency would keep this run alive for its whole duration and block the
+# next poller for hours.
+#
+# The chain is self-sustaining and has no cron backstop: it starts on a manual dispatch and each run
+# hands over to the next. Cancelling a run therefore stops the watch permanently, by design — but so
+# does a crash, so a failed run here means nobody is watching until someone dispatches it again.
+name: xDiT Poller
+
+on:
+  workflow_dispatch:
+
+# Guards against two loiterers running at once; not a relaunch mechanism.
+concurrency:
+  group: xdit-poller
+
+env:
+  XDIT_REPO: xdit-project/xDiT
+  XDIT_WORKFLOW: rocm-hardware-ci.yml
+  HEAVY_WORKFLOW: xdit-hardware-compat.yml
+  SELF_WORKFLOW: xdit-poller.yml
+  POLL_INTERVAL_SECONDS: '60'
+  # 47h. Must stay comfortably below the job's timeout-minutes: reaching the timeout means GitHub
+  # cancels the job, which skips the handover and kills the chain.
+  LOITER_SECONDS: '169200'
+  # Comma-separated GitHub logins allowed to spend our GPU time. Anyone with write access to xDiT
+  # can launch their side, so this list — which only we can edit — is the actual gate. A repo
+  # variable rather than a literal so it can change without a workflow PR.
+  ALLOWED_ACTORS: ${{ vars.XDIT_CI_ALLOWED_ACTORS }}
+
+permissions:
+  contents: read
+  # Lets GITHUB_TOKEN dispatch the heavy lifter and relaunch this workflow; verified to work here,
+  # workflow_dispatch being an exception to the usual GITHUB_TOKEN recursion guard.
+  actions: write
+
+jobs:
+  loiter:
+    # Must be a CPU-only label: this job idles for the whole loiter window and would otherwise
+    # hold a GPU runner slot hostage all day.
+    runs-on: [self-hosted, xdit-poller]
+    # 48h, one hour above LOITER_SECONDS. Can't read that env var — timeout-minutes has no access to
+    # the env context — so the two are kept in step by hand.
+    timeout-minutes: 2880
+    steps:
+      - name: Watch xDiT for launched CI runs
+        env:
+          # Reads xDiT (public) and dispatches in our own repo; no PAT needed for either.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+
+          # Hand the watch over to a fresh run. Only ever reached on a clean exit: a cancellation or
+          # a timeout kills the shell here, and set -e aborts on error, so neither continues the
+          # chain. Throttled so that if anything makes this job exit immediately, it can't spin.
+          relaunch() {
+            elapsed=$(( $(date +%s) - started ))
+            if [ "$elapsed" -lt 60 ]; then
+              sleep $(( 60 - elapsed ))
+            fi
+            if ! gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${SELF_WORKFLOW}/dispatches" \
+                 -f ref="${GITHUB_REF_NAME}"; then
+              echo "::error::Handover failed, so no poller is watching xDiT any more. With no cron"
+              echo "::error::backstop, this workflow must be dispatched manually to resume."
+              exit 1
+            fi
+          }
+
+          allowed=$(printf '%s' "$ALLOWED_ACTORS" | tr -d '[:space:]' | tr ',' '\n' | grep -v '^$' || true)
+          if [ -z "$allowed" ]; then
+            echo "::error::Repository variable XDIT_CI_ALLOWED_ACTORS is empty, so no run could ever"
+            echo "::error::be accepted. Failing now rather than idling for the whole loiter window."
+            exit 1
+          fi
+
+          deadline=$(( $(date +%s) + LOITER_SECONDS ))
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            candidates=$(gh api \
+              "repos/${XDIT_REPO}/actions/workflows/${XDIT_WORKFLOW}/runs?status=in_progress&per_page=50" \
+              2>/dev/null || echo '{"workflow_runs":[]}')
+
+            rows=$(echo "$candidates" | jq -c \
+              '[.workflow_runs[] | {id, attempt: .run_attempt, actor: (.triggering_actor.login // .actor.login // ""), title: (.display_title // "")}]')
+
+            for i in $(seq 0 $(( $(echo "$rows" | jq 'length') - 1 ))); do
+              # Attempt is part of the key: run_id alone is stable across reruns, so a rerun would
+              # otherwise be deduped away and replay the old result instead of retesting.
+              xrun="$(echo "$rows" | jq -r ".[$i].id").$(echo "$rows" | jq -r ".[$i].attempt")"
+              title=$(echo "$rows" | jq -r ".[$i].title")
+              actor=$(echo "$rows" | jq -r ".[$i].actor")
+
+              if ! printf '%s\n' "$allowed" | grep -Fxqi "$actor"; then
+                echo "xDiT run ${xrun}: actor '${actor}' not in allow-list, skipping"
+                continue
+              fi
+
+              sha=$(printf '%s' "$title" | sed -n 's/.*\[sha:\([0-9a-fA-F]\{7,40\}\)\].*/\1/p')
+              pr=$(printf '%s' "$title" | sed -n 's/.*\[pr:\([0-9]\{1,\}\)\].*/\1/p')
+              if [ -z "$sha" ]; then
+                echo "xDiT run ${xrun}: no [sha:...] marker in run name, skipping"
+                continue
+              fi
+
+              # One of our own runs already carrying this marker is the "already dispatched" record,
+              # so a successor poller never double-dispatches a still-running xDiT job. The closing
+              # bracket matters: without it, run 998877 would also match run 9988771.
+              seen=$(gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/${HEAVY_WORKFLOW}/runs?per_page=100" \
+                2>/dev/null \
+                | jq --arg m "[xdit-run:${xrun}]" \
+                    '[.workflow_runs[] | select((.display_title // "") | contains($m))] | length')
+              if [ "${seen:-0}" -gt 0 ]; then
+                continue
+              fi
+
+              gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/${HEAVY_WORKFLOW}/dispatches" \
+                -f ref="${GITHUB_REF_NAME}" \
+                -f inputs[xdit_sha]="$sha" \
+                -f inputs[pr_number]="${pr:-0}" \
+                -f inputs[xdit_run_id]="$xrun"
+
+              echo "dispatched hardware run for xDiT run ${xrun} (sha ${sha}, pr ${pr:-unknown}, actor ${actor})"
+              relaunch
+              exit 0
+            done
+
+            sleep "$POLL_INTERVAL_SECONDS"
+          done
+
+          echo "loiter window elapsed with nothing to dispatch"
+          relaunch
