@@ -7,28 +7,29 @@ Complete reference for all `build-and-benchmark.yml` workflow_dispatch inputs.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `git_branch` | string | `''` | Git branch to build from. Empty uses the repo default branch. |
-| `prebuilt_core_image_tag` | string | `''` | Tag for a prebuilt core image. Skips core image build only. |
-| `prebuilt_untuned_image_tag` | string | `''` | Tag for a prebuilt untuned image. Skips both core and untuned builds. Format: `<short-sha>-temp`. |
-| `benchmark_image` | string | `''` | Image for benchmark-only mode. Can be a tag (resolved to `amdsiloai/pytorch-xdit-staging:<tag>`) or full Docker Hub path. Skips ALL builds. |
+| `base_image` | string | `''` | Tag or full Docker Hub path to start from. Empty always forces a rebuild. |
+| `rebuild` | boolean | `false` | Attempt to rebuild the image using `base_image` as a prebuilt core image. Forced on when `base_image` is empty. With `base_image` set, this uses it as a build cache source (bare tag against the core image) instead of using it directly. May trigger full rebuild if `base_image` has drifted from the branch the workflow has been dispatched from. |
 
-### Build source precedence
+### Build source behavior
 
 ```
-benchmark_image set         → benchmark-only mode, no builds at all
-prebuilt_untuned_image_tag  → skips core + untuned builds
-prebuilt_core_image_tag     → skips core build only
-none set                    → full build from source
+base_image empty                → rebuild forced on, full build from source
+base_image set, rebuild=false   → use base_image directly, no build
+base_image set, rebuild=true    → build from source using base_image as cache
 ```
 
-## Run Mode
+## Step Checkboxes
 
-| Input | Type | Default | Options |
+| Input | Type | Default | Description |
 |---|---|---|---|
-| `run_mode` | choice | `Standard run` | `Standard run`, `MIOpen tuning only`, `MIOpen tuning + benchmarking` |
+| `run_miopen_tuning` | boolean | `true` | Run MIOpen tuning. |
+| `run_benchmarks` | boolean | `true` | Run benchmarks. |
+| `build_final` | boolean | `true` | Build the final tuned image and push it. |
+| `create_miopen_db_branch` | boolean | `false` | Push a `miopen/<run_number>-<run_attempt>` branch with the updated tuning database. The run summary links a prefilled pull request form; the pull request itself is opened manually. |
 
-- **Standard run**: Build → tune → benchmark → build final image
-- **MIOpen tuning only**: Build → tune → create MIOpen DB PR (no benchmarks, no final image)
-- **MIOpen tuning + benchmarking**: Build → tune → benchmark → create MIOpen DB PR
+Each checkbox is independent — there is no implicit run-mode coupling. A
+benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
+`run_miopen_tuning=false`, `build_final=false`, `run_benchmarks=true`.
 
 ## MIOpen Configuration
 
@@ -44,7 +45,9 @@ none set                    → full build from source
 |---|---|---|---|
 | `benchmark_flags` | string | `''` | Filter which benchmarks to run. Examples: `--tag release`, `--name CONFIG_NAME`. Empty runs all. |
 | `collect_hipblaslt_logs` | boolean | `false` | Collect per-process hipBLASLt GEMM YAML logs for each benchmark. |
-| `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. |
+| `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. The cache is still re-exported, so this is how a stale cache gets replaced. |
+| `cache_scope` | string | `''` | Layer cache scope. Defaults to the built branch, so only builds of `main` touch the mainline cache. Set it to isolate a test build launched from `main`. |
+| `build_runner` | string | `''` | Runner label for the build jobs (core/untuned build, final image build, MIOpen branch). Empty uses the repository default. |
 
 ## GPU Runners
 
