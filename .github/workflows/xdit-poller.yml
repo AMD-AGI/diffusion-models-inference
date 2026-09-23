@@ -1,0 +1,44 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Long-lived loitering poller: watches xDiT for a ROCm CI run and dispatches the test workflow.
+name: xDiT Poller
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: xdit-poller
+
+env:
+  XDIT_REPO: xdit-project/xDiT
+  XDIT_WORKFLOW: rocm-hardware-ci.yml
+  HEAVY_WORKFLOW: xdit-hardware-compat.yml
+  SELF_WORKFLOW: xdit-poller.yml
+  POLL_INTERVAL_SECONDS: '60'
+  LOITER_SECONDS: '169200'
+  ALLOWED_ACTORS: ${{ vars.XDIT_CI_ALLOWED_ACTORS }}
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  loiter:
+    runs-on: xdit-poller
+    timeout-minutes: 2880
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Watch xDiT and dispatch hardware test
+        uses: ./.github/actions/xdit-loiter
+        with:
+          github_token: ${{ github.token }}
+          xdit_repo: ${{ env.XDIT_REPO }}
+          xdit_workflow: ${{ env.XDIT_WORKFLOW }}
+          heavy_workflow: ${{ env.HEAVY_WORKFLOW }}
+          self_workflow: ${{ env.SELF_WORKFLOW }}
+          poll_interval_seconds: ${{ env.POLL_INTERVAL_SECONDS }}
+          loiter_seconds: ${{ env.LOITER_SECONDS }}
+          allowed_actors: ${{ env.ALLOWED_ACTORS }}
