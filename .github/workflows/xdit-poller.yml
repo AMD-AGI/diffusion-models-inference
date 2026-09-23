@@ -1,0 +1,98 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Long-lived "loiter" poller: watches xDiT for a manually launched ROCm CI run and dispatches the
+# heavy lifter here. Deliberately a separate workflow from the heavy lifter — if the GPU job ran in
+# this run, workflow-level concurrency would keep this run alive for its whole duration and block the
+# next poller for hours.
+name: xDiT Poller
+
+on:
+  schedule:
+    # Only needs to tick more often than the loiter window, so a pending successor is always parked;
+    # it takes over the instant this one times out. Retune once the team picks a support window.
+    - cron: '0 */8 * * *'
+  workflow_dispatch:
+
+# No cancel-in-progress: the single pending slot IS the relaunch mechanism.
+concurrency:
+  group: xdit-poller
+
+env:
+  XDIT_REPO: xdit-project/xDiT
+  XDIT_WORKFLOW: rocm-hardware-ci.yml
+  HEAVY_WORKFLOW: xdit-hardware-compat.yml
+  POLL_INTERVAL_SECONDS: '60'
+
+permissions:
+  contents: read
+
+jobs:
+  loiter:
+    # Secret lives here so a run on a non-main branch can't read it; restrict this environment's
+    # deployment branches to main in repo Settings.
+    environment: xdit-ci
+    # Must be a CPU-only label: this job idles for the whole loiter window and would otherwise
+    # hold a GPU runner slot hostage all day.
+    runs-on: [self-hosted, xdit-poller]
+    timeout-minutes: 1380
+    steps:
+      - name: Watch xDiT for launched CI runs
+        env:
+          # Public-repo read; swap for a read-only PAT if GITHUB_TOKEN can't reach xDiT cross-repo.
+          READ_TOKEN: ${{ github.token }}
+          # Fine-grained PAT, Actions:write on THIS repo only. GITHUB_TOKEN cannot start workflows.
+          DISPATCH_TOKEN: ${{ secrets.XDIT_DISPATCH_TOKEN }}
+          LOITER_SECONDS: '82200'
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + LOITER_SECONDS ))
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            candidates=$(GH_TOKEN="$READ_TOKEN" gh api \
+              "repos/${XDIT_REPO}/actions/workflows/${XDIT_WORKFLOW}/runs?status=in_progress&per_page=50" \
+              2>/dev/null || echo '{"workflow_runs":[]}')
+
+            rows=$(echo "$candidates" | jq -c \
+              '[.workflow_runs[] | {id, attempt: .run_attempt, title: (.display_title // "")}]')
+
+            for i in $(seq 0 $(( $(echo "$rows" | jq 'length') - 1 ))); do
+              # Attempt is part of the key: run_id alone is stable across reruns, so a rerun would
+              # otherwise be deduped away and replay the old result instead of retesting.
+              xrun="$(echo "$rows" | jq -r ".[$i].id").$(echo "$rows" | jq -r ".[$i].attempt")"
+              title=$(echo "$rows" | jq -r ".[$i].title")
+
+              sha=$(printf '%s' "$title" | sed -n 's/.*\[sha:\([0-9a-fA-F]\{7,40\}\)\].*/\1/p')
+              pr=$(printf '%s' "$title" | sed -n 's/.*\[pr:\([0-9]\{1,\}\)\].*/\1/p')
+              if [ -z "$sha" ]; then
+                echo "xDiT run ${xrun}: no [sha:...] marker in run name, skipping"
+                continue
+              fi
+
+              # One of our own runs already carrying this marker is the "already dispatched" record,
+              # so a successor poller never double-dispatches a still-running xDiT job. The closing
+              # bracket matters: without it, run 998877 would also match run 9988771.
+              seen=$(GH_TOKEN="$READ_TOKEN" gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/${HEAVY_WORKFLOW}/runs?per_page=100" \
+                2>/dev/null \
+                | jq --arg m "[xdit-run:${xrun}]" \
+                    '[.workflow_runs[] | select((.display_title // "") | contains($m))] | length')
+              if [ "${seen:-0}" -gt 0 ]; then
+                continue
+              fi
+
+              GH_TOKEN="$DISPATCH_TOKEN" gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/${HEAVY_WORKFLOW}/dispatches" \
+                -f ref=main \
+                -f inputs[xdit_sha]="$sha" \
+                -f inputs[pr_number]="${pr:-0}" \
+                -f inputs[xdit_run_id]="$xrun"
+
+              echo "dispatched hardware run for xDiT run ${xrun} (sha ${sha}, pr ${pr:-unknown})"
+              exit 0
+            done
+
+            sleep "$POLL_INTERVAL_SECONDS"
+          done
+
+          echo "loiter window elapsed with nothing to dispatch"

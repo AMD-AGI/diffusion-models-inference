@@ -1,0 +1,59 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# The GPU half of the xDiT integration. Dispatched by xdit-poller.yml, never triggered directly by
+# xDiT. Holds no credentials: it reports nothing outward, it just runs and lets its own conclusion be
+# read back. The xdit-run marker in run-name is the correlation key the xDiT-side poller matches on,
+# and it comes from an input because run-name can only use the github/inputs/vars contexts.
+name: xDiT Hardware Compat (mock)
+run-name: "xDiT compat ${{ inputs.xdit_sha }} PR#${{ inputs.pr_number }} [xdit-run:${{ inputs.xdit_run_id }}]"
+
+on:
+  workflow_dispatch:
+    inputs:
+      xdit_sha:
+        description: 'xDiT commit SHA under test'
+        required: true
+      pr_number:
+        description: 'xDiT PR number'
+        required: false
+        default: '0'
+      xdit_run_id:
+        description: 'Run ID and attempt of the xDiT-side poller waiting on this (e.g. 12345.1)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  compat:
+    # Swap for the real GPU label once the test invocation below is no longer mocked.
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Mock hardware test
+        run: |
+          set -euo pipefail
+          echo "xDiT SHA:     ${{ inputs.xdit_sha }}"
+          echo "xDiT PR:      ${{ inputs.pr_number }}"
+          echo "xDiT run ID:  ${{ inputs.xdit_run_id }}"
+
+          # Placeholder stages until the real xDiT test invocation is decided.
+          for stage in "Building image" "Running smoke config 1/2" "Running smoke config 2/2"; do
+            echo "== ${stage} =="
+            sleep 5
+          done
+
+      - name: Publish result summary
+        if: always()
+        run: |
+          {
+            echo "### xDiT hardware compatibility (mock)"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| SHA | \`${{ inputs.xdit_sha }}\` |"
+            echo "| PR | #${{ inputs.pr_number }} |"
+            echo "| xDiT run | ${{ inputs.xdit_run_id }} |"
+            echo "| Result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

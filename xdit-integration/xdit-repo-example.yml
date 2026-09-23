@@ -1,0 +1,83 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Template for xdit-project/xDiT's .github/workflows/ — inert here, since it lives outside
+# .github/workflows in this repo. Launched manually by someone who maintains both repos.
+#
+# Stores NO credentials: it only reads a public repo's Actions API, and the AMD side never calls
+# back. The sha/pr markers in run-name are what the AMD-side poller parses; this run's own ID is
+# the correlation key it waits on in return.
+name: ROCm Hardware CI
+run-name: "ROCm HW CI [sha:${{ inputs.sha }}] [pr:${{ inputs.pr_number }}]"
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit SHA to test (PR head)'
+        required: true
+      pr_number:
+        description: 'PR number this run reports on'
+        required: true
+
+env:
+  PARTNER_REPO: AMD-AGI/diffusion-models-inference
+  PARTNER_WORKFLOW: xdit-hardware-compat.yml
+
+permissions:
+  contents: read
+
+jobs:
+  wait:
+    runs-on: ubuntu-latest
+    # Under the hard 6h cap for GitHub-hosted runners; the AMD-side job has its own separate budget.
+    timeout-minutes: 330
+    env:
+      # Swap for a read-only PAT (Actions: read on PARTNER_REPO) if the preflight below fails.
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Preflight — confirm cross-repo read access
+        run: |
+          if ! gh api "repos/${PARTNER_REPO}/actions/workflows/${PARTNER_WORKFLOW}/runs?per_page=1" >/dev/null 2>&1; then
+            echo "::error::Cannot read ${PARTNER_REPO} Actions API. If GITHUB_TOKEN lacks cross-repo"
+            echo "::error::access, add a read-only PAT as a secret and set GH_TOKEN to it."
+            exit 1
+          fi
+
+      - name: Wait for the hardware run
+        run: |
+          set -euo pipefail
+          # run_id is stable across reruns and only run_attempt increments, so the attempt has to be
+          # part of the key — otherwise a rerun would just replay the previous run's conclusion.
+          # Closing bracket included so run 998877 can't match run 9988771.
+          marker="[xdit-run:${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}]"
+          deadline=$(( $(date +%s) + 19200 ))
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            run=$(gh api "repos/${PARTNER_REPO}/actions/workflows/${PARTNER_WORKFLOW}/runs?per_page=50" 2>/dev/null \
+              | jq -c --arg m "$marker" \
+                  '[.workflow_runs[] | select((.display_title // "") | contains($m))] | first // empty' || true)
+
+            if [ -n "$run" ]; then
+              status=$(echo "$run" | jq -r '.status')
+              url=$(echo "$run" | jq -r '.html_url')
+              if [ "$status" = "completed" ]; then
+                conclusion=$(echo "$run" | jq -r '.conclusion')
+                {
+                  echo "### ROCm hardware CI: ${conclusion}"
+                  echo ""
+                  echo "[Full run details](${url})"
+                } >> "$GITHUB_STEP_SUMMARY"
+                echo "concluded: ${conclusion} (${url})"
+                [ "$conclusion" = "success" ] && exit 0 || exit 1
+              fi
+              echo "hardware run ${status}: ${url}"
+            else
+              echo "no hardware run tagged ${marker} yet"
+            fi
+            sleep 60
+          done
+
+          echo "::error::No hardware run tagged ${marker} completed within the wait window."
+          echo "::error::This means none was picked up, not that the hardware test failed."
+          exit 1
