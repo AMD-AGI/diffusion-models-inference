@@ -89,7 +89,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     attention_backend: aiter
 
 - name: wan2_2.quantgemm.gfx950 # MXFP4 only supported on gfx950
@@ -107,7 +107,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    use_fp4_gemms: true
+    gemm_quantization: low=fp4,high=fp6
     attention_backend: aiter
 
 - name: wan2_2.quantgemm.hopper.h100
@@ -127,7 +127,7 @@
     use_torch_compile: true
     fully_shard_degree: 8
     no_reshard_after_forward: true
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     attention_backend: flash_3
 
 - name: wan2_2.quantgemm.hopper.h200
@@ -145,7 +145,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     attention_backend: flash_3
 
 - name: wan2_2.quantgemm.blackwell
@@ -163,7 +163,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    use_fp4_gemms: true
+    gemm_quantization: low=fp4,high=fp8
     attention_backend: cudnn
 
 - name: wan2_2.quantgemm_quantattn.gfx942
@@ -181,7 +181,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     attention_backend: aiter_fp8
 
 - name: wan2_2.quantgemm_quantattn.gfx950
@@ -199,9 +199,9 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    attention_backend: aiter_fp8
+    attention_backend: aiter_mxfp6
     cross_attention_backend: aiter
-    use_fp4_gemms: true
+    gemm_quantization: low=fp4,high=fp6
 
 - name: wan2_2.quantgemm_quantattn.hopper.h100  
   tags: [lucid, hopper, h100]
@@ -220,7 +220,7 @@
     use_torch_compile: true
     fully_shard_degree: 8
     no_reshard_after_forward: true
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     attention_backend: flash_3_fp8
 
 - name: wan2_2.quantgemm_quantattn.hopper.h200  
@@ -238,7 +238,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     attention_backend: flash_3_fp8
 
 - name: wan2_2.quantgemm_quantattn.blackwell
@@ -256,7 +256,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    use_fp4_gemms: true
+    gemm_quantization: low=fp4,high=fp8
     attention_backend: nvte_fp8
 
 - name: wan2_2.quantgemm_sparseattn.gfx942
@@ -276,7 +276,7 @@
     use_torch_compile: true
     attention_backend: aiter_fp8_sparge
     cross_attention_backend: aiter
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
@@ -298,7 +298,7 @@
     use_torch_compile: true
     attention_backend: aiter_fp8_sparge
     cross_attention_backend: aiter
-    use_fp4_gemms: true
+    gemm_quantization: low=fp4,high=fp6
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
@@ -322,7 +322,7 @@
     no_reshard_after_forward: true
     attention_backend: flex_block_sparge
     cross_attention_backend: flash_3
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
@@ -344,7 +344,7 @@
     use_torch_compile: true
     attention_backend: flex_block_sparge
     cross_attention_backend: flash_3
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true

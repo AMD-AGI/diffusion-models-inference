@@ -41,7 +41,7 @@ ARG AITER_COMMIT="0c2b0f77b2ff6d13c677d12466abf87299f8b260"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="3aa7b34ec3f1d4f86f0befc5f09384333067846c"
+ARG XDIT_COMMIT="c1bf5295093561eb49e7c841fb5167c160b652d0"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -570,13 +570,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/xfuser_minimax_h3.patch && \
-    # xDiT only sets reorder_for_compute_comm_overlap, whose pass list defaulted
-    # to three passes on torch 2.9 but defaults to [] on 2.13, silently dropping
-    # comm/compute overlap. Pin the pass list explicitly.
-    # Remove once xDiT sets the pass list itself.
-    git apply /patches/xfuser_compile_comm_overlap_passes.patch && \
-    git apply /patches/fix-torchao-quant-sharding.patch && \
     git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
