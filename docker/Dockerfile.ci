@@ -12,7 +12,7 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="40d2bb4d2eba9920bf932b1eb7672ab0dd3ec77e"
+ARG THEROCK_COMMIT="0c46fb33640e00ef5c97112ad4c0d595ec031e77"
 ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
