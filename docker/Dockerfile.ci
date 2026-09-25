@@ -12,7 +12,7 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="0c46fb33640e00ef5c97112ad4c0d595ec031e77"
+ARG THEROCK_COMMIT="ab56f1f7c5b54746bf9f7948fff3f306b2bef8b2"
 ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
@@ -133,11 +133,6 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     # rocprofiler-sdk-output-library. Remove once fixed upstream:
     # https://github.com/ROCm/TheRock/issues/5868
     libsqlite3-dev \
-    # Workaround: profiler-hub generates its bundled SQLite3 amalgamation via
-    # `make sqlite3.c`, which requires tclsh even with --disable-tcl. Remove
-    # once fixed upstream:
-    # https://github.com/ROCm/rocm-systems/issues/10059
-    tcl \
     libtool \
     ninja-build \
     texinfo \
@@ -213,12 +208,9 @@ ARG ROCM_LIBRARIES_COMMIT_OVERRIDE
 ARG ROCM_SYSTEMS_COMMIT_OVERRIDE
 
 WORKDIR /app
-RUN --mount=type=bind,source=patches,target=/patches \
-    git clone https://github.com/ROCm/TheRock.git && \
+RUN git clone https://github.com/ROCm/TheRock.git && \
     cd TheRock && \
     git reset --hard ${THEROCK_COMMIT} && \
-    # Vendors ROCm/TheRock#8279 until that skip lands on the pinned commit.
-    git apply /patches/therock_skip_rccl_translate_without_gfx1250.patch && \
     if [ -n "$ROCM_LIBRARIES_COMMIT_OVERRIDE" ]; then \
         echo "Force updating rocm-libraries commit to ${ROCM_LIBRARIES_COMMIT_OVERRIDE}" && \
         git update-index --cacheinfo 160000,${ROCM_LIBRARIES_COMMIT_OVERRIDE},rocm-libraries ; \
