@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: wan2_2.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -18,6 +18,24 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: aiter
+
+- name: wan2_2.default.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    height: 720
+    width: 1280
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    ulysses_degree: 8
+    use_parallel_vae: true
+    seed: 42
+    num_iterations: 1
+    num_inference_steps: 40
+    use_torch_compile: true
+    attention_backend: aiter_bf16
 
 - name: wan2_2.default.hopper.h100
   tags: [lucid, hopper, h100]
@@ -108,7 +126,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     gemm_quantization: low=fp4,high=fp6
-    attention_backend: aiter
+    attention_backend: aiter_bf16
 
 - name: wan2_2.quantgemm.hopper.h100
   tags: [lucid, hopper, h100]
@@ -200,7 +218,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: aiter_mxfp6
-    cross_attention_backend: aiter
+    cross_attention_backend: aiter_bf16
     gemm_quantization: low=fp4,high=fp6
 
 - name: wan2_2.quantgemm_quantattn.hopper.h100  
@@ -297,7 +315,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: aiter_fp8_sparge
-    cross_attention_backend: aiter
+    cross_attention_backend: aiter_bf16
     gemm_quantization: low=fp4,high=fp6
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
