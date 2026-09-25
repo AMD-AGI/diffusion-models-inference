@@ -23,6 +23,10 @@ env:
   XDIT_WORKFLOW: rocm-hardware-ci.yml
   HEAVY_WORKFLOW: xdit-hardware-compat.yml
   POLL_INTERVAL_SECONDS: '60'
+  # Comma-separated GitHub logins allowed to spend our GPU time. Anyone with write access to xDiT
+  # can launch their side, so this list — which only we can edit — is the actual gate. A repo
+  # variable rather than a literal so it can change without a workflow PR.
+  ALLOWED_ACTORS: ${{ vars.XDIT_CI_ALLOWED_ACTORS }}
 
 permissions:
   contents: read
@@ -46,6 +50,14 @@ jobs:
           LOITER_SECONDS: '82200'
         run: |
           set -euo pipefail
+
+          allowed=$(printf '%s' "$ALLOWED_ACTORS" | tr -d '[:space:]' | tr ',' '\n' | grep -v '^$' || true)
+          if [ -z "$allowed" ]; then
+            echo "::error::Repository variable XDIT_CI_ALLOWED_ACTORS is empty, so no run could ever"
+            echo "::error::be accepted. Failing now rather than idling for the whole loiter window."
+            exit 1
+          fi
+
           deadline=$(( $(date +%s) + LOITER_SECONDS ))
 
           while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -54,13 +66,19 @@ jobs:
               2>/dev/null || echo '{"workflow_runs":[]}')
 
             rows=$(echo "$candidates" | jq -c \
-              '[.workflow_runs[] | {id, attempt: .run_attempt, title: (.display_title // "")}]')
+              '[.workflow_runs[] | {id, attempt: .run_attempt, actor: (.triggering_actor.login // .actor.login // ""), title: (.display_title // "")}]')
 
             for i in $(seq 0 $(( $(echo "$rows" | jq 'length') - 1 ))); do
               # Attempt is part of the key: run_id alone is stable across reruns, so a rerun would
               # otherwise be deduped away and replay the old result instead of retesting.
               xrun="$(echo "$rows" | jq -r ".[$i].id").$(echo "$rows" | jq -r ".[$i].attempt")"
               title=$(echo "$rows" | jq -r ".[$i].title")
+              actor=$(echo "$rows" | jq -r ".[$i].actor")
+
+              if ! printf '%s\n' "$allowed" | grep -Fxqi "$actor"; then
+                echo "xDiT run ${xrun}: actor '${actor}' not in allow-list, skipping"
+                continue
+              fi
 
               sha=$(printf '%s' "$title" | sed -n 's/.*\[sha:\([0-9a-fA-F]\{7,40\}\)\].*/\1/p')
               pr=$(printf '%s' "$title" | sed -n 's/.*\[pr:\([0-9]\{1,\}\)\].*/\1/p')
@@ -88,7 +106,7 @@ jobs:
                 -f inputs[pr_number]="${pr:-0}" \
                 -f inputs[xdit_run_id]="$xrun"
 
-              echo "dispatched hardware run for xDiT run ${xrun} (sha ${sha}, pr ${pr:-unknown})"
+              echo "dispatched hardware run for xDiT run ${xrun} (sha ${sha}, pr ${pr:-unknown}, actor ${actor})"
               exit 0
             done
 
