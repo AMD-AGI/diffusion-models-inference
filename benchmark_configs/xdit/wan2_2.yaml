@@ -37,7 +37,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: flash_3
-    fully_shard_degree: 8
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.default.hopper.h200
   tags: [lucid, hopper, h200]
@@ -130,11 +130,9 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    fully_shard_degree: 8
-    memory_efficient_sharding: true
-    no_reshard_after_forward: true
     use_fp8_gemms: true
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm.hopper.h200
   tags: [lucid, hopper, h200]
@@ -228,11 +226,9 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    fully_shard_degree: 8
-    memory_efficient_sharding: true
-    no_reshard_after_forward: true
     use_fp8_gemms: true
     attention_backend: flash_3_fp8
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.hopper.h200  
   tags: [lucid, hopper, h200]
@@ -333,15 +329,13 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    fully_shard_degree: 8
-    memory_efficient_sharding: true
-    no_reshard_after_forward: true
     attention_backend: flex_block_sparge
     cross_attention_backend: flash_3
     use_fp8_gemms: true
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.hopper.h200
   tags: [lucid, hopper, h200]
