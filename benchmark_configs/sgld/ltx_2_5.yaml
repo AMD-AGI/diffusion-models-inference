@@ -1,7 +1,9 @@
 # LTX-2.5 CI config (gfx950). One config per model, mirroring
 # benchmark_configs/xdit/ltx2_5.yaml (`ltx2_5.default`) knob-for-knob so the
-# SGL-D and xDiT numbers are directly comparable. VAE parallel decode defaults
-# ON, same as the xDiT default.
+# SGL-D and xDiT numbers are directly comparable.
+# Decode path: the SGL-D default routes decode through the diffusion decoder
+# (use_diffusion_decoder), NOT the conv VAE -- this matches the validated
+# LTX-2.5 SGL-D runs and is the path our decode-side PRs target.
 # Full SP / diffusion-decode perf depends on sglang PRs sgl-project/sglang#40755
 # (SP self-attn mask) and sgl-project/sglang#41240 (tile-parallel decode LPT).
 
@@ -25,7 +27,8 @@
     ulysses_degree: 8
     ring_degree: 1
     use_torch_compile: True
-    use_parallel_vae: True
+    # Decode via the diffusion decoder (tile-parallel), not the conv VAE.
+    use_diffusion_decoder: True
     num_iterations: 25
     attention_backend: aiter
     seed: 42
