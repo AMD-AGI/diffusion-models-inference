@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: flux.usp
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -18,6 +18,24 @@
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: aiter
+
+- name: flux.usp.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: black-forest-labs/FLUX.1-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: true
+    guidance_scale: 0.0
+    num_iterations: 50
+    attention_backend: aiter_bf16
 
 - name: flux.usp.hopper
   tags: [lucid, hopper, h100, h200]
@@ -56,7 +74,7 @@
     attention_backend: cudnn
 
 - name: flux.single_gpu
-  tags: [release, instinct, gfx942, gfx950]
+  tags: [release, instinct, gfx942]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -72,6 +90,24 @@
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: aiter
+
+- name: flux.single_gpu.gfx950
+  tags: [release, instinct, gfx950]
+  model: black-forest-labs/FLUX.1-dev
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_calls: 5
+    ulysses_degree: 1
+    use_torch_compile: true
+    guidance_scale: 0.0
+    num_iterations: 50
+    attention_backend: aiter_bf16
 
 - name: flux.single_gpu.hopper
   tags: [hopper, h100, h200]
@@ -110,7 +146,7 @@
     attention_backend: cudnn
 
 - name: flux.usp_2k
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -126,6 +162,24 @@
     guidance_scale: 0.0
     num_iterations: 25
     attention_backend: aiter
+
+- name: flux.usp_2k.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: black-forest-labs/FLUX.1-dev
+  runner: xdit
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_calls: 5
+    ulysses_degree: 8
+    use_torch_compile: true
+    guidance_scale: 0.0
+    num_iterations: 25
+    attention_backend: aiter_bf16
 
 - name: flux.usp_2k.hopper
   tags: [lucid, hopper, h100, h200]
@@ -164,7 +218,7 @@
     attention_backend: cudnn
 
 - name: flux.single_gpu_2k
-  tags: [release, instinct, gfx942, gfx950]
+  tags: [release, instinct, gfx942]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -180,6 +234,24 @@
     guidance_scale: 0.0
     num_iterations: 25
     attention_backend: aiter
+
+- name: flux.single_gpu_2k.gfx950
+  tags: [release, instinct, gfx950]
+  model: black-forest-labs/FLUX.1-dev
+  runner: xdit
+  args:
+    seed: 0
+    prompt: A small cat
+    height: 2048
+    width: 2048
+    num_inference_steps: 25
+    max_sequence_length: 256
+    warmup_calls: 5
+    ulysses_degree: 1
+    use_torch_compile: true
+    guidance_scale: 0.0
+    num_iterations: 25
+    attention_backend: aiter_bf16
 
 - name: flux.single_gpu_2k.hopper
   tags: [hopper, h100, h200]

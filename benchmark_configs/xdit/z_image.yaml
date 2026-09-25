@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: z_image.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942]
   model: Tongyi-MAI/Z-Image
   runner: xdit
   args:
@@ -16,6 +16,22 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+
+- name: z_image.default.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: Tongyi-MAI/Z-Image
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A crowded beach
+    height: 1088
+    width: 1920
+    num_inference_steps: 50
+    ulysses_degree: 8
+    use_torch_compile: true
+    guidance_scale: 4.0
+    num_iterations: 25
+    attention_backend: aiter_bf16
 
 - name: z_image.default.hopper
   tags: [lucid, hopper, h100, h200]

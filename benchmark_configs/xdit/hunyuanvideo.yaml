@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: hunyuanvideo.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
@@ -22,6 +22,28 @@
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: aiter
+
+- name: hunyuanvideo.default.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: tencent/HunyuanVideo
+  revision: refs/pr/18
+  runner: xdit
+  args:
+    prompt: In the large cage, two puppies were wagging their tails at each other.
+    batch_size: 1
+    height: 720
+    width: 1280
+    seed: 1168860793
+    num_frames: 129
+    num_inference_steps: 50
+    warmup_calls: 1
+    num_iterations: 1
+    ulysses_degree: 8
+    enable_tiling: true
+    enable_slicing: true
+    guidance_scale: 6.0
+    use_torch_compile: true
+    attention_backend: aiter_bf16
 
 - name: hunyuanvideo.default.hopper
   tags: [lucid, hopper, h100, h200]
