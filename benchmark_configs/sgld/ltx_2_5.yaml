@@ -1,0 +1,37 @@
+# LTX-2.5 CI config. Tagged gfx950 for CI scheduling, but the CLI path
+# (run_type: cli) is arch-portable: it emits no attention_backend, so the
+# `attention_backend: aiter` below is a no-op on the CLI path and sglang
+# auto-selects the backend (dynamic_cudnn_sdpa on NVIDIA B200/sm_100). The same
+# config file runs unchanged on gfx950 (MI355X) and NVIDIA B200.
+# Mirrors benchmark_configs/xdit/ltx2_5.yaml (`ltx2_5.default`) knob-for-knob.
+# Decode path: the SGL-D default routes decode through the diffusion decoder
+# (use_diffusion_decoder), NOT the conv VAE -- this matches the validated
+# LTX-2.5 SGL-D runs and is the path our decode-side PRs target.
+# Full SP / diffusion-decode perf depends on sglang PRs sgl-project/sglang#40755
+# (SP self-attn mask) and sgl-project/sglang#41240 (tile-parallel decode LPT).
+
+# default (t2v): 1024x1536, 121f, distilled 8-step, ulysses 8. num_iterations 25
+# matches xDiT and is intentionally heavy -- lower if CI wall-clock is a concern.
+- name: ltx_2_5.default.gfx950
+  tags: [instinct, gfx950]
+  model: Lightricks/LTX-2.5-Diffusers
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    run_type: cli
+    pipeline_class_name: LTX2Pipeline
+    prompt: "A cinematic shot of a red fox walking through a snowy forest at dawn, the camera tracking alongside, snow crunching underfoot."
+    height: 1024
+    width: 1536
+    num_frames: 121
+    num_inference_steps: 8
+    # Pinned to match xDiT's distilled CFG for apples-to-apples comparison.
+    guidance_scale: 1.0
+    ulysses_degree: 8
+    ring_degree: 1
+    use_torch_compile: True
+    # Decode via the diffusion decoder (tile-parallel), not the conv VAE.
+    use_diffusion_decoder: True
+    num_iterations: 25
+    attention_backend: aiter
+    seed: 42
