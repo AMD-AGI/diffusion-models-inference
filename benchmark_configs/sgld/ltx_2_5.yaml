@@ -1,0 +1,29 @@
+# LTX-2.5 CI config (gfx950). One config per model, mirroring
+# benchmark_configs/xdit/ltx2_5.yaml (`ltx2_5.default`) knob-for-knob so the
+# SGL-D and xDiT numbers are directly comparable. VAE parallel decode defaults
+# ON, same as the xDiT default.
+
+# default (t2v): 1024x1536, 121f, distilled 8-step, ulysses 8. num_iterations 25
+# matches xDiT and is intentionally heavy -- lower if CI wall-clock is a concern.
+- name: ltx_2_5.default.gfx950
+  tags: [instinct, gfx950]
+  model: Lightricks/LTX-2.5-Diffusers
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    run_type: cli
+    pipeline_class_name: LTX2Pipeline
+    prompt: "A cinematic shot of a red fox walking through a snowy forest at dawn, the camera tracking alongside, snow crunching underfoot."
+    height: 1024
+    width: 1536
+    num_frames: 121
+    num_inference_steps: 8
+    # Pinned to match xDiT's distilled CFG for apples-to-apples comparison.
+    guidance_scale: 1.0
+    ulysses_degree: 8
+    ring_degree: 1
+    use_torch_compile: True
+    use_parallel_vae: True
+    num_iterations: 25
+    attention_backend: aiter
+    seed: 42
