@@ -18,6 +18,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.default.hopper.h100
   tags: [lucid, hopper, h100]
@@ -36,7 +37,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: flash_3
-    fully_shard_degree: 8
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.default.hopper.h200
   tags: [lucid, hopper, h200]
@@ -55,6 +56,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -73,6 +75,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -91,6 +94,7 @@
     use_torch_compile: true
     use_fp8_gemms: true
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm.gfx950 # MXFP4 only supported on gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -109,6 +113,7 @@
     use_torch_compile: true
     use_fp4_gemms: true
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm.hopper.h100
   tags: [lucid, hopper, h100]
@@ -125,10 +130,9 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    fully_shard_degree: 8
-    no_reshard_after_forward: true
     use_fp8_gemms: true
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm.hopper.h200
   tags: [lucid, hopper, h200]
@@ -147,6 +151,7 @@
     use_torch_compile: true
     use_fp8_gemms: true
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -165,6 +170,7 @@
     use_torch_compile: true
     use_fp4_gemms: true
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -183,6 +189,7 @@
     use_torch_compile: true
     use_fp8_gemms: true
     attention_backend: aiter_fp8
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -202,6 +209,7 @@
     attention_backend: aiter_fp8
     cross_attention_backend: aiter
     use_fp4_gemms: true
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.hopper.h100  
   tags: [lucid, hopper, h100]
@@ -218,10 +226,9 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    fully_shard_degree: 8
-    no_reshard_after_forward: true
     use_fp8_gemms: true
     attention_backend: flash_3_fp8
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.hopper.h200  
   tags: [lucid, hopper, h200]
@@ -240,6 +247,7 @@
     use_torch_compile: true
     use_fp8_gemms: true
     attention_backend: flash_3_fp8
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -258,6 +266,7 @@
     use_torch_compile: true
     use_fp4_gemms: true
     attention_backend: nvte_fp8
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -280,6 +289,7 @@
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -302,6 +312,7 @@
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.hopper.h100
   tags: [lucid, hopper, h100]
@@ -318,14 +329,13 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    fully_shard_degree: 8
-    no_reshard_after_forward: true
     attention_backend: flex_block_sparge
     cross_attention_backend: flash_3
     use_fp8_gemms: true
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
+    memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.hopper.h200
   tags: [lucid, hopper, h200]
@@ -348,6 +358,7 @@
     spargeattn_simthreshold: 0.2
     spargeattn_cdfthreshold: 0.9
     use_spargeattn_head_balance: true
+    memory_efficient_replicated_load: true
 
 - name: wan2_2_ti2v_5b.i2v.4gpu.rdna4
   tags: [rdna4, gfx1201]

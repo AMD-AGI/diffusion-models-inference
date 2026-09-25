@@ -19,6 +19,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.default.hopper.h100
   tags: [lucid, hopper, h100]
@@ -58,6 +59,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -77,6 +79,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -97,6 +100,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -117,6 +121,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm.hopper.h100
   tags: [lucid, hopper, h100]
@@ -158,6 +163,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -178,6 +184,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm_quantattn.gfx942
   tags: [release, instinct, gfx942]
@@ -198,6 +205,7 @@
     num_iterations: 25
     attention_backend: aiter_fp8
     use_fp8_gemms: true
+    memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm_quantattn.gfx950
   tags: [release, instinct, gfx950]
@@ -218,6 +226,7 @@
     num_iterations: 25
     attention_backend: aiter_fp8
     use_fp4_gemms: true
+    memory_efficient_replicated_load: true
 
 # TI2V 2K
 - name: flux2.ti2i_2k
@@ -238,6 +247,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.ti2i_2k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -277,6 +287,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.ti2i_2k.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -296,6 +307,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 # T2V 1K
 - name: flux2.t2i_1k
@@ -315,6 +327,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.t2i_1k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -352,6 +365,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.t2i_1k.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -370,6 +384,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 # T2V 2K
 - name: flux2.t2i_2k
@@ -389,6 +404,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.t2i_2k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -426,6 +442,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.t2i_2k.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -444,6 +461,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 # TmultiI2V 1K
 - name: flux2.t-multi-i2i_1k
@@ -466,6 +484,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.t-multi-i2i_1k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -509,6 +528,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.t-multi-i2i_1k.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -530,6 +550,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 # TmultiI2V 2K
 - name: flux2.t-multi-i2i_2k
@@ -552,6 +573,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: flux2.t-multi-i2i_2k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -595,6 +617,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.t-multi-i2i_2k.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -616,6 +639,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: flux2.i2i_1k.4gpu.rdna4
   tags: [rdna4, gfx1201]
