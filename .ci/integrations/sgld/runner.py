@@ -129,6 +129,8 @@ def parse_args() -> argparse.Namespace:
              "express OFF, since run.py drops a YAML bool false).",
     )
     # Optional diffusion VAE decoder (off by default, matching upstream).
+    # Decode-side support: sglang sgl-project/sglang#40755 (SP self-attn mask) +
+    # sgl-project/sglang#41240 (tile-parallel decode LPT balancing).
     parser.add_argument(
         "--use_diffusion_decoder",
         required=False,

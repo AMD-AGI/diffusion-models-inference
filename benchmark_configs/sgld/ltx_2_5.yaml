@@ -2,6 +2,8 @@
 # benchmark_configs/xdit/ltx2_5.yaml (`ltx2_5.default`) knob-for-knob so the
 # SGL-D and xDiT numbers are directly comparable. VAE parallel decode defaults
 # ON, same as the xDiT default.
+# Full SP / diffusion-decode perf depends on sglang PRs sgl-project/sglang#40755
+# (SP self-attn mask) and sgl-project/sglang#41240 (tile-parallel decode LPT).
 
 # default (t2v): 1024x1536, 121f, distilled 8-step, ulysses 8. num_iterations 25
 # matches xDiT and is intentionally heavy -- lower if CI wall-clock is a concern.
