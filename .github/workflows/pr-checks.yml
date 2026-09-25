@@ -25,6 +25,7 @@ jobs:
       shell_files: ${{ steps.filter.outputs.shell_files }}
       workflows: ${{ steps.filter.outputs.workflows }}
       workflow_files: ${{ steps.filter.outputs.workflow_files }}
+      cache_cleanup: ${{ steps.filter.outputs.cache_cleanup }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,6 +54,9 @@ jobs:
             echo "shell=$( [ -n "$sh_files" ] && echo true || echo false )"
             echo "workflows=$( [ -n "$wf_files" ] && echo true || echo false )"
           } >> "$GITHUB_OUTPUT"
+
+          cache_cleanup_files=$(echo "$all_changed" | grep -E '^\.github/scripts/cache-scope\.sh$|^\.github/actions/(cleanup-build-cache|resolve-build-cache)/|^\.github/workflows/cleanup-build-cache\.yml$' || true)
+          echo "cache_cleanup=$( [ -n "$cache_cleanup_files" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
 
           {
             echo "python_files<<EOF"
@@ -129,6 +133,16 @@ jobs:
       - uses: actions/checkout@v7
       - name: shellcheck
         run: echo '${{ needs.changed-files.outputs.shell_files }}' | xargs shellcheck
+
+  test-cache-cleanup:
+    name: Test registry cache cleanup
+    needs: changed-files
+    if: needs.changed-files.outputs.cache_cleanup == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run cleanup tests
+        run: bash .github/actions/cleanup-build-cache/tests/test-cleanup-build-cache.sh
 
   actionlint:
     name: Action lint
