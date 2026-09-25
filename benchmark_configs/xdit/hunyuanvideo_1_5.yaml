@@ -15,9 +15,9 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: True
-    enable_slicing: True
-    use_torch_compile: True
+    enable_tiling: true
+    enable_slicing: true
+    use_torch_compile: true
     attention_backend: aiter
 
 - name: hunyuanvideo_1_5.default.gfx950
@@ -34,9 +34,9 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: True
-    enable_slicing: True
-    use_torch_compile: True
+    enable_tiling: true
+    enable_slicing: true
+    use_torch_compile: true
     attention_backend: aiter_bf16
 
 - name: hunyuanvideo_1_5.default.hopper
@@ -53,9 +53,9 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: True
-    enable_slicing: True
-    use_torch_compile: True
+    enable_tiling: true
+    enable_slicing: true
+    use_torch_compile: true
     attention_backend: flash_3
 
 - name: hunyuanvideo_1_5.default.blackwell
@@ -72,7 +72,7 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: True
-    enable_slicing: True
-    use_torch_compile: True
+    enable_tiling: true
+    enable_slicing: true
+    use_torch_compile: true
     attention_backend: cudnn
