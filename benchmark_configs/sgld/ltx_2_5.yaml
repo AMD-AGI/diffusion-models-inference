@@ -1,6 +1,9 @@
-# LTX-2.5 CI config (gfx950). One config per model, mirroring
-# benchmark_configs/xdit/ltx2_5.yaml (`ltx2_5.default`) knob-for-knob so the
-# SGL-D and xDiT numbers are directly comparable.
+# LTX-2.5 CI config. Tagged gfx950 for CI scheduling, but the CLI path
+# (run_type: cli) is arch-portable: it emits no attention_backend, so the
+# `attention_backend: aiter` below is a no-op on the CLI path and sglang
+# auto-selects the backend (dynamic_cudnn_sdpa on NVIDIA B200/sm_100). The same
+# config file runs unchanged on gfx950 (MI355X) and NVIDIA B200.
+# Mirrors benchmark_configs/xdit/ltx2_5.yaml (`ltx2_5.default`) knob-for-knob.
 # Decode path: the SGL-D default routes decode through the diffusion decoder
 # (use_diffusion_decoder), NOT the conv VAE -- this matches the validated
 # LTX-2.5 SGL-D runs and is the path our decode-side PRs target.
