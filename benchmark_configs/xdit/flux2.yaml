@@ -90,7 +90,7 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     ulysses_degree: 8
     use_torch_compile: true
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
@@ -110,7 +110,7 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp4_gemms: true
+    gemm_quantization: fp4
     ulysses_degree: 8
     use_torch_compile: true
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
@@ -130,7 +130,7 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     ulysses_degree: 8
     fully_shard_degree: 8
     use_torch_compile: true
@@ -151,7 +151,7 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp8_gemms: true
+    gemm_quantization: fp8
     ulysses_degree: 8
     use_torch_compile: true
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
@@ -171,7 +171,7 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp4_gemms: true
+    gemm_quantization: fp4
     ulysses_degree: 8
     use_torch_compile: true
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
@@ -197,7 +197,7 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter_fp8
-    use_fp8_gemms: true
+    gemm_quantization: fp8
 
 - name: flux2.quantgemm_quantattn.gfx950
   tags: [release, instinct, gfx950]
@@ -216,8 +216,8 @@
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: aiter_fp8
-    use_fp4_gemms: true
+    attention_backend: aiter_mxfp6
+    gemm_quantization: fp4
 
 # TI2V 2K
 - name: flux2.ti2i_2k
