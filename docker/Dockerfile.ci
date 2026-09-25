@@ -44,6 +44,7 @@ ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
 ARG XDIT_COMMIT="3aa7b34ec3f1d4f86f0befc5f09384333067846c"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
+ARG LINGBOT_VIDEO_COMMIT="f348dca454c8f1e5707721614dbac10fa5290fed"
 
 FROM ${BASE_IMAGE} AS base_os
 
@@ -516,6 +517,7 @@ ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG AO_COMMIT
 ARG ARBITER_COMMIT
+ARG LINGBOT_VIDEO_COMMIT
 
 # setup
 WORKDIR /app/external
@@ -564,6 +566,11 @@ RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
     git reset --hard ${DISTVAE_COMMIT} && \
     pip install -e .
+# install lingbot-video (required by the LingBot-Video Dense/MoE runners; not in diffusers)
+RUN git clone https://github.com/Robbyant/lingbot-video.git && \
+    cd lingbot-video && \
+    git reset --hard ${LINGBOT_VIDEO_COMMIT} && \
+    pip install -e . --no-deps
 # install xfuser
 WORKDIR /app
 RUN --mount=type=bind,source=patches,target=/patches \
