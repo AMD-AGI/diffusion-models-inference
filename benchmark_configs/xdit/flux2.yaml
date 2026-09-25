@@ -138,7 +138,6 @@
     use_fp8_gemms: true
     ulysses_degree: 8
     fully_shard_degree: 8
-    memory_efficient_sharding: true
     use_torch_compile: true
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
