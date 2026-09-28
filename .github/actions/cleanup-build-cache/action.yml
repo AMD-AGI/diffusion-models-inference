@@ -1,0 +1,49 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Cleanup Build Cache'
+description: >-
+  Removes orphaned core registry-cache tags after a grace period while
+  preserving cache scopes represented by current repository branches.
+
+inputs:
+  cache_image_name:
+    description: 'Repository that holds the core registry cache tags'
+    required: false
+    default: 'amdsiloai/pytorch-xdit-buildcache'
+  grace_period_days:
+    description: 'Minimum age in days for an orphan tag before deletion'
+    required: false
+    default: '3'
+  dry_run_setting:
+    description: 'Repository-level dry-run setting'
+    required: false
+    default: 'true'
+  manual_dry_run:
+    description: 'Manual override: inherit, true, or false'
+    required: false
+    default: 'inherit'
+  github_token:
+    description: 'GitHub token used to list repository branches'
+    required: true
+  dockerhub_username:
+    description: 'Docker Hub username or organization account'
+    required: true
+  dockerhub_token:
+    description: 'Docker Hub access token'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Clean orphaned core cache tags
+      shell: bash
+      env:
+        CACHE_IMAGE_NAME: ${{ inputs.cache_image_name }}
+        GRACE_PERIOD_DAYS: ${{ inputs.grace_period_days }}
+        DRY_RUN_SETTING: ${{ inputs.dry_run_setting }}
+        MANUAL_DRY_RUN: ${{ inputs.manual_dry_run }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        DOCKERHUB_USERNAME: ${{ inputs.dockerhub_username }}
+        DOCKERHUB_TOKEN: ${{ inputs.dockerhub_token }}
+      run: ${{ github.action_path }}/scripts/cleanup-build-cache.sh

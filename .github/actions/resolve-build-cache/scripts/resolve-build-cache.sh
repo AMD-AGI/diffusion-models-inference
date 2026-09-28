@@ -10,19 +10,10 @@ set -euo pipefail
 # Outputs: scope, cache_from_flags, cache_to_flag, export_ref,
 # export_ref_digest to GITHUB_OUTPUT
 
-# Docker tags accept [a-zA-Z0-9._-] and may not lead with a separator, while
-# branch names routinely carry slashes, so everything else collapses to a dash.
-# Truncation happens before trimming so that cutting mid-name cannot leave a
-# trailing separator behind.
-# Callers pass github.ref_name, which is already bare, but a miswired caller
-# passing github.ref would otherwise get a silently different scope.
-slug() {
-  printf '%s' "${1#refs/heads/}" \
-    | tr '[:upper:]' '[:lower:]' \
-    | sed 's#[^a-z0-9._-]#-#g' \
-    | cut -c1-40 \
-    | sed 's#^[-._]*##; s#[-._]*$##'
-}
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# The helper path is resolved relative to this action at runtime.
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../../../scripts/cache-scope.sh"
 
 # Empty output means the ref does not exist. The raw manifest is hashed rather
 # than read through --format, because a cache-only manifest is not an image and
