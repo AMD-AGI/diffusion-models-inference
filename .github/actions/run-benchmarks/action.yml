@@ -23,6 +23,10 @@ inputs:
     description: 'Collect hipBLASLt GEMM logs per benchmark (adds runtime overhead). Files are written per-experiment as hipblaslt_gemms_pid<PID>.yaml (one file per worker process) under each experiments output directory.'
     required: false
     default: 'false'
+  force_determinism_check:
+    description: 'Force xFuser determinism checks for every benchmark and emit determinism_report.json (adds runtime overhead).'
+    required: false
+    default: 'false'
   output_dir:
     description: 'Output directory name for benchmark results'
     required: false
@@ -72,6 +76,7 @@ runs:
         HF_TOKEN: ${{ inputs.hf_token }}
         DOCKER_IMAGE: ${{ inputs.image }}
         COLLECT_HIPBLASLT_LOGS: ${{ inputs.collect_hipblaslt_logs }}
+        FORCE_DETERMINISM_CHECK: ${{ inputs.force_determinism_check }}
       run: ${{ github.action_path }}/scripts/run-benchmarks.sh
     
     - name: Upload benchmark results

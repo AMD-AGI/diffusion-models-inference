@@ -45,6 +45,7 @@ benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
 |---|---|---|---|
 | `benchmark_flags` | string | `''` | Filter which benchmarks to run. Examples: `--tag release`, `--name CONFIG_NAME`. Empty runs all. |
 | `collect_hipblaslt_logs` | boolean | `false` | Collect per-process hipBLASLt GEMM YAML logs for each benchmark. |
+| `force_determinism_check` | boolean | `false` | Force xFuser determinism checks for every benchmark. Each architecture is checked in its own `<arch> determinism check` job; a non-deterministic benchmark fails that job, so the run goes red while `build-final` and the MIOpen branch still complete. |
 | `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. The cache is still re-exported, so this is how a stale cache gets replaced. |
 | `cache_scope` | string | `''` | Layer cache scope. Defaults to the built branch, so only builds of `main` touch the mainline cache. Set it to isolate a test build launched from `main`. |
 | `build_runner` | string | `''` | Runner label for the build jobs (core/untuned build, final image build, MIOpen branch). Empty uses the repository default. |

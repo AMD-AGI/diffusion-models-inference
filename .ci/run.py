@@ -29,11 +29,17 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.propagate = False
 _handler = logging.StreamHandler()
-_handler.setFormatter(logging.Formatter(
-    fmt='%(asctime)s - %(levelname)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-))
+_handler.setFormatter(
+    logging.Formatter(
+        fmt="%(asctime)s - %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
 logger.addHandler(_handler)
+
+# Machine-readable determinism summary, written to the results directory root and
+# consumed by CI to decide whether to raise a determinism failure notification.
+DETERMINISM_REPORT_FILENAME = "determinism_report.json"
 
 
 def import_xfuser_determinism_check_results():
@@ -78,8 +84,9 @@ def import_xfuser_determinism_check_results():
 
     return determinism_check_results, readable_bytes
 
+
 tried_import_xfuser_determinism_check_results = False
-determinism_check_results, readable_bytes = None, None # import_xfuser_determinism_check_results()
+determinism_check_results, readable_bytes = None, None  # import_xfuser_determinism_check_results()
 
 
 @dataclass
@@ -140,7 +147,7 @@ def _parse_args():
         help=(
             "JSON dict of extra/override args passed to the benchmark script.\n"
             "Example:\n"
-            "  --override-args-json '{\"prompt\": \"My new prompt\", \"seed\": 1234, \"use_cfg_parallel\": true}'"
+            '  --override-args-json \'{"prompt": "My new prompt", "seed": 1234, "use_cfg_parallel": true}\''
         ),
     )
     parser.add_argument(
@@ -153,7 +160,7 @@ def _parse_args():
         "--csv-output-path",
         type=str,
         default="/outputs/results.csv",
-        help="Path to the CSV file where benchmark results for MAD will be written"
+        help="Path to the CSV file where benchmark results for MAD will be written",
     )
     parser.add_argument(
         "--export-config-path",
@@ -210,20 +217,14 @@ def _is_python_script(path: str) -> bool:
 
 def _filter_experiments_by_name(experiments: List[Experiment], names: List[str]) -> List[Experiment]:
     """Filter experiments based on --name arguments."""
-    experiments = [
-        e for e in experiments
-        if e.name in names
-    ]
+    experiments = [e for e in experiments if e.name in names]
 
     return experiments
 
 
 def _filter_experiments_by_tags(experiments: List[Experiment], tags: List[str]) -> List[Experiment]:
     """Filter experiments based on --tag arguments. An experiment must match all tags given."""
-    experiments = [
-        e for e in experiments
-        if all(t in e.tags for t in tags)
-    ]
+    experiments = [e for e in experiments if all(t in e.tags for t in tags)]
     return experiments
 
 
@@ -256,13 +257,17 @@ def _model_in_cache(model: str, revision: Optional[str] = None) -> bool:
         logger.warning("Could not scan cache for %s: %s", model, e)
         return False
 
+
 def _report_download_dry_run_statistics(result: List[DryRunFileInfo]) -> None:
     n_downloaded_files = sum(1 for dryrun_info in result if dryrun_info.will_download)
     download_size_bytes = sum(dryrun_info.file_size for dryrun_info in result if dryrun_info.will_download)
-    download_size_gigabytes = download_size_bytes // (1024 ** 3)
+    download_size_gigabytes = download_size_bytes // (1024**3)
     n_skipped_files = sum(1 for dryrun_info in result if not dryrun_info.will_download)
-    logger.info(f"[dry-run] Would have downloaded {n_downloaded_files} files with total size {download_size_gigabytes} GB.")
+    logger.info(
+        f"[dry-run] Would have downloaded {n_downloaded_files} files with total size {download_size_gigabytes} GB."
+    )
     logger.info(f"[dry-run] Would have skipped downloading {n_skipped_files} files.")
+
 
 def _download_model(model: str, revision: Optional[str] = None, dry_run: bool = False) -> None:
     """
@@ -346,7 +351,8 @@ def _is_determinism_check_enabled(exp: Experiment) -> bool:
     return ret
 
 
-def _report_determinism_check_results(exp: Experiment, benchmark_output_directory: Path) -> None:
+def _report_determinism_check_results(exp: Experiment, benchmark_output_directory: Path) -> Dict[str, Any]:
+    """Report determinism check results for one experiment and return a summary entry."""
     global tried_import_xfuser_determinism_check_results, determinism_check_results, readable_bytes
     if not tried_import_xfuser_determinism_check_results:
         tried_import_xfuser_determinism_check_results = True
@@ -354,17 +360,27 @@ def _report_determinism_check_results(exp: Experiment, benchmark_output_director
         if readable_bytes is None:
             readable_bytes = lambda x: f"{x} bytes"  # noqa: E731
 
+    entry: Dict[str, Any] = {
+        "name": exp.name,
+        "status": "unavailable",
+        "failed_checks": 0,
+        "dump_bytes": 0,
+        "output_directory": str(benchmark_output_directory),
+    }
+
     if determinism_check_results is None:  # import must have failed
-        return
+        return entry
 
     try:
         det_check = determinism_check_results(benchmark_output_directory)
         if not isinstance(det_check, dict):
             logger.error(f"Expected a dictionary in results report, got {type(det_check)}")
-            return
+            entry["status"] = "error"
+            return entry
         if 0 == len(det_check):
             logger.info(f"Determinism checks passed for {exp.name}")
-            return
+            entry["status"] = "passed"
+            return entry
 
         if 1 != len(det_check):
             logger.error("Expected exactly one top-level directory in results report")
@@ -374,10 +390,39 @@ def _report_determinism_check_results(exp: Experiment, benchmark_output_director
                 f"Determinism check failed for {exp.name}: {res[0]} checks failed, "
                 f"{readable_bytes(res[1])} is occupied by dumps"
             )
+            entry["status"] = "failed"
+            entry["failed_checks"] = int(res[0])
+            entry["dump_bytes"] = int(res[1])
         else:
             logger.error("Results for the top-level directory not found. Skipping report.")
+            entry["status"] = "error"
     except Exception:  # ruff: ignore[blind-except]
         logger.error("Error getting determinism check results.", exc_info=True)
+        entry["status"] = "error"
+
+    return entry
+
+
+def _write_determinism_report(results_directory: Path, entries: List[Dict[str, Any]]) -> None:
+    """Write a machine-readable determinism summary consumed by CI notifications."""
+    report = {
+        "experiments": entries,
+        "failed_experiments": sum(1 for e in entries if e["status"] == "failed"),
+        "failed_checks": sum(e["failed_checks"] for e in entries),
+    }
+    report_path = results_directory / DETERMINISM_REPORT_FILENAME
+    try:
+        results_directory.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, indent=2) + "\n")
+    except OSError as exc:
+        logger.warning("Failed to write determinism report to %s: %s", report_path, exc)
+        return
+    logger.info(
+        "Determinism report written to %s (%d of %d experiments failed).",
+        report_path,
+        report["failed_experiments"],
+        len(entries),
+    )
 
 
 def _run_experiment(
@@ -404,9 +449,7 @@ def _run_experiment(
         # %i is substituted with the worker process ID by hipBLASLt at runtime,
         # so multi-rank benchmarks (e.g. ulysses_degree > 1) get one file per process.
         env["HIPBLASLT_LOG_MASK"] = "64"
-        env["HIPBLASLT_LOG_FILE"] = str(
-            benchmark_output_directory / "hipblaslt_gemms_pid%i.yaml"
-        )
+        env["HIPBLASLT_LOG_FILE"] = str(benchmark_output_directory / "hipblaslt_gemms_pid%i.yaml")
     stdout_path = benchmark_output_directory / "stdout.txt"
     stderr_path = benchmark_output_directory / "stderr.txt"
     memory_path = benchmark_output_directory / "memory.json"
@@ -422,9 +465,6 @@ def _run_experiment(
     if r.returncode != 0:
         logger.info(f"Experiment {exp.name} failed!")
         return False
-
-    if _is_determinism_check_enabled(exp):
-        _report_determinism_check_results(exp, benchmark_output_directory)
 
     logger.info(f"Experiment: {exp.name} completed successfully.")
     return True
@@ -443,16 +483,16 @@ def _export_config(experiments: List[Experiment], export_config_path: str) -> No
 
 
 def _get_median_latency(file_path: Path) -> Optional[float]:
-        try:
-            with open(file_path, 'r') as f:
-                data = json.load(f)
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
 
-            median = np.median(data)
-        except Exception as e:
-            logger.error(f"Failed to compute median latency from {file_path}: {e}")
-            return None
+        median = np.median(data)
+    except Exception as e:
+        logger.error(f"Failed to compute median latency from {file_path}: {e}")
+        return None
 
-        return median
+    return median
 
 
 def _save_mad_latency_metric(csv_output_path: str, experiment_name: str, latency: float):
@@ -462,7 +502,7 @@ def _save_mad_latency_metric(csv_output_path: str, experiment_name: str, latency
 
     file_exists = csv_file_path.exists()
 
-    with open(csv_file_path, 'a', newline='') as csvfile:
+    with open(csv_file_path, "a", newline="") as csvfile:
         writer = csv.writer(csvfile)
 
         if not file_exists:
@@ -500,6 +540,7 @@ def _print_timing_summary(timing: Dict[str, Any]) -> None:
         print(f"{'Sum':<{name_width}} {experiments_sum:>{time_col_width}.2f}")
         print("-" * sep_width)
 
+
 def _merge_hipblaslt_logs(directory: Path) -> None:
     """
     Merge per-PID hipBLASLt GEMM log files into a single hipblaslt_gemms.yaml.
@@ -520,17 +561,15 @@ def _merge_hipblaslt_logs(directory: Path) -> None:
 
     df = pd.DataFrame(records)
     key_cols = [c for c in df.columns if c != "call_count"]
-    merged = (
-        df.groupby(key_cols, dropna=False)["call_count"]
-        .sum()
-        .reset_index()
-    )
+    merged = df.groupby(key_cols, dropna=False)["call_count"].sum().reset_index()
 
     out_path = directory / "hipblaslt_gemms.yaml"
     merged_records = merged.to_dict(orient="records")
     with open(out_path, "w") as f:
         for record in merged_records:
-            f.write("- " + yaml.dump(record, default_flow_style=True, sort_keys=False, width=float("inf")).rstrip() + "\n")
+            f.write(
+                "- " + yaml.dump(record, default_flow_style=True, sort_keys=False, width=float("inf")).rstrip() + "\n"
+            )
 
     for path in pid_files:
         path.unlink()
@@ -543,8 +582,9 @@ def _merge_hipblaslt_logs(directory: Path) -> None:
     )
 
 
-def command(e: Experiment, override_args: dict, override_runner: Optional[str] = None, override_entrypoint: Optional[str] = None) -> List[str]:
-
+def command(
+    e: Experiment, override_args: dict, override_runner: Optional[str] = None, override_entrypoint: Optional[str] = None
+) -> List[str]:
     if override_runner is not None:
         e.runner = override_runner
     if override_entrypoint is not None:
@@ -561,11 +601,7 @@ def command(e: Experiment, override_args: dict, override_runner: Optional[str] =
         if e.runner == "torchrun":
             if e.num_gpus is None:
                 raise ValueError("num_gpus is required for torchrun runner")
-            cmd = [
-                "torchrun",
-                f"--nproc_per_node={e.num_gpus}",
-                e.entrypoint
-            ]
+            cmd = ["torchrun", f"--nproc_per_node={e.num_gpus}", e.entrypoint]
         else:
             cmd = [e.runner, e.entrypoint]
     else:
@@ -576,20 +612,9 @@ def command(e: Experiment, override_args: dict, override_runner: Optional[str] =
         if e.runner == "torchrun":
             if e.num_gpus is None:
                 raise ValueError("num_gpus is required for torchrun runner")
-            cmd = [
-                sys.executable,
-                "-m",
-                "torch.distributed.run",
-                f"--nproc_per_node={e.num_gpus}",
-                "-m",
-                e.entrypoint
-            ]
+            cmd = [sys.executable, "-m", "torch.distributed.run", f"--nproc_per_node={e.num_gpus}", "-m", e.entrypoint]
         else:
-            cmd = [
-                sys.executable,
-                "-m",
-                e.entrypoint
-            ]
+            cmd = [sys.executable, "-m", e.entrypoint]
 
     cmd.extend(["--model", e.model])
 
@@ -657,9 +682,7 @@ def main():
                 Path(args.results_directory), (exp.name for exp in experiments)
             )
         except OSError as exc:
-            logger.warning(
-                "Failed to initialize MIOpenDriver command collection: %s", exc
-            )
+            logger.warning("Failed to initialize MIOpenDriver command collection: %s", exc)
 
     # Write Experiment configurations to file
     if args.export_config_path:
@@ -671,6 +694,7 @@ def main():
     # Download models and run Experiments
     preserve_original_state = not args.clear_model_cache and not args.no_clear_model_cache
     timing: Dict[str, Any] = {"download_model": {}, "experiments": []}
+    determinism_entries: List[Dict[str, Any]] = []
 
     override_args = json.loads(args.override_args_json)
     # assumes `override_args` aren't mutated in the loop below
@@ -685,7 +709,7 @@ def main():
     for model_name, exps in experiments_per_model.items():
         logger.info(f"Running experiments for model: {model_name}")
 
-        revision = exps[0].revision # Remark: assumes model experiments uses same revision.
+        revision = exps[0].revision  # Remark: assumes model experiments uses same revision.
         model_existed_before = _model_in_cache(model_name, revision)
         try:
             t0 = time.monotonic()
@@ -700,9 +724,14 @@ def main():
         for i, exp in enumerate(exps, 1):
             benchmark_output_directory = Path(args.results_directory) / exp.name
 
-            logger.info(f"Running Experiment {i}/{len(exps)}: {exp.name}. See {benchmark_output_directory}/stdout.txt for stdout logs.")
+            logger.info(
+                f"Running Experiment {i}/{len(exps)}: {exp.name}. See {benchmark_output_directory}/stdout.txt for stdout logs."
+            )
 
-            cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + ["--output-directory", benchmark_output_directory]
+            cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + [
+                "--output-directory",
+                benchmark_output_directory,
+            ]
 
             t0 = time.monotonic()
             process_succeeded = _run_experiment(
@@ -736,8 +765,13 @@ def main():
                 logger.error(msg)
                 continue
 
+            if not args.dry_run and _is_determinism_check_enabled(exp):
+                determinism_entries.append(_report_determinism_check_results(exp, benchmark_output_directory))
+
             if not args.dry_run:
-                latency_output_filepath = Path(benchmark_output_directory) / "timings.json" # benchmark scripts are expected to write latencies to "timings.json"
+                latency_output_filepath = (
+                    Path(benchmark_output_directory) / "timings.json"
+                )  # benchmark scripts are expected to write latencies to "timings.json"
                 median_latency = _get_median_latency(latency_output_filepath)
                 if not median_latency:
                     if miopen_command_collector is not None:
@@ -756,14 +790,15 @@ def main():
                 if miopen_command_collector is not None:
                     miopen_command_collector.mark_succeeded(exp.name)
 
-        should_clear_cache = args.clear_model_cache or (
-            preserve_original_state and not model_existed_before
-        )
+        should_clear_cache = args.clear_model_cache or (preserve_original_state and not model_existed_before)
         if should_clear_cache:
             try:
                 _delete_model_cache(model_name, revision, args.dry_run)
             except Exception as e:
                 logger.error(e, stack_info=True, exc_info=True)
+
+    if determinism_entries:
+        _write_determinism_report(Path(args.results_directory), determinism_entries)
 
     if args.print_timing_summary and (timing.get("download_model") or timing.get("experiments")):
         _print_timing_summary(timing)

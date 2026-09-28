@@ -53,11 +53,16 @@ on:
         required: false
         default: false
       benchmark_flags:
-        description: 'Flags used to filter benchmarks, leave empty to run all. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
+        description: 'Flags used to filter benchmarks, e.g. --tag release or --name CONFIG_NAME, leave empty to run all'
         required: false
         default: ''
       collect_hipblaslt_logs:
         description: 'Collect hipBLASLt GEMM logs per benchmark (adds runtime overhead, intended for ad-hoc GEMM tuning data collection only)'
+        type: boolean
+        required: false
+        default: false
+      force_determinism_check:
+        description: 'Force determinism checks'
         type: boolean
         required: false
         default: false
@@ -200,6 +205,7 @@ jobs:
                 "build_final": "${{ inputs.build_final }}",
                 "create_miopen_db_branch": "${{ inputs.create_miopen_db_branch }}",
                 "force_retuning": "${{ inputs.force_retuning }}",
+                "force_determinism_check": "${{ inputs.force_determinism_check }}",
                 "cache_scope": "${{ inputs.cache_scope || inputs.git_branch || github.ref_name }}",
                 "cache_image_name": "${{ env.BUILDCACHE_IMAGE }}"
               },
@@ -330,6 +336,7 @@ jobs:
           benchmark_flags: ${{ inputs.benchmark_flags }}
           benchmark_only: ${{ !inputs.run_miopen_tuning }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
+          force_determinism_check: ${{ inputs.force_determinism_check }}
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
           artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
@@ -351,6 +358,36 @@ jobs:
         with:
           containers: 'xdit-bench'
           skip_workspace_cleanup: 'false'
+
+  check-determinism:
+    name: ${{ matrix.arch }} determinism check
+    needs: [validate, generate-matrix, tune-and-benchmark]
+    runs-on: ubuntu-latest
+    if: |
+      inputs.force_determinism_check &&
+      inputs.run_benchmarks &&
+      !cancelled() &&
+      needs.tune-and-benchmark.result != 'skipped'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.git_branch || github.ref_name }}
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
+          path: benchmark-results
+
+      - name: Check determinism report
+        uses: ./.github/actions/check-determinism-report
+        with:
+          results_dir: benchmark-results
+          arch: ${{ matrix.arch }}
 
   build-final:
     name: Build final tuned image
