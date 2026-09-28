@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: flux2.default
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -19,25 +19,6 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
-
-- name: flux2.default.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: black-forest-labs/FLUX.2-dev
-  runner: xdit
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: true
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
-    guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_bf16
 
 - name: flux2.default.hopper.h100
   tags: [lucid, hopper, h100]
@@ -135,7 +116,7 @@
     input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: aiter_bf16
+    attention_backend: aiter
 
 - name: flux2.quantgemm.hopper.h100
   tags: [lucid, hopper, h100]
@@ -240,7 +221,7 @@
 
 # TI2V 2K
 - name: flux2.ti2i_2k
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -257,25 +238,6 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
-
-- name: flux2.ti2i_2k.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: black-forest-labs/FLUX.2-dev
-  runner: xdit
-  args:
-    seed: 42
-    prompt: Add a cool hat to the cat
-    height: 2048
-    width: 2048
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: true
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
-    guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_bf16
 
 - name: flux2.ti2i_2k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -337,7 +299,7 @@
 
 # T2V 1K
 - name: flux2.t2i_1k
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -353,24 +315,6 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
-
-- name: flux2.t2i_1k.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: black-forest-labs/FLUX.2-dev
-  runner: xdit
-  args:
-    seed: 42
-    prompt: Cat astronaut raising a cat flag on the surface of moon
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: true
-    guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_bf16
 
 - name: flux2.t2i_1k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -429,7 +373,7 @@
 
 # T2V 2K
 - name: flux2.t2i_2k
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -445,24 +389,6 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
-
-- name: flux2.t2i_2k.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: black-forest-labs/FLUX.2-dev
-  runner: xdit
-  args:
-    seed: 42
-    prompt: Cat astronaut raising a cat flag on the surface of moon
-    height: 2048
-    width: 2048
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: true
-    guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_bf16
 
 - name: flux2.t2i_2k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -521,7 +447,7 @@
 
 # TmultiI2V 1K
 - name: flux2.t-multi-i2i_1k
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -540,27 +466,6 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
-
-- name: flux2.t-multi-i2i_1k.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: black-forest-labs/FLUX.2-dev
-  runner: xdit
-  args:
-    seed: 42
-    prompt: the cat from image 1 has the same expression as cat on image 2
-    height: 1024
-    width: 1024
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: true
-    input_images:
-      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
-      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
-    guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_bf16
 
 - name: flux2.t-multi-i2i_1k.hopper.h100
   tags: [lucid, hopper, h100]
@@ -628,7 +533,7 @@
 
 # TmultiI2V 2K
 - name: flux2.t-multi-i2i_2k
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -647,27 +552,6 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
-
-- name: flux2.t-multi-i2i_2k.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
-  model: black-forest-labs/FLUX.2-dev
-  runner: xdit
-  args:
-    seed: 42
-    prompt: the cat from image 1 has the same expression as cat on image 2
-    height: 2048
-    width: 2048
-    num_inference_steps: 50
-    max_sequence_length: 512
-    warmup_calls: 5
-    ulysses_degree: 8
-    use_torch_compile: true
-    input_images:
-      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
-      - https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/grumpy.jpg
-    guidance_scale: 4.0
-    num_iterations: 25
-    attention_backend: aiter_bf16
 
 - name: flux2.t-multi-i2i_2k.hopper.h100
   tags: [lucid, hopper, h100]
