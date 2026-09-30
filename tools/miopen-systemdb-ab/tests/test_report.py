@@ -65,9 +65,9 @@ def test_render_report_md_includes_improvements():
                 "arm_b_median_ms": 0.8,
                 "delta_ms": 0.2,
                 "speedup_pct": 20.0,
-                "arm_a_solver": "SolverA:very-long-config-that-the-markdown-table-clips",
+                "arm_a_solver": "SolverA:" + ("very-long-kernel-config-" * 4),
                 "arm_b_solver": "SolverB",
-                "system_db_solver": "SolverA:very-long-config-that-the-markdown-table-clips",
+                "system_db_solver": "SolverA:" + ("very-long-kernel-config-" * 4),
                 "arm_a_device_ids": ["0", "0", "0"],
                 "arm_b_device_ids": ["1", "1", "1"],
                 "arm_b_tune_device": "2",
@@ -103,7 +103,8 @@ def test_render_report_md_includes_improvements():
     }
     md = render_report_md(metadata, comparison, Path("/tmp/run"))
     assert "Different solver, exhaustive faster" in md
-    assert "Same solver" in md
+    assert "Same kernel" in md
+    assert ("very-long-kernel-config-" * 4) not in md
     assert "flux.single_gpu.txt" in md
     assert "n1 c1 8x8 k1 1x1 F BF16" in md
     assert "A 0 / B 1 / tune 2" in md
@@ -117,5 +118,5 @@ def test_render_report_md_includes_improvements():
     payload = json.loads(json_path.read_text())
     assert payload["summary"]["improvement"] == 1
     full = payload["different_solver_production_slower"][0]
-    assert full["arm_a_solver"].endswith("clips")
+    assert full["arm_a_solver"].endswith("very-long-kernel-config-")
     assert payload["by_source"][0]["different_solver_production_slower"] == 1

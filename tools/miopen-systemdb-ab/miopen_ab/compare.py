@@ -47,6 +47,8 @@ class ComparisonEntry:
     arm_b_device_ids: list[str] = field(default_factory=list)
     arm_b_tune_device: str | None = None
     same_solver: bool = False
+    same_kernel: bool = False
+    kernel_difference: str = "kernel_not_recorded"
     source_files: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -59,30 +61,95 @@ def _primary_solver(value: str) -> str:
 def _same_solver(arm_a_solver: str | None, arm_b_solver: str | None) -> bool:
     """True when both arms recorded a solver and the names match.
 
-    Kernel config after ``:`` is ignored. A matching name is not a reason to
-    expect a timing difference; those gaps are measurement noise.
+    A matching name is not a matching kernel. Use ``kernel_difference``.
     """
     left = solver_name(arm_a_solver)
     right = solver_name(arm_b_solver)
     return bool(left and right and left == right)
 
 
+# Solvers that compile one kernel. The name is the kernel. ImplicitGEMM CK
+# solvers (ConvHipImplicitGemm*) and dynamic IGEMM (ConvAsmImplicitGemmGTCDynamic*)
+# are absent: the text after ':' is the kernel instance.
+_SINGLE_KERNEL_PREFIXES = (
+    "Gemm",
+    "ConvBinWinograd",
+    "ConvWinoRage",
+    "ConvOclDirect",
+    "ConvDirectNaive",
+)
+
+
 def solver_name(value: str | None) -> str | None:
     """Solver id from a driver ``id/Name`` token or a perf-DB ``Name:config`` record."""
     if not value:
         return None
+    token = _solver_token(value)
+    return token.split(":", 1)[0].strip() or None
+
+
+def kernel_config(value: str | None) -> str | None:
+    """Kernel instance from a ``Name:config`` record.
+
+    Empty when the driver only printed ``id/Name`` and no perf config was logged
+    or stored. For a single-kernel solver that is expected.
+    """
+    if not value:
+        return None
+    token = _solver_token(value)
+    if ":" not in token:
+        return None
+    config = token.split(":", 1)[1].strip()
+    return config or None
+
+
+def is_single_kernel_solver(name: str | None) -> bool:
+    """True when this solver name identifies one kernel."""
+    if not name:
+        return False
+    return name.startswith(_SINGLE_KERNEL_PREFIXES)
+
+
+def kernel_difference(arm_a_solver: str | None, arm_b_solver: str | None) -> str:
+    """How the executed kernels compare.
+
+    ``same_kernel`` — same solver and the same kernel instance.
+    ``different_solver`` — the solver name changed.
+    ``different_kernel`` — one multi-kernel solver, two recorded instances.
+    ``kernel_not_recorded`` — a multi-kernel solver ran, and at least one arm
+    has no perf config, so the instance is unknown.
+    """
+    left = solver_name(arm_a_solver)
+    right = solver_name(arm_b_solver)
+    if not left or not right:
+        return "kernel_not_recorded"
+    if left != right:
+        return "different_solver"
+    if is_single_kernel_solver(left):
+        return "same_kernel"
+    left_config = kernel_config(arm_a_solver)
+    right_config = kernel_config(arm_b_solver)
+    if left_config is None or right_config is None:
+        return "kernel_not_recorded"
+    if left_config == right_config:
+        return "same_kernel"
+    return "different_kernel"
+
+
+def _solver_token(value: str) -> str:
     token = value.split(";", 1)[0].strip()
     slash = token.find("/")
     if slash > 0 and token[:slash].isdigit() and ":" not in token[:slash]:
         token = token[slash + 1 :].strip()
-    return token.split(":", 1)[0].strip() or None
+    return token
 
 
 def recorded_solver(driver_hint: str | None, db_candidates: list[str | None]) -> str | None:
     """Prefer the perf-DB record when it is the solution the driver actually ran.
 
-    The database value keeps the kernel configuration. The driver line is only
-    ``id/Name``. A database entry for a different solver is not substituted.
+    The database value keeps the kernel configuration. The driver hint is
+    ``id/Name``, plus the perf config when performance logs recorded one.
+    A database entry for a different solver is not substituted.
     """
     available = [value for value in db_candidates if value]
     if driver_hint:
@@ -391,6 +458,7 @@ def classify_entry(
         arm_b.finalize()
 
     def _entry(outcome: str, speedup_pct: float | None) -> ComparisonEntry:
+        difference = kernel_difference(arm_a_solver, arm_b_solver)
         return ComparisonEntry(
             command=command,
             outcome=outcome,
@@ -413,6 +481,8 @@ def classify_entry(
             arm_a_device_ids=list(arm_a.device_ids) if arm_a else [],
             arm_b_device_ids=list(arm_b.device_ids) if arm_b else [],
             same_solver=_same_solver(arm_a_solver, arm_b_solver),
+            same_kernel=difference == "same_kernel",
+            kernel_difference=difference,
             source_files=source_files or [],
             notes=notes,
         )
@@ -441,7 +511,9 @@ def classify_entry(
         outcome = Outcome.NO_CHANGE
     elif speedup_pct > threshold_pct:
         outcome = Outcome.IMPROVEMENT
-    elif speedup_pct < -threshold_pct and solver_name(arm_a_solver) != solver_name(arm_b_solver):
+    elif speedup_pct < -threshold_pct and kernel_difference(
+        arm_a_solver, arm_b_solver
+    ) in {"different_solver", "different_kernel"}:
         outcome = Outcome.REGRESSION
     else:
         outcome = Outcome.NO_CHANGE
@@ -505,8 +577,16 @@ def compare_arms(
     def _dump(selected: list[ComparisonEntry]) -> list[dict[str, Any]]:
         return [asdict(entry) for entry in selected]
 
-    def _different(entry: ComparisonEntry) -> bool:
-        return entry.parity != "failed" and not entry.same_solver
+    def _reported(entry: ComparisonEntry) -> bool:
+        """A timing row that is not the same kernel and did not fail."""
+        return entry.parity != "failed" and entry.kernel_difference != "same_kernel"
+
+    def _select(entries_for_parity: list[ComparisonEntry], difference: str) -> list[ComparisonEntry]:
+        return [
+            entry
+            for entry in entries_for_parity
+            if entry.kernel_difference == difference
+        ]
 
     production_slower = sorted(
         (entry for entry in entries if entry.parity == "production_slower"),
@@ -519,12 +599,21 @@ def compare_arms(
         key=lambda entry: entry.delta_ms or 0,
     )
     same_solver = [entry for entry in entries if entry.same_solver and entry.parity != "failed"]
-    different_solver_production_slower = [entry for entry in production_slower if _different(entry)]
-    different_solver_similar = [entry for entry in equal if _different(entry)]
-    different_solver_exhaustive_slower = [entry for entry in exhaustive_slower if _different(entry)]
+    same_kernel = [entry for entry in entries if entry.same_kernel and entry.parity != "failed"]
+    different_solver_production_slower = _select(production_slower, "different_solver")
+    different_solver_similar = _select(equal, "different_solver")
+    different_solver_exhaustive_slower = _select(exhaustive_slower, "different_solver")
+    different_kernel_production_slower = _select(production_slower, "different_kernel")
+    different_kernel_similar = _select(equal, "different_kernel")
+    different_kernel_exhaustive_slower = _select(exhaustive_slower, "different_kernel")
+    unrecorded_kernel_production_slower = _select(production_slower, "kernel_not_recorded")
+    unrecorded_kernel_similar = _select(equal, "kernel_not_recorded")
+    unrecorded_kernel_exhaustive_slower = _select(exhaustive_slower, "kernel_not_recorded")
     different_solver_ms_left = sum(
         entry.delta_ms or 0 for entry in different_solver_production_slower
     )
+    reported_faster = [entry for entry in production_slower if _reported(entry)]
+    reported_ms_left = sum(entry.delta_ms or 0 for entry in reported_faster)
     by_source: dict[str, list[ComparisonEntry]] = {}
     for entry in entries:
         sources = entry.source_files or ["(no workload file)"]
@@ -534,7 +623,15 @@ def compare_arms(
     for source in sorted(by_source):
         grouped = by_source[source]
         slower = [entry for entry in grouped if entry.parity == "production_slower"]
-        different_slower = [entry for entry in slower if not entry.same_solver]
+        reported_grouped = [entry for entry in slower if _reported(entry)]
+
+        def _n(difference: str, parity: str) -> int:
+            return sum(
+                1
+                for entry in grouped
+                if entry.kernel_difference == difference and entry.parity == parity
+            )
+
         workload_summaries.append(
             {
                 "source_file": source,
@@ -548,19 +645,38 @@ def compare_arms(
                 "same_solver": sum(
                     1 for entry in grouped if entry.same_solver and entry.parity != "failed"
                 ),
-                "different_solver_production_slower": len(different_slower),
-                "different_solver_similar": sum(
-                    1
-                    for entry in grouped
-                    if entry.parity == "equal" and not entry.same_solver
+                "same_kernel": sum(
+                    1 for entry in grouped if entry.same_kernel and entry.parity != "failed"
                 ),
-                "different_solver_exhaustive_slower": sum(
-                    1
-                    for entry in grouped
-                    if entry.parity == "exhaustive_slower" and not entry.same_solver
-                ),
+                "different_solver_production_slower": _n("different_solver", "production_slower"),
+                "different_solver_similar": _n("different_solver", "equal"),
+                "different_solver_exhaustive_slower": _n("different_solver", "exhaustive_slower"),
                 "different_solver_ms_left_on_table": sum(
-                    entry.delta_ms or 0 for entry in different_slower
+                    entry.delta_ms or 0
+                    for entry in grouped
+                    if entry.kernel_difference == "different_solver"
+                    and entry.parity == "production_slower"
+                ),
+                "different_kernel_production_slower": _n("different_kernel", "production_slower"),
+                "different_kernel_similar": _n("different_kernel", "equal"),
+                "different_kernel_exhaustive_slower": _n("different_kernel", "exhaustive_slower"),
+                "unrecorded_kernel_production_slower": _n(
+                    "kernel_not_recorded", "production_slower"
+                ),
+                "unrecorded_kernel_similar": _n("kernel_not_recorded", "equal"),
+                "unrecorded_kernel_exhaustive_slower": _n(
+                    "kernel_not_recorded", "exhaustive_slower"
+                ),
+                "reported_similar": sum(
+                    1 for entry in grouped if entry.parity == "equal" and _reported(entry)
+                ),
+                "reported_exhaustive_slower": sum(
+                    1
+                    for entry in grouped
+                    if entry.parity == "exhaustive_slower" and _reported(entry)
+                ),
+                "reported_ms_left_on_table": sum(
+                    entry.delta_ms or 0 for entry in reported_grouped
                 ),
             }
         )
@@ -582,16 +698,25 @@ def compare_arms(
         "parity_counts": parity_counts,
         "ms_left_on_table": ms_left_on_table,
         "different_solver_ms_left_on_table": different_solver_ms_left,
+        "reported_ms_left_on_table": reported_ms_left,
         "same_solver_count": len(same_solver),
+        "same_kernel_count": len(same_kernel),
         "by_source": workload_summaries,
         "entries": _dump(entries),
         "equal": _dump(equal),
         "production_slower": _dump(production_slower),
         "exhaustive_slower": _dump(exhaustive_slower),
         "same_solver": _dump(same_solver),
+        "same_kernel": _dump(same_kernel),
         "different_solver_production_slower": _dump(different_solver_production_slower),
         "different_solver_similar": _dump(different_solver_similar),
         "different_solver_exhaustive_slower": _dump(different_solver_exhaustive_slower),
+        "different_kernel_production_slower": _dump(different_kernel_production_slower),
+        "different_kernel_similar": _dump(different_kernel_similar),
+        "different_kernel_exhaustive_slower": _dump(different_kernel_exhaustive_slower),
+        "unrecorded_kernel_production_slower": _dump(unrecorded_kernel_production_slower),
+        "unrecorded_kernel_similar": _dump(unrecorded_kernel_similar),
+        "unrecorded_kernel_exhaustive_slower": _dump(unrecorded_kernel_exhaustive_slower),
         "improvements": sorted(
             _dump([entry for entry in entries if entry.outcome == Outcome.IMPROVEMENT.value]),
             key=lambda item: item.get("speedup_pct") or 0,

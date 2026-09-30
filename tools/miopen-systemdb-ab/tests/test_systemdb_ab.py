@@ -47,6 +47,27 @@ def test_parse_driver_output_forward():
     assert parsed.solver_hint is None
 
 
+def test_parse_driver_output_attaches_performance_log_kernel():
+    stdout = """
+MIOpen Forward Conv. Algorithm: 5, Solution: 137/ConvHipImplicitGemmGroupFwdXdlops
+GPU Kernel Time Forward Conv. Elapsed: 0.146713 ms (average)
+"""
+    stderr = (
+        '{"solution":"ConvHipImplicitGemmGroupFwdXdlops","solver_id":137,'
+        '"workspace_bytes":0,"phase":"execution","performance_configs":['
+        '{"config_name":"ConvHipImplicitGemmGroupFwdXdlops",'
+        '"config_descriptor":"DeviceGroupedConvFwd<64, 64, 16>",'
+        '"exec_number":1,"time_executions_ms":[0.14],"time_ms":0.14,'
+        '"time_std_ms":0,"time_min_ms":0.14,"time_max_ms":0.14,'
+        '"number_of_transformations":0,"kernels":null}]}'
+    )
+    parsed = parse_driver_output(COMMAND, stdout, stderr)
+    assert (
+        parsed.solver_hint
+        == "137/ConvHipImplicitGemmGroupFwdXdlops:DeviceGroupedConvFwd<64, 64, 16>"
+    )
+
+
 def test_parse_driver_output_records_full_solution_name():
     stdout = """
 MIOpen(HIP): Info [FindConvFwdAlgorithm] miopenConvolutionFwdAlgoImplicitGEMM 0.200 0
@@ -158,23 +179,23 @@ def test_recorded_solver_keeps_driver_choice_when_db_differs():
     assert entry.outcome == Outcome.IMPROVEMENT.value
 
 
-def test_classify_regression_requires_solver_change():
+def test_classify_regression_requires_kernel_change():
     from miopen_convolution import MIOpenConvolution
 
     conv = MIOpenConvolution.from_miopendriver_command(COMMAND)
-    system_map = {conv: "SolverA:params"}
+    system_map = {conv: "GemmFwdRest:params"}
     arm_a = CommandResult(
         command=COMMAND,
         times_ms=[10.0, 10.0, 10.0],
         returncodes=[0, 0, 0],
-        solver_hints=["SolverA"],
+        solver_hints=["GemmFwdRest"],
         device_ids=["0", "0", "3"],
     )
     arm_b = CommandResult(
         command=COMMAND,
         times_ms=[11.0, 11.0, 11.0],
         returncodes=[0, 0, 0],
-        solver_hints=["SolverA"],
+        solver_hints=["GemmFwdRest"],
         device_ids=["1", "1", "1"],
     )
     entry = classify_entry(
@@ -190,11 +211,81 @@ def test_classify_regression_requires_solver_change():
     assert entry.outcome == Outcome.NO_CHANGE.value
     assert entry.parity == "exhaustive_slower"
     assert entry.same_solver is True
+    assert entry.same_kernel is True
+    assert entry.kernel_difference == "same_kernel"
     assert entry.arm_a_device_ids == ["0", "0", "3"]
     assert entry.arm_b_device_ids == ["1", "1", "1"]
     assert entry.delta_ms == pytest.approx(-1.0)
-    assert entry.arm_a_solver == "SolverA:params"
+    assert entry.arm_a_solver == "GemmFwdRest:params"
     assert entry.in_system_db is True
+
+
+def test_same_solver_different_kernel_is_not_the_same_kernel():
+    from miopen_convolution import MIOpenConvolution
+
+    conv = MIOpenConvolution.from_miopendriver_command(COMMAND)
+    solver = "ConvHipImplicitGemmGroupFwdXdlops"
+    arm_a_record = f"{solver}:DeviceGroupedConvFwd<64, 64, 16>"
+    arm_b_record = f"{solver}:DeviceGroupedConvFwd<256, 256, 128>"
+    arm_a = CommandResult(
+        command=COMMAND,
+        times_ms=[10.0, 10.0, 10.0],
+        returncodes=[0, 0, 0],
+        solver_hints=[f"137/{solver}"],
+    )
+    arm_b = CommandResult(
+        command=COMMAND,
+        times_ms=[8.0, 8.0, 8.0],
+        returncodes=[0, 0, 0],
+        solver_hints=[f"137/{solver}"],
+    )
+    entry = classify_entry(
+        command=COMMAND,
+        arm_a=arm_a,
+        arm_b=arm_b,
+        system_db_map={},
+        arm_a_db_map={conv: arm_a_record},
+        arm_b_db_map={conv: arm_b_record},
+        threshold_pct=2.0,
+        benchmark_repeats=3,
+    )
+    assert entry.same_solver is True
+    assert entry.same_kernel is False
+    assert entry.kernel_difference == "different_kernel"
+    assert entry.outcome == Outcome.IMPROVEMENT.value
+    assert entry.arm_a_solver == arm_a_record
+    assert entry.arm_b_solver == arm_b_record
+
+
+def test_missing_implicit_gemm_config_is_not_called_the_same_kernel():
+    arm_a = CommandResult(
+        command=COMMAND,
+        times_ms=[10.0, 10.0, 10.0],
+        returncodes=[0, 0, 0],
+        solver_hints=["137/ConvHipImplicitGemmGroupFwdXdlops"],
+    )
+    arm_b = CommandResult(
+        command=COMMAND,
+        times_ms=[8.0, 8.0, 8.0],
+        returncodes=[0, 0, 0],
+        solver_hints=[
+            "ConvHipImplicitGemmGroupFwdXdlops:DeviceGroupedConvFwd<256, 256, 128>"
+        ],
+    )
+    entry = classify_entry(
+        command=COMMAND,
+        arm_a=arm_a,
+        arm_b=arm_b,
+        system_db_map={},
+        arm_a_db_map={},
+        arm_b_db_map={},
+        threshold_pct=2.0,
+        benchmark_repeats=3,
+    )
+    assert entry.same_solver is True
+    assert entry.same_kernel is False
+    assert entry.kernel_difference == "kernel_not_recorded"
+    assert entry.outcome == Outcome.IMPROVEMENT.value
 
 
 def test_compare_arms_keeps_same_solver_out_of_the_report_lists(tmp_path, monkeypatch):
@@ -256,6 +347,7 @@ def test_compare_arms_keeps_same_solver_out_of_the_report_lists(tmp_path, monkey
     assert comparison["different_solver_ms_left_on_table"] == pytest.approx(2.0)
     same_row = next(item for item in comparison["entries"] if item["command"] == same)
     assert same_row["same_solver"] is True
+    assert same_row["same_kernel"] is True
     assert same_row["parity"] == "exhaustive_slower"
 
 

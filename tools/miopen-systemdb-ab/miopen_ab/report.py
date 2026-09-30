@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .compare import is_single_kernel_solver, kernel_config, solver_name
+
 
 def _fmt_ms(value: float | None) -> str:
     if value is None:
@@ -74,10 +76,26 @@ def _gpu_label(entry: dict[str, Any]) -> str:
     return label
 
 
+def _solver_cell(value: str | None) -> str:
+    return _clip(solver_name(value), 48)
+
+
+def _kernel_cell(value: str | None) -> str:
+    config = kernel_config(value)
+    if config:
+        return _clip(config, 64)
+    name = solver_name(value)
+    if is_single_kernel_solver(name):
+        return "single kernel"
+    if name:
+        return "not recorded"
+    return "n/a"
+
+
 def _detail_rows(entries: list[dict[str, Any]]) -> list[str]:
     rows = [
-        "| Workload | Shape | GPUs | Arm A (ms) | Arm B (ms) | Delta (ms) | Speedup | Arm A solver | Arm B solver |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- |",
+        "| Workload | Shape | GPUs | Arm A (ms) | Arm B (ms) | Delta (ms) | Speedup | Arm A solver | Arm A kernel | Arm B solver | Arm B kernel |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- | --- |",
     ]
     for entry in entries:
         cells = [
@@ -88,8 +106,10 @@ def _detail_rows(entries: list[dict[str, Any]]) -> list[str]:
             _fmt_ms(entry.get("arm_b_median_ms")),
             _fmt_ms(entry.get("delta_ms")),
             _fmt_pct(entry.get("speedup_pct")),
-            _cell(_clip(entry.get("arm_a_solver"), 48)),
-            _cell(_clip(entry.get("arm_b_solver"), 48)),
+            _cell(_solver_cell(entry.get("arm_a_solver"))),
+            _cell(_kernel_cell(entry.get("arm_a_solver"))),
+            _cell(_solver_cell(entry.get("arm_b_solver"))),
+            _cell(_kernel_cell(entry.get("arm_b_solver"))),
         ]
         rows.append("| " + " | ".join(cells) + " |")
     return rows
@@ -121,12 +141,23 @@ def render_report_md(
         system_db_hits = f"{len(recorded) - len(misses)} / {len(misses)}"
     else:
         system_db_hits = f"n/a / {len(misses)}"
-    faster = comparison.get("different_solver_production_slower", [])
-    similar = comparison.get("different_solver_similar", [])
-    slower = comparison.get("different_solver_exhaustive_slower", [])
-    same_solver_count = comparison.get("same_solver_count")
-    if same_solver_count is None:
-        same_solver_count = len(comparison.get("same_solver", []))
+    faster_solver = comparison.get("different_solver_production_slower", [])
+    faster_kernel = comparison.get("different_kernel_production_slower", [])
+    faster_unrecorded = comparison.get("unrecorded_kernel_production_slower", [])
+    similar = (
+        comparison.get("different_solver_similar", [])
+        + comparison.get("different_kernel_similar", [])
+        + comparison.get("unrecorded_kernel_similar", [])
+    )
+    slower_solver = comparison.get("different_solver_exhaustive_slower", [])
+    slower_kernel = comparison.get("different_kernel_exhaustive_slower", [])
+    slower_unrecorded = comparison.get("unrecorded_kernel_exhaustive_slower", [])
+    same_kernel_count = comparison.get("same_kernel_count")
+    if same_kernel_count is None:
+        same_kernel_count = len(comparison.get("same_kernel", []))
+    ms_left = comparison.get("reported_ms_left_on_table")
+    if ms_left is None:
+        ms_left = comparison.get("different_solver_ms_left_on_table")
 
     lines = [
         "# MIOpen System DB vs Exhaustive Tuning Report",
@@ -134,22 +165,30 @@ def render_report_md(
         "## Summary",
         "",
         f"- **Total commands**: {config.get('command_count', comparison.get('primary_ab_count', 'n/a'))}",
-        f"- **Same solver**: {same_solver_count}",
-        f"- **Different solver, exhaustive faster**: {len(faster)}",
-        f"- **Milliseconds left on the table**: {_fmt_ms(comparison.get('different_solver_ms_left_on_table'))}",
-        f"- **Different solver, similar speed** (within {threshold}%): {len(similar)}",
-        f"- **Different solver, exhaustive slower**: {len(slower)}",
+        f"- **Same kernel**: {same_kernel_count}",
+        f"- **Different solver, exhaustive faster**: {len(faster_solver)}",
+        f"- **Same solver, different kernel, exhaustive faster**: {len(faster_kernel)}",
+        f"- **Same solver, kernel not recorded, exhaustive faster**: {len(faster_unrecorded)}",
+        f"- **Milliseconds left on the table**: {_fmt_ms(ms_left)}",
+        f"- **Different kernel, similar speed** (within {threshold}%): {len(similar)}",
+        f"- **Different solver, exhaustive slower**: {len(slower_solver)}",
+        f"- **Same solver, different kernel, exhaustive slower**: {len(slower_kernel)}",
+        f"- **Same solver, kernel not recorded, exhaustive slower**: {len(slower_unrecorded)}",
         f"- **Failed**: {parity.get('failed', len(comparison.get('failures', [])))}",
         f"- **System DB hits / misses**: {system_db_hits}",
         "",
-        "The tables below include only shapes where exhaustive search and the production",
-        "heuristic recorded different solver names. When the names match, there is no",
-        "reason to expect a different kernel time; any median gap is timing noise and is",
-        "omitted here. `delta_ms` is Arm A − Arm B. Milliseconds left on the table sums",
-        "that gap over different-solver shapes where exhaustive was faster than the",
-        f"{threshold}% threshold. Full timings, including same-solver rows, GPU ids for",
-        "each repeat, and untruncated solver strings, are in `comparison.json`.",
-        "Names in the tables below are shortened.",
+        "A matching solver name is not a matching kernel. ImplicitGEMM CK solvers",
+        "(`ConvHipImplicitGemm*`) and dynamic IGEMM solvers",
+        "(`ConvAsmImplicitGemmGTCDynamic*`) each ship many kernels; the instance is",
+        "the perf config after `:`. Single-kernel solvers such as `GemmFwdRest` are",
+        "the exception: the name is the kernel. The tables include shapes whose",
+        "kernel instance differs, and shapes where a multi-kernel solver ran but the",
+        "instance was not recorded. Same-kernel gaps are timing noise and are omitted.",
+        "`delta_ms` is Arm A − Arm B. Milliseconds left on the table sums that gap",
+        "where exhaustive was faster than the",
+        f"{threshold}% threshold and the kernel was not the same. Full timings,",
+        "including same-kernel rows, GPU ids, and untruncated solver strings, are in",
+        "`comparison.json`. Names in the tables below are shortened.",
         "",
         "## By workload file",
         "",
@@ -159,20 +198,31 @@ def render_report_md(
     if by_source:
         lines.extend(
             [
-                "| Workload | Same solver | Exhaustive faster | Similar | Exhaustive slower | Failed | ms left on table |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Workload | Same kernel | Solver changed, faster | Kernel changed, faster | Kernel not recorded, faster | Similar | Exhaustive slower | Failed | ms left on table |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for row in by_source:
+            similar_n = row.get("reported_similar")
+            if similar_n is None:
+                similar_n = row.get("different_solver_similar", 0)
+            slower_n = row.get("reported_exhaustive_slower")
+            if slower_n is None:
+                slower_n = row.get("different_solver_exhaustive_slower", 0)
+            ms = row.get("reported_ms_left_on_table")
+            if ms is None:
+                ms = row.get("different_solver_ms_left_on_table")
             lines.append(
-                "| {name} | {same} | {faster} | {similar} | {slower} | {failed} | {ms} |".format(
+                "| {name} | {same} | {solver} | {kernel} | {unrecorded} | {similar} | {slower} | {failed} | {ms} |".format(
                     name=_cell(Path(row["source_file"]).name),
-                    same=row.get("same_solver", 0),
-                    faster=row.get("different_solver_production_slower", 0),
-                    similar=row.get("different_solver_similar", 0),
-                    slower=row.get("different_solver_exhaustive_slower", 0),
+                    same=row.get("same_kernel", row.get("same_solver", 0)),
+                    solver=row.get("different_solver_production_slower", 0),
+                    kernel=row.get("different_kernel_production_slower", 0),
+                    unrecorded=row.get("unrecorded_kernel_production_slower", 0),
+                    similar=similar_n,
+                    slower=slower_n,
                     failed=row.get("failed", 0),
-                    ms=_fmt_ms(row.get("different_solver_ms_left_on_table")),
+                    ms=_fmt_ms(ms),
                 )
             )
     else:
@@ -199,18 +249,22 @@ def render_report_md(
             f"- **Threshold**: {threshold}% relative median timing difference",
             f"- **Benchmark repeats**: {comparison.get('benchmark_repeats')} (median reported)",
             "- **Arm A**: out-of-the-box path (`MIOPEN_FIND_ENFORCE=1`, default find mode, empty user DB, system DB enabled)",
-            "- **Arm A measurement**: MIOpenDriver inline timing (`-t 1`) without forced incremental tuning",
+            "- **Arm A measurement**: MIOpenDriver inline timing (`-t 1`) without forced incremental tuning. `MIOPEN_PERFORMANCE_LOGS=1` records the executed kernel config and does not change find",
             "- **Arm B tuning**: exhaustive override (`MIOPEN_FIND_ENFORCE=4` SEARCH_DB_UPDATE, `MIOPEN_FIND_MODE=1`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`)",
-            "- **Arm B benchmark**: `MIOPEN_FIND_ENFORCE=1` and default find mode, reading the merged exhaustive user DB",
+            "- **Arm B benchmark**: `MIOPEN_FIND_ENFORCE=1` and default find mode, reading the merged exhaustive user DB, with `MIOPEN_PERFORMANCE_LOGS=1`",
             "- **Shared kernel cache** across arms (default `~/.cache/miopen`)",
             "- **`MIOPEN_DEBUG_CONV_DIRECT=0`** on all arms (naive direct conv solvers excluded from find/tune)",
             "- **System DB miss** is recorded on each entry (`in_system_db`) and does not replace the timing comparison",
         ]
     )
 
-    _section(lines, "Different solver, exhaustive faster", faster)
-    _section(lines, "Different solver, similar speed", similar)
-    _section(lines, "Different solver, exhaustive slower", slower)
+    _section(lines, "Different solver, exhaustive faster", faster_solver)
+    _section(lines, "Same solver, different kernel, exhaustive faster", faster_kernel)
+    _section(lines, "Same solver, kernel not recorded, exhaustive faster", faster_unrecorded)
+    _section(lines, "Different kernel, similar speed", similar)
+    _section(lines, "Different solver, exhaustive slower", slower_solver)
+    _section(lines, "Same solver, different kernel, exhaustive slower", slower_kernel)
+    _section(lines, "Same solver, kernel not recorded, exhaustive slower", slower_unrecorded)
 
     lines.extend(["", "## Failures / arch mismatch", ""])
     failures = comparison.get("failures", [])
@@ -262,7 +316,9 @@ def write_reports(
         "parity_counts": comparison.get("parity_counts", {}),
         "ms_left_on_table": comparison.get("ms_left_on_table"),
         "different_solver_ms_left_on_table": comparison.get("different_solver_ms_left_on_table"),
+        "reported_ms_left_on_table": comparison.get("reported_ms_left_on_table"),
         "same_solver_count": comparison.get("same_solver_count"),
+        "same_kernel_count": comparison.get("same_kernel_count"),
         "threshold_pct": comparison.get("threshold_pct"),
         "benchmark_repeats": comparison.get("benchmark_repeats"),
         "system_db_path": comparison.get("system_db_path") or comparison.get("system_udb_path"),
@@ -270,7 +326,18 @@ def write_reports(
         "different_solver_production_slower": comparison.get("different_solver_production_slower", []),
         "different_solver_similar": comparison.get("different_solver_similar", []),
         "different_solver_exhaustive_slower": comparison.get("different_solver_exhaustive_slower", []),
+        "different_kernel_production_slower": comparison.get("different_kernel_production_slower", []),
+        "different_kernel_similar": comparison.get("different_kernel_similar", []),
+        "different_kernel_exhaustive_slower": comparison.get("different_kernel_exhaustive_slower", []),
+        "unrecorded_kernel_production_slower": comparison.get(
+            "unrecorded_kernel_production_slower", []
+        ),
+        "unrecorded_kernel_similar": comparison.get("unrecorded_kernel_similar", []),
+        "unrecorded_kernel_exhaustive_slower": comparison.get(
+            "unrecorded_kernel_exhaustive_slower", []
+        ),
         "same_solver": comparison.get("same_solver", []),
+        "same_kernel": comparison.get("same_kernel", []),
         "production_slower": comparison.get("production_slower", []),
         "equal": comparison.get("equal", []),
         "exhaustive_slower": comparison.get("exhaustive_slower", []),

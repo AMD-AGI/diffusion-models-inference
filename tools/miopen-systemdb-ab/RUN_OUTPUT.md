@@ -58,7 +58,7 @@ Default threshold: **2%** relative median difference (`threshold_pct` in metadat
 | `exhaustive_slower` | Exhaustive tuning is slower by more than the threshold |
 | `failed` | Driver error, incomplete timings, or architecture mismatch |
 
-`outcome` is also stored: `improvement` matches `production_slower`, `regression` is exhaustive-slower with a different solver, and `no_change` covers equal plus exhaustive-slower with the same solver. `in_system_db` is separate from both. A miss does not replace the timing comparison. The system DB file is `{prefix}.db.txt` on ROCm 10.1, or a legacy `{prefix}*.udb.txt`.
+`outcome` is also stored: `improvement` matches `production_slower`, `regression` is exhaustive-slower with a different solver or kernel instance, and `no_change` covers equal plus exhaustive-slower with the same kernel. `in_system_db` is separate from both. A miss does not replace the timing comparison. The system DB file is `{prefix}.db.txt` on ROCm 10.1, or a legacy `{prefix}*.udb.txt`.
 
 ---
 
@@ -109,6 +109,7 @@ Arm B tuning writes per-GPU DBs under `arm_b/tuning/device_*/`, then merges them
 | Arm B (ms) | Exhaustive-tuned median latency |
 | Delta (ms) | Arm A − Arm B. Positive means production is slower |
 | Speedup | Percent improvement of B over A |
-| Arm A / Arm B solver | Shortened solver name. The full config is in `comparison.json` |
+| Arm A / Arm B solver | Solver name. The full record is in `comparison.json` |
+| Arm A / Arm B kernel | Perf config after `:`, `single kernel`, or `not recorded` |
 
-The performance tables list only shapes whose solver **name** differs between arms. Same-solver rows stay in `comparison.json` (`same_solver: true`) and are summarized as a count. Per-file counts and the summed milliseconds, both limited to different-solver shapes, are in **By workload file**. `arm_*_device_ids` on each comparison entry is one id per benchmark repeat, in repeat order. `arm_b/tune_devices.json` records the GPU that ran exhaustive search.
+The performance tables list shapes whose kernel instance differs, and shapes where a multi-kernel solver ran but the instance was not recorded. Same-kernel rows stay in `comparison.json` (`same_kernel: true`). `kernel_difference` is `same_kernel`, `different_solver`, `different_kernel`, or `kernel_not_recorded`. Per-file counts and the summed milliseconds are in **By workload file**. `arm_*_device_ids` on each comparison entry is one id per benchmark repeat, in repeat order. `arm_b/tune_devices.json` records the GPU that ran exhaustive search.

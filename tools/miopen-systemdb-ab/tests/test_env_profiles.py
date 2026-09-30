@@ -33,6 +33,7 @@ def test_arm_a_uses_an_empty_user_db(tmp_path):
     envs = arm_a_worker_envs(["0"], user_db)
     assert envs[0]["MIOPEN_USER_DB_PATH"] == str(user_db)
     assert envs[0]["MIOPEN_FIND_ENFORCE"] == "1"
+    assert envs[0]["MIOPEN_PERFORMANCE_LOGS"] == "1"
     assert "MIOPEN_FIND_MODE" not in envs[0]
     assert "MIOPEN_SYSTEM_DB_PATH" not in envs[0]
 
@@ -42,6 +43,7 @@ def test_arm_b_tune_uses_search_db_update(tmp_path):
     assert envs[0]["MIOPEN_FIND_ENFORCE"] == "4"
     assert envs[0]["MIOPEN_FIND_MODE"] == "1"
     assert envs[0]["MIOPEN_SYSTEM_DB_PATH"] == envs[0]["MIOPEN_USER_DB_PATH"]
+    assert "MIOPEN_PERFORMANCE_LOGS" not in envs[0]
 
 
 def test_arm_b_benchmark_uses_merged_db_without_full_find(tmp_path):
@@ -50,3 +52,4 @@ def test_arm_b_benchmark_uses_merged_db_without_full_find(tmp_path):
     assert envs[0]["MIOPEN_FIND_ENFORCE"] == "1"
     assert "MIOPEN_FIND_MODE" not in envs[0]
     assert envs[0]["MIOPEN_USER_DB_PATH"] == str(merged)
+    assert envs[0]["MIOPEN_PERFORMANCE_LOGS"] == "1"

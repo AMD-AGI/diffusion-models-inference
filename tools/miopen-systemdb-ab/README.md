@@ -154,7 +154,9 @@ Benchmark and tuning tasks are distributed across GPUs using
 
 **Arm A (out-of-the-box path):** all workers share one empty user DB at
 `arm_a/user_db`. No prebuilt user DB is loaded. `MIOPEN_FIND_ENFORCE=1` does not
-write tuning results.
+write tuning results. `MIOPEN_PERFORMANCE_LOGS=1` records the kernel instance
+that ran. Raising find-enforce to write the user DB would force a full search
+and would no longer be the production path.
 
 **Arm B (exhaustive tuning):** each worker writes to its own directory
 (`arm_b/tuning/device_<gpu_id>/`) with `MIOPEN_SYSTEM_DB_PATH` set equal to
@@ -171,7 +173,7 @@ Each run writes to `tools/miopen-systemdb-ab/runs/<run_id>/`:
 
 | File | Description |
 |------|-------------|
-| `report.md` | Summary of shapes that chose a different solver, plus per-workload counts |
+| `report.md` | Summary of shapes that ran a different kernel, plus per-workload counts |
 | `report.json` | Same summary, with full (untruncated) different-solver lists |
 | `comparison.json` | Full per-command record, including same-solver timings, repeat times, GPU ids, and parsed shape |
 | `arm_b/tune_devices.json` | GPU that ran exhaustive search for each command |
@@ -190,14 +192,20 @@ record for every command: parsed shape, repeat times, both solver configs,
 `delta_ms` (Arm A − Arm B), `source_files`, and `in_system_db`. `report.md`
 shortens solver names and groups those records.
 
-The report compares solver names, ignoring the kernel config after `:`. When both
-arms recorded the same name, the shape is counted as **same solver** and left out
-of the performance tables: a timing gap on the same solver is measurement noise.
-Tables and the "milliseconds left on the table" sum cover only **different solver**
-shapes, split by whether exhaustive was faster, similar (within the threshold), or
-slower. Each of those rows includes the GPUs that produced the benchmark repeats
-(`arm_a_device_ids`, `arm_b_device_ids`) and, when tuning ran in this process, the
-GPU that wrote the exhaustive solution (`arm_b_tune_device`).
+The report compares kernel instances, not only solver names. The instance is
+the perf config after `:`. A matching name is the same kernel only for
+single-kernel solvers such as `GemmFwdRest`. ImplicitGEMM CK solvers
+(`ConvHipImplicitGemm*`) and dynamic IGEMM solvers
+(`ConvAsmImplicitGemmGTCDynamic*`) each cover many kernels, so those rows stay
+in the tables when the configs differ. When a multi-kernel solver ran and the
+config was not recorded, the row is reported as **kernel not recorded** instead
+of being dropped as noise. Benchmark arms set `MIOPEN_PERFORMANCE_LOGS=1` so
+the executed config is captured without changing find mode. Tables and the
+"milliseconds left on the table" sum cover every shape that is not the same
+kernel, split by whether exhaustive was faster, similar (within the threshold),
+or slower. Each of those rows includes the GPUs that produced the benchmark
+repeats (`arm_a_device_ids`, `arm_b_device_ids`) and, when tuning ran in this
+process, the GPU that wrote the exhaustive solution (`arm_b_tune_device`).
 
 `parity` is still stored on every entry as the raw timing comparison:
 
@@ -207,9 +215,9 @@ GPU that wrote the exhaustive solution (`arm_b_tune_device`).
 - **failed** — driver failure or an incomplete timing
 
 `outcome` is still recorded. **improvement** matches `production_slower`.
-**regression** is the exhaustive-slower case where the solver also changed.
-**no_change** is everything else that timed successfully, including
-exhaustive-slower with the same solver. **system_db_miss** is not an outcome:
+**regression** is the exhaustive-slower case where the solver or the kernel
+instance changed. **no_change** is everything else that timed successfully,
+including exhaustive-slower on the same kernel. **system_db_miss** is not an outcome:
 `in_system_db` is false when the shape is absent from the installed system
 performance DB (`{prefix}.db.txt`, or a legacy `{prefix}*.udb.txt`). Those
 shapes are still compared.

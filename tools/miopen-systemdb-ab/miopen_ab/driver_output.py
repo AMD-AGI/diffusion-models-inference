@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -44,6 +45,57 @@ class ParsedDriverOutput:
     direction: Optional[str]
 
 
+def _kernel_from_performance_log(stderr: str, solver_hint: str | None) -> str | None:
+    """Kernel instance from ``MIOPEN_PERFORMANCE_LOGS`` JSON, if MIOpen printed one.
+
+    The driver Solution line is only ``id/Name``. The perf-config descriptor in
+    the JSON is the kernel instance (the same text the performance DB stores
+    after ``:``). Level 1 logs the executed solution and does not change find.
+    """
+    hint_name = None
+    if solver_hint:
+        token = solver_hint.split(";", 1)[0].strip()
+        slash = token.find("/")
+        if slash > 0 and token[:slash].isdigit() and ":" not in token[:slash]:
+            token = token[slash + 1 :]
+        hint_name = token.split(":", 1)[0].strip() or None
+
+    matched: str | None = None
+    fallback: str | None = None
+    for line in stderr.splitlines():
+        line = line.strip()
+        if not line.startswith('{"solution":'):
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        solution = str(payload.get("solution") or "").strip()
+        for config in payload.get("performance_configs") or []:
+            if not isinstance(config, dict):
+                continue
+            descriptor = str(config.get("config_descriptor") or "").strip()
+            config_name = str(config.get("config_name") or "").strip()
+            kernel = descriptor or (config_name if config_name and config_name != solution else "")
+            if not kernel:
+                continue
+            fallback = kernel
+            if hint_name is None or solution == hint_name:
+                matched = kernel
+    return matched or fallback
+
+
+def _with_kernel(solver_hint: str | None, kernel: str | None) -> str | None:
+    if not kernel:
+        return solver_hint
+    if solver_hint is None:
+        return kernel
+    token = solver_hint.split(";", 1)[0]
+    if ":" in token:
+        return solver_hint
+    return f"{solver_hint}:{kernel}"
+
+
 def _solution_for_direction(text: str, direction: str) -> Optional[str]:
     """Return the last Solution id/name printed for this convolution direction."""
     matches = [
@@ -80,6 +132,7 @@ def parse_driver_output(command: str, stdout: str, stderr: str = "") -> ParsedDr
     time_ms = float(time_match.group(1)) if time_match else None
     algorithm_id = algo_match.group(1) if algo_match else None
     solver_hint = _solution_for_direction(text, direction)
+    solver_hint = _with_kernel(solver_hint, _kernel_from_performance_log(stderr, solver_hint))
 
     return ParsedDriverOutput(
         time_ms=time_ms,

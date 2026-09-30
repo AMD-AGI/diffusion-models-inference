@@ -39,6 +39,10 @@ def arm_a_worker_envs(device_ids: list[str], user_db_path: Path) -> list[dict[st
             miopen_find_enforce=MIOPEN_FIND_ENFORCE_NONE,
             miopen_debug_conv_direct=MIOPEN_DEBUG_CONV_DIRECT,
         )
+        # Level 1 logs the executed solution's perf config (the kernel instance)
+        # without forcing Find Mode NORMAL. Any MIOPEN_FIND_ENFORCE other than
+        # NONE does that, so the config cannot be captured by writing the user DB.
+        env["MIOPEN_PERFORMANCE_LOGS"] = "1"
         envs.append(env)
     return envs
 
@@ -78,6 +82,7 @@ def arm_b_benchmark_worker_envs(
             miopen_find_enforce=MIOPEN_FIND_ENFORCE_NONE,
             miopen_debug_conv_direct=MIOPEN_DEBUG_CONV_DIRECT,
         )
+        env["MIOPEN_PERFORMANCE_LOGS"] = "1"
         envs.append(env)
     return envs
 
@@ -90,6 +95,7 @@ ARM_A_METHODOLOGY = {
     "MIOPEN_USER_DB_PATH": "empty directory created for this run (arm_a/user_db)",
     "MIOPEN_SYSTEM_DB_PATH": "default install path",
     "measurement": "MIOpenDriver inline timing (-t 1) without incremental DB updates",
+    "MIOPEN_PERFORMANCE_LOGS": "1 (executed solution perf config; does not change find)",
 }
 
 ARM_B_TUNE_METHODOLOGY = {
@@ -106,4 +112,5 @@ ARM_B_BENCHMARK_METHODOLOGY = {
     "MIOPEN_FIND_MODE": "unset (default DYNAMIC_HYBRID / 5)",
     "MIOPEN_DEBUG_CONV_DIRECT": "0",
     "MIOPEN_USER_DB_PATH": "tuning_merged/",
+    "MIOPEN_PERFORMANCE_LOGS": "1 (executed solution perf config; does not change find)",
 }
