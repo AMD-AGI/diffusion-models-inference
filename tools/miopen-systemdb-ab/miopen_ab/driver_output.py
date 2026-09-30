@@ -35,6 +35,16 @@ _KIND_TO_DIRECTION = {
     "Backward Data": "B",
     "Backward Weights": "W",
 }
+# MIOPEN_PERFORMANCE_LOGS prints a JSON object instead of the text
+# "GPU Kernel Time ... Elapsed" / "Solution:" lines.
+_JSON_DIRECTION = {
+    "forward": "F",
+    "backward": "B",
+    "backward data": "B",
+    "bwd": "B",
+    "backward weights": "W",
+    "wrw": "W",
+}
 
 
 @dataclass
@@ -108,6 +118,26 @@ def _solution_for_direction(text: str, direction: str) -> Optional[str]:
     return matches[-1]
 
 
+def _performance_record(text: str, direction: str) -> dict | None:
+    """Last ``{"performance": ...}`` object for this convolution direction."""
+    chosen: dict | None = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or '"performance"' not in line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        perf = payload.get("performance")
+        if not isinstance(perf, dict):
+            continue
+        raw = str(perf.get("direction") or "").strip().lower()
+        if _JSON_DIRECTION.get(raw) == direction:
+            chosen = perf
+    return chosen
+
+
 def _direction_from_command(command: str) -> str:
     match = re.search(r"(?:^|\s)-F\s+(\d+)", command)
     if not match:
@@ -132,6 +162,15 @@ def parse_driver_output(command: str, stdout: str, stderr: str = "") -> ParsedDr
     time_ms = float(time_match.group(1)) if time_match else None
     algorithm_id = algo_match.group(1) if algo_match else None
     solver_hint = _solution_for_direction(text, direction)
+    record = _performance_record(text, direction)
+    if record is not None:
+        results = record.get("results") if isinstance(record.get("results"), dict) else {}
+        if time_ms is None and results.get("average_time_ms") is not None:
+            time_ms = float(results["average_time_ms"])
+        if algorithm_id is None and record.get("algorithm") is not None:
+            algorithm_id = str(record["algorithm"])
+        if solver_hint is None and record.get("solution"):
+            solver_hint = str(record["solution"]).strip()
     solver_hint = _with_kernel(solver_hint, _kernel_from_performance_log(stderr, solver_hint))
 
     return ParsedDriverOutput(

@@ -47,6 +47,17 @@ def test_parse_driver_output_forward():
     assert parsed.solver_hint is None
 
 
+def test_parse_driver_output_reads_performance_json():
+    stdout = """
+{"performance":{"name":"fwd-conv1x11u1","algorithm":5,"solution":"137/ConvHipImplicitGemmGroupFwdXdlops","direction":"forward","operation":"conv","results":{"average_time_ms":0.145735}}}
+"""
+    parsed = parse_driver_output(COMMAND, stdout)
+    assert parsed.time_ms == pytest.approx(0.145735)
+    assert parsed.algorithm_id == "5"
+    assert parsed.solver_hint == "137/ConvHipImplicitGemmGroupFwdXdlops"
+    assert parsed.direction == "F"
+
+
 def test_parse_driver_output_attaches_performance_log_kernel():
     stdout = """
 MIOpen Forward Conv. Algorithm: 5, Solution: 137/ConvHipImplicitGemmGroupFwdXdlops
