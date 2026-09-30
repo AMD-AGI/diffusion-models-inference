@@ -9,6 +9,7 @@ from miopen_ab.env_profiles import (
     arm_a_worker_envs,
     arm_b_benchmark_worker_envs,
     arm_b_tune_worker_envs,
+    prepare_empty_user_db,
 )
 
 
@@ -23,6 +24,17 @@ def test_all_arms_set_miopen_debug_conv_direct_zero(tmp_path):
         assert len(envs) == 2
         for env in envs:
             assert env["MIOPEN_DEBUG_CONV_DIRECT"] == "0"
+
+
+def test_arm_a_uses_an_empty_user_db(tmp_path):
+    user_db = prepare_empty_user_db(tmp_path / "arm_a" / "user_db")
+    assert user_db.is_dir()
+    assert list(user_db.glob("*.udb.txt")) == []
+    envs = arm_a_worker_envs(["0"], user_db)
+    assert envs[0]["MIOPEN_USER_DB_PATH"] == str(user_db)
+    assert envs[0]["MIOPEN_FIND_ENFORCE"] == "1"
+    assert "MIOPEN_FIND_MODE" not in envs[0]
+    assert "MIOPEN_SYSTEM_DB_PATH" not in envs[0]
 
 
 def test_arm_b_tune_uses_search_db_update(tmp_path):

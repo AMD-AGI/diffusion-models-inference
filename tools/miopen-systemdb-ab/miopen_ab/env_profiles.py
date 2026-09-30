@@ -15,33 +15,19 @@ MIOPEN_FIND_ENFORCE_NONE = 1
 MIOPEN_FIND_ENFORCE_SEARCH_DB_UPDATE = 4
 
 
-def resolve_production_user_db(
-    repo_root: Path, override: Path | str | None = None
-) -> Path:
-    """Return the prebuilt production user DB directory used by benchmark images."""
-    if override is not None:
-        path = Path(override).expanduser().resolve()
-        if not path.is_dir():
-            raise FileNotFoundError(f"Arm A user DB directory not found: {path}")
-        return path
+def prepare_empty_user_db(path: Path) -> Path:
+    """Create an empty Arm A user DB directory.
 
-    candidates = [
-        Path("/miopen_userdb"),
-        repo_root / "data/miopen/userdb",
-    ]
-    for path in candidates:
-        if path.is_dir() and any(path.glob("*.udb.txt")):
-            return path.resolve()
-
-    searched = ", ".join(str(path) for path in candidates)
-    raise FileNotFoundError(
-        "Production user DB not found. Checked: "
-        f"{searched}. Pass --arm-a-user-db to override."
-    )
+    The directory is not seeded from the repository or from /miopen_userdb.
+    With MIOPEN_FIND_ENFORCE=1, MIOpen then uses the installed system DB and
+    production heuristics.
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    return path.resolve()
 
 
 def arm_a_worker_envs(device_ids: list[str], user_db_path: Path) -> list[dict[str, str]]:
-    """Production inference path: ENFORCE=1, default find mode, prebuilt user DB."""
+    """Out-of-the-box path: ENFORCE=1, default find mode, empty user DB."""
     if not user_db_path.is_dir():
         raise FileNotFoundError(f"Arm A user DB directory not found: {user_db_path}")
     envs: list[dict[str, str]] = []
@@ -97,11 +83,11 @@ def arm_b_benchmark_worker_envs(
 
 
 ARM_A_METHODOLOGY = {
-    "description": "Production inference path (heuristics, no forced inline tuning)",
+    "description": "Out-of-the-box path (empty user DB, system DB, heuristics)",
     "MIOPEN_FIND_ENFORCE": "1 (NONE — MIOpen default, no forced auto-tune)",
     "MIOPEN_FIND_MODE": "unset (default DYNAMIC_HYBRID / 5)",
     "MIOPEN_DEBUG_CONV_DIRECT": "0",
-    "MIOPEN_USER_DB_PATH": "prebuilt production user DB (/miopen_userdb or data/miopen/userdb)",
+    "MIOPEN_USER_DB_PATH": "empty directory created for this run (arm_a/user_db)",
     "MIOPEN_SYSTEM_DB_PATH": "default install path",
     "measurement": "MIOpenDriver inline timing (-t 1) without incremental DB updates",
 }

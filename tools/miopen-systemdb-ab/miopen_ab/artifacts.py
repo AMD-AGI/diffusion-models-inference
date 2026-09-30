@@ -13,19 +13,23 @@ def _glob_paths(directory: Path, pattern: str) -> list[str]:
     return sorted(str(path) for path in directory.glob(pattern))
 
 
-def collect_artifacts(output_dir: Path, arm_a_production_db: Path | None = None) -> dict[str, Any]:
+def collect_artifacts(output_dir: Path, arm_a_user_db: Path | None = None) -> dict[str, Any]:
     """List all persisted paths under a run directory, including user DB files."""
     arm_b_tuning = output_dir / "arm_b" / "tuning"
     arm_b_merged = output_dir / "arm_b" / "tuning_merged"
 
-    production_db = arm_a_production_db
-    if production_db is None:
+    user_db = arm_a_user_db
+    if user_db is None:
         metadata_path = output_dir / "metadata.json"
         if metadata_path.exists():
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            raw = metadata.get("experiment_config", {}).get("arm_a_production_user_db")
+            raw = metadata.get("experiment_config", {}).get("arm_a_user_db")
             if raw:
-                production_db = Path(raw)
+                user_db = Path(raw)
+        if user_db is None:
+            candidate = output_dir / "arm_a" / "user_db"
+            if candidate.is_dir():
+                user_db = candidate
 
     per_device: list[dict[str, Any]] = []
     for device_dir in sorted(arm_b_tuning.glob("device_*")):
@@ -55,16 +59,12 @@ def collect_artifacts(output_dir: Path, arm_a_production_db: Path | None = None)
         "arm_a": {
             "results_jsonl": str(output_dir / "arm_a" / "results.jsonl"),
             "logs_dir": str(output_dir / "arm_a" / "logs"),
-            "production_user_db_dir": str(production_db) if production_db else None,
+            "user_db_dir": str(user_db) if user_db else None,
             "udb_files": (
-                _glob_paths(production_db, "*.udb.txt")
-                if production_db and production_db.is_dir()
-                else []
+                _glob_paths(user_db, "*.udb.txt") if user_db and user_db.is_dir() else []
             ),
             "ufdb_files": (
-                _glob_paths(production_db, "*.ufdb.txt")
-                if production_db and production_db.is_dir()
-                else []
+                _glob_paths(user_db, "*.ufdb.txt") if user_db and user_db.is_dir() else []
             ),
         },
         "arm_b": {
@@ -80,9 +80,9 @@ def collect_artifacts(output_dir: Path, arm_a_production_db: Path | None = None)
     }
 
 
-def write_artifacts_manifest(output_dir: Path, arm_a_production_db: Path | None = None) -> Path:
+def write_artifacts_manifest(output_dir: Path, arm_a_user_db: Path | None = None) -> Path:
     manifest_path = output_dir / "artifacts.json"
-    payload = collect_artifacts(output_dir, arm_a_production_db=arm_a_production_db)
+    payload = collect_artifacts(output_dir, arm_a_user_db=arm_a_user_db)
     with open(manifest_path, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
         handle.write("\n")

@@ -80,7 +80,7 @@ def render_report_md(
         "",
         f"- **Threshold**: {comparison.get('threshold_pct')}% relative median timing difference",
         f"- **Benchmark repeats**: {comparison.get('benchmark_repeats')} (median reported)",
-        "- **Arm A**: production inference path (`MIOPEN_FIND_ENFORCE=1`, default find mode, prebuilt user DB, system DB enabled)",
+        "- **Arm A**: out-of-the-box path (`MIOPEN_FIND_ENFORCE=1`, default find mode, empty user DB, system DB enabled)",
         "- **Arm A measurement**: MIOpenDriver inline timing (`-t 1`) without forced incremental tuning",
         "- **Arm B tuning**: exhaustive override (`MIOPEN_FIND_ENFORCE=4` SEARCH_DB_UPDATE, `MIOPEN_FIND_MODE=1`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`)",
         "- **Arm B benchmark**: `MIOPEN_FIND_ENFORCE=1` and default find mode, reading the merged exhaustive user DB",

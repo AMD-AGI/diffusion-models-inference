@@ -63,22 +63,24 @@ python tools/miopen-systemdb-ab/run_experiment.py \
 
 | Arm | Description |
 |-----|-------------|
-| **A** | Out-of-the-box path: `MIOPEN_FIND_ENFORCE=1` (no forced tuning), default find mode, prebuilt user DB, then system DB, then production heuristics when the shape misses the system DB |
+| **A** | Out-of-the-box path: `MIOPEN_FIND_ENFORCE=1` (no forced tuning), default find mode, empty user DB, then the installed system DB, then production heuristics when the shape misses the system DB |
 | **B** | Exhaustive override: `MIOPEN_FIND_ENFORCE=4` (`SEARCH_DB_UPDATE`), `MIOPEN_FIND_MODE=1`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`, then time the merged user DB with `MIOPEN_FIND_ENFORCE=1` and the default find mode |
 
-Arm A matches the out-of-the-box container path. MIOpen uses the shipped user DB, then the
-system DB, then heuristics (`DYNAMIC_HYBRID`) when the shape is not in the system DB.
-It does not run incremental inline tuning. Arm B is the exhaustive-tuned upper bound for
-the same shapes: tuning uses `SEARCH_DB_UPDATE` so the winner is written, and the
-follow-up benchmark times that merged user DB instead of searching again.
+Arm A matches a fresh install. MIOpen starts from an empty user DB created for the
+run (`arm_a/user_db`), then the installed system DB, then heuristics
+(`DYNAMIC_HYBRID`) when the shape is not in the system DB. It does not load
+`data/miopen/userdb` or `/miopen_userdb`, and it does not run incremental inline
+tuning. Arm B is the exhaustive-tuned upper bound for the same shapes: tuning uses
+`SEARCH_DB_UPDATE` so the winner is written, and the follow-up benchmark times that
+merged user DB instead of searching again.
 
 Each command is timed **3 times**; the report uses the **median**.
 
 All arms set **`MIOPEN_DEBUG_CONV_DIRECT=0`** by default so expensive naive direct
 convolution solvers are excluded from find/tune (same as `data/miopen/tune.sh`).
 
-Arm A resolves the production user DB from `/miopen_userdb` (Docker image) or
-`data/miopen/userdb` (bind-mounted repo). Override with `--arm-a-user-db`.
+Arm A writes nothing into the repository user DB. `MIOPEN_USER_DB_PATH` is
+`arm_a/user_db`, an empty directory created under the run output.
 
 ## Where results are saved (host)
 
@@ -123,8 +125,9 @@ Benchmark and tuning tasks are distributed across GPUs using
    one command per GPU at a time.
 5. Per-task stdout/stderr is saved under `arm_*/logs/` or `arm_b/tune_logs/`.
 
-**Arm A (production path):** all workers read the same prebuilt production user DB
-(`/miopen_userdb` or `data/miopen/userdb`). No incremental tuning or user DB writes.
+**Arm A (out-of-the-box path):** all workers share one empty user DB at
+`arm_a/user_db`. No prebuilt user DB is loaded. `MIOPEN_FIND_ENFORCE=1` does not
+write tuning results.
 
 **Arm B (exhaustive tuning):** each worker writes to its own directory
 (`arm_b/tuning/device_<gpu_id>/`) with `MIOPEN_SYSTEM_DB_PATH` set equal to
