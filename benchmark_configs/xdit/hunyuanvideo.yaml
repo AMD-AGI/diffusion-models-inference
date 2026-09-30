@@ -22,6 +22,7 @@
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: hunyuanvideo.default.hopper
   tags: [lucid, hopper, h100, h200]
@@ -44,6 +45,7 @@
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: hunyuanvideo.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -66,3 +68,4 @@
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
