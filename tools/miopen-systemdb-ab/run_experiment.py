@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -174,9 +175,11 @@ def main() -> int:
                 source_files_by_command=source_files_by_command,
             )
 
+        tune_devices_path = arm_b_dir / "tune_devices.json"
+        tune_devices: dict[str, str] = {}
         if not args.skip_tune:
             logger.info("Phase: Arm B exhaustive tuning")
-            run_exhaustive_tuning(
+            tune_devices = run_exhaustive_tuning(
                 commands=commands,
                 tuning_root=arm_b_tuning,
                 log_dir=arm_b_dir / "tune_logs",
@@ -184,6 +187,11 @@ def main() -> int:
                 stop_on_failure=False,
             )
             merge_tuning_databases(arm_b_tuning, arm_b_merged)
+        elif tune_devices_path.is_file():
+            with open(tune_devices_path, encoding="utf-8") as handle:
+                loaded = json.load(handle)
+            if isinstance(loaded, dict):
+                tune_devices = {str(key): str(value) for key, value in loaded.items()}
 
         if not args.skip_benchmark_b:
             logger.info("Phase: Arm B post-tune benchmarks")
@@ -208,6 +216,7 @@ def main() -> int:
             arm_a_user_db=arm_a_user_db,
             arm_b_user_db=arm_b_merged,
             source_files_by_command=source_files_by_command,
+            arm_b_tune_devices=tune_devices,
         )
         write_comparison(output_dir / "comparison.json", comparison)
         md_path, json_path = write_reports(output_dir, metadata, comparison)

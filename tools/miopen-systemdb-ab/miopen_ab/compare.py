@@ -43,6 +43,10 @@ class ComparisonEntry:
     shape: dict[str, Any] | None = None
     arm_a_times_ms: list[float] = field(default_factory=list)
     arm_b_times_ms: list[float] = field(default_factory=list)
+    arm_a_device_ids: list[str] = field(default_factory=list)
+    arm_b_device_ids: list[str] = field(default_factory=list)
+    arm_b_tune_device: str | None = None
+    same_solver: bool = False
     source_files: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -50,6 +54,17 @@ class ComparisonEntry:
 def _primary_solver(value: str) -> str:
     """Primary perf-DB record, including kernel config and embedded spaces."""
     return value.split(";", 1)[0].strip()
+
+
+def _same_solver(arm_a_solver: str | None, arm_b_solver: str | None) -> bool:
+    """True when both arms recorded a solver and the names match.
+
+    Kernel config after ``:`` is ignored. A matching name is not a reason to
+    expect a timing difference; those gaps are measurement noise.
+    """
+    left = solver_name(arm_a_solver)
+    right = solver_name(arm_b_solver)
+    return bool(left and right and left == right)
 
 
 def solver_name(value: str | None) -> str | None:
@@ -395,6 +410,9 @@ def classify_entry(
             shape=shape,
             arm_a_times_ms=list(arm_a.times_ms) if arm_a else [],
             arm_b_times_ms=list(arm_b.times_ms) if arm_b else [],
+            arm_a_device_ids=list(arm_a.device_ids) if arm_a else [],
+            arm_b_device_ids=list(arm_b.device_ids) if arm_b else [],
+            same_solver=_same_solver(arm_a_solver, arm_b_solver),
             source_files=source_files or [],
             notes=notes,
         )
@@ -441,6 +459,7 @@ def compare_arms(
     arm_a_user_db: Path | None = None,
     arm_b_user_db: Path | None = None,
     source_files_by_command: dict[str, list[str]] | None = None,
+    arm_b_tune_devices: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     arm_a_results = load_results(arm_a_results_path)
     arm_b_results = load_results(arm_b_results_path)
@@ -470,6 +489,9 @@ def compare_arms(
             benchmark_repeats=benchmark_repeats,
             source_files=(source_files_by_command or {}).get(command),
         )
+        tune_device = (arm_b_tune_devices or {}).get(command)
+        if tune_device:
+            entry.arm_b_tune_device = tune_device
         entries.append(entry)
 
     counts = {item.value: 0 for item in Outcome}
@@ -483,6 +505,9 @@ def compare_arms(
     def _dump(selected: list[ComparisonEntry]) -> list[dict[str, Any]]:
         return [asdict(entry) for entry in selected]
 
+    def _different(entry: ComparisonEntry) -> bool:
+        return entry.parity != "failed" and not entry.same_solver
+
     production_slower = sorted(
         (entry for entry in entries if entry.parity == "production_slower"),
         key=lambda entry: entry.delta_ms or 0,
@@ -493,6 +518,13 @@ def compare_arms(
         (entry for entry in entries if entry.parity == "exhaustive_slower"),
         key=lambda entry: entry.delta_ms or 0,
     )
+    same_solver = [entry for entry in entries if entry.same_solver and entry.parity != "failed"]
+    different_solver_production_slower = [entry for entry in production_slower if _different(entry)]
+    different_solver_similar = [entry for entry in equal if _different(entry)]
+    different_solver_exhaustive_slower = [entry for entry in exhaustive_slower if _different(entry)]
+    different_solver_ms_left = sum(
+        entry.delta_ms or 0 for entry in different_solver_production_slower
+    )
     by_source: dict[str, list[ComparisonEntry]] = {}
     for entry in entries:
         sources = entry.source_files or ["(no workload file)"]
@@ -502,6 +534,7 @@ def compare_arms(
     for source in sorted(by_source):
         grouped = by_source[source]
         slower = [entry for entry in grouped if entry.parity == "production_slower"]
+        different_slower = [entry for entry in slower if not entry.same_solver]
         workload_summaries.append(
             {
                 "source_file": source,
@@ -512,6 +545,23 @@ def compare_arms(
                 ),
                 "failed": sum(1 for entry in grouped if entry.parity == "failed"),
                 "ms_left_on_table": sum(entry.delta_ms or 0 for entry in slower),
+                "same_solver": sum(
+                    1 for entry in grouped if entry.same_solver and entry.parity != "failed"
+                ),
+                "different_solver_production_slower": len(different_slower),
+                "different_solver_similar": sum(
+                    1
+                    for entry in grouped
+                    if entry.parity == "equal" and not entry.same_solver
+                ),
+                "different_solver_exhaustive_slower": sum(
+                    1
+                    for entry in grouped
+                    if entry.parity == "exhaustive_slower" and not entry.same_solver
+                ),
+                "different_solver_ms_left_on_table": sum(
+                    entry.delta_ms or 0 for entry in different_slower
+                ),
             }
         )
 
@@ -531,11 +581,17 @@ def compare_arms(
         "counts": counts,
         "parity_counts": parity_counts,
         "ms_left_on_table": ms_left_on_table,
+        "different_solver_ms_left_on_table": different_solver_ms_left,
+        "same_solver_count": len(same_solver),
         "by_source": workload_summaries,
         "entries": _dump(entries),
         "equal": _dump(equal),
         "production_slower": _dump(production_slower),
         "exhaustive_slower": _dump(exhaustive_slower),
+        "same_solver": _dump(same_solver),
+        "different_solver_production_slower": _dump(different_solver_production_slower),
+        "different_solver_similar": _dump(different_solver_similar),
+        "different_solver_exhaustive_slower": _dump(different_solver_exhaustive_slower),
         "improvements": sorted(
             _dump([entry for entry in entries if entry.outcome == Outcome.IMPROVEMENT.value]),
             key=lambda item: item.get("speedup_pct") or 0,

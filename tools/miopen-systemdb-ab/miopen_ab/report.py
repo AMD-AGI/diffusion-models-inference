@@ -55,39 +55,52 @@ def _workload_label(entry: dict[str, Any]) -> str:
     return ", ".join(Path(path).name for path in files)
 
 
-def _detail_rows(entries: list[dict[str, Any]], include_solvers: bool) -> list[str]:
-    if include_solvers:
-        rows = [
-            "| Workload | Shape | Arm A (ms) | Arm B (ms) | Delta (ms) | Speedup | Arm A solver | Arm B solver |",
-            "| --- | --- | ---: | ---: | ---: | ---: | --- | --- |",
-        ]
-    else:
-        rows = [
-            "| Workload | Shape | Arm A (ms) | Arm B (ms) | Delta (ms) | Speedup |",
-            "| --- | --- | ---: | ---: | ---: | ---: |",
-        ]
+def _unique_devices(ids: list[str] | None) -> str:
+    seen: list[str] = []
+    for device_id in ids or []:
+        if device_id and device_id not in seen:
+            seen.append(device_id)
+    return ",".join(seen) if seen else "n/a"
+
+
+def _gpu_label(entry: dict[str, Any]) -> str:
+    label = (
+        f"A {_unique_devices(entry.get('arm_a_device_ids'))} / "
+        f"B {_unique_devices(entry.get('arm_b_device_ids'))}"
+    )
+    tune = entry.get("arm_b_tune_device") or ""
+    if tune:
+        label += f" / tune {tune}"
+    return label
+
+
+def _detail_rows(entries: list[dict[str, Any]]) -> list[str]:
+    rows = [
+        "| Workload | Shape | GPUs | Arm A (ms) | Arm B (ms) | Delta (ms) | Speedup | Arm A solver | Arm B solver |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- |",
+    ]
     for entry in entries:
         cells = [
             _cell(_workload_label(entry)),
             _cell(_shape_label(entry)),
+            _cell(_gpu_label(entry)),
             _fmt_ms(entry.get("arm_a_median_ms")),
             _fmt_ms(entry.get("arm_b_median_ms")),
             _fmt_ms(entry.get("delta_ms")),
             _fmt_pct(entry.get("speedup_pct")),
+            _cell(_clip(entry.get("arm_a_solver"), 48)),
+            _cell(_clip(entry.get("arm_b_solver"), 48)),
         ]
-        if include_solvers:
-            cells.append(_cell(_clip(entry.get("arm_a_solver"), 48)))
-            cells.append(_cell(_clip(entry.get("arm_b_solver"), 48)))
         rows.append("| " + " | ".join(cells) + " |")
     return rows
 
 
-def _section(lines: list[str], title: str, entries: list[dict[str, Any]], include_solvers: bool) -> None:
+def _section(lines: list[str], title: str, entries: list[dict[str, Any]]) -> None:
     lines.extend(["", f"## {title}", ""])
     lines.append(f"**Count**: {len(entries)}")
     if entries:
         lines.append("")
-        lines.extend(_detail_rows(entries, include_solvers=include_solvers))
+        lines.extend(_detail_rows(entries))
     else:
         lines.append("")
         lines.append("_None._")
@@ -108,9 +121,12 @@ def render_report_md(
         system_db_hits = f"{len(recorded) - len(misses)} / {len(misses)}"
     else:
         system_db_hits = f"n/a / {len(misses)}"
-    poor = comparison.get("production_slower", comparison.get("improvements", []))
-    equal = comparison.get("equal", [])
-    exhaustive_slower = comparison.get("exhaustive_slower", [])
+    faster = comparison.get("different_solver_production_slower", [])
+    similar = comparison.get("different_solver_similar", [])
+    slower = comparison.get("different_solver_exhaustive_slower", [])
+    same_solver_count = comparison.get("same_solver_count")
+    if same_solver_count is None:
+        same_solver_count = len(comparison.get("same_solver", []))
 
     lines = [
         "# MIOpen System DB vs Exhaustive Tuning Report",
@@ -118,16 +134,21 @@ def render_report_md(
         "## Summary",
         "",
         f"- **Total commands**: {config.get('command_count', comparison.get('primary_ab_count', 'n/a'))}",
-        f"- **Equal** (within {threshold}%): {parity.get('equal', len(equal))}",
-        f"- **Production slower than exhaustive**: {parity.get('production_slower', len(poor))}",
-        f"- **Milliseconds left on the table**: {_fmt_ms(comparison.get('ms_left_on_table'))}",
-        f"- **Exhaustive slower than production**: {parity.get('exhaustive_slower', len(exhaustive_slower))}",
+        f"- **Same solver**: {same_solver_count}",
+        f"- **Different solver, exhaustive faster**: {len(faster)}",
+        f"- **Milliseconds left on the table**: {_fmt_ms(comparison.get('different_solver_ms_left_on_table'))}",
+        f"- **Different solver, similar speed** (within {threshold}%): {len(similar)}",
+        f"- **Different solver, exhaustive slower**: {len(slower)}",
         f"- **Failed**: {parity.get('failed', len(comparison.get('failures', [])))}",
         f"- **System DB hits / misses**: {system_db_hits}",
         "",
-        "Equal means the medians are within the threshold. Production slower means exhaustive",
-        "tuning beat the out-of-the-box path by more than the threshold (`delta_ms` = Arm A − Arm B).",
-        "Full commands, solver configs, repeat times, and parsed shapes are in `comparison.json`.",
+        "The tables below include only shapes where exhaustive search and the production",
+        "heuristic recorded different solver names. When the names match, there is no",
+        "reason to expect a different kernel time; any median gap is timing noise and is",
+        "omitted here. `delta_ms` is Arm A − Arm B. Milliseconds left on the table sums",
+        "that gap over different-solver shapes where exhaustive was faster than the",
+        f"{threshold}% threshold. Full timings, including same-solver rows, GPU ids for",
+        "each repeat, and untruncated solver strings, are in `comparison.json`.",
         "Names in the tables below are shortened.",
         "",
         "## By workload file",
@@ -138,19 +159,20 @@ def render_report_md(
     if by_source:
         lines.extend(
             [
-                "| Workload | Equal | Production slower | Exhaustive slower | Failed | ms left on table |",
-                "| --- | ---: | ---: | ---: | ---: | ---: |",
+                "| Workload | Same solver | Exhaustive faster | Similar | Exhaustive slower | Failed | ms left on table |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for row in by_source:
             lines.append(
-                "| {name} | {equal} | {slow} | {exhaustive} | {failed} | {ms} |".format(
+                "| {name} | {same} | {faster} | {similar} | {slower} | {failed} | {ms} |".format(
                     name=_cell(Path(row["source_file"]).name),
-                    equal=row.get("equal", 0),
-                    slow=row.get("production_slower", 0),
-                    exhaustive=row.get("exhaustive_slower", 0),
+                    same=row.get("same_solver", 0),
+                    faster=row.get("different_solver_production_slower", 0),
+                    similar=row.get("different_solver_similar", 0),
+                    slower=row.get("different_solver_exhaustive_slower", 0),
                     failed=row.get("failed", 0),
-                    ms=_fmt_ms(row.get("ms_left_on_table")),
+                    ms=_fmt_ms(row.get("different_solver_ms_left_on_table")),
                 )
             )
     else:
@@ -186,19 +208,9 @@ def render_report_md(
         ]
     )
 
-    _section(
-        lines,
-        "Production slower than exhaustive",
-        poor,
-        include_solvers=True,
-    )
-    _section(lines, "Equal", equal, include_solvers=False)
-    _section(
-        lines,
-        "Exhaustive slower than production",
-        exhaustive_slower,
-        include_solvers=True,
-    )
+    _section(lines, "Different solver, exhaustive faster", faster)
+    _section(lines, "Different solver, similar speed", similar)
+    _section(lines, "Different solver, exhaustive slower", slower)
 
     lines.extend(["", "## Failures / arch mismatch", ""])
     failures = comparison.get("failures", [])
@@ -249,10 +261,16 @@ def write_reports(
         "summary": comparison.get("counts", {}),
         "parity_counts": comparison.get("parity_counts", {}),
         "ms_left_on_table": comparison.get("ms_left_on_table"),
+        "different_solver_ms_left_on_table": comparison.get("different_solver_ms_left_on_table"),
+        "same_solver_count": comparison.get("same_solver_count"),
         "threshold_pct": comparison.get("threshold_pct"),
         "benchmark_repeats": comparison.get("benchmark_repeats"),
         "system_db_path": comparison.get("system_db_path") or comparison.get("system_udb_path"),
         "by_source": comparison.get("by_source", []),
+        "different_solver_production_slower": comparison.get("different_solver_production_slower", []),
+        "different_solver_similar": comparison.get("different_solver_similar", []),
+        "different_solver_exhaustive_slower": comparison.get("different_solver_exhaustive_slower", []),
+        "same_solver": comparison.get("same_solver", []),
         "production_slower": comparison.get("production_slower", []),
         "equal": comparison.get("equal", []),
         "exhaustive_slower": comparison.get("exhaustive_slower", []),

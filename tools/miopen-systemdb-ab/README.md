@@ -171,9 +171,10 @@ Each run writes to `tools/miopen-systemdb-ab/runs/<run_id>/`:
 
 | File | Description |
 |------|-------------|
-| `report.md` | Summary by workload file, then equal / production-slower / exhaustive-slower tables |
-| `report.json` | Same summary, with full (untruncated) entries for those three lists |
-| `comparison.json` | Full per-command record, including repeat times and parsed shape |
+| `report.md` | Summary of shapes that chose a different solver, plus per-workload counts |
+| `report.json` | Same summary, with full (untruncated) different-solver lists |
+| `comparison.json` | Full per-command record, including same-solver timings, repeat times, GPU ids, and parsed shape |
+| `arm_b/tune_devices.json` | GPU that ran exhaustive search for each command |
 | `metadata.json` | GPU, ROCm, MIOpen versions (+ artifact paths after completion) |
 | `artifacts.json` | Manifest of all persisted paths, including user DB files |
 | `arm_a/results.jsonl` | Arm A timings |
@@ -189,7 +190,16 @@ record for every command: parsed shape, repeat times, both solver configs,
 `delta_ms` (Arm A − Arm B), `source_files`, and `in_system_db`. `report.md`
 shortens solver names and groups those records.
 
-`parity` is the view used by the report:
+The report compares solver names, ignoring the kernel config after `:`. When both
+arms recorded the same name, the shape is counted as **same solver** and left out
+of the performance tables: a timing gap on the same solver is measurement noise.
+Tables and the "milliseconds left on the table" sum cover only **different solver**
+shapes, split by whether exhaustive was faster, similar (within the threshold), or
+slower. Each of those rows includes the GPUs that produced the benchmark repeats
+(`arm_a_device_ids`, `arm_b_device_ids`) and, when tuning ran in this process, the
+GPU that wrote the exhaustive solution (`arm_b_tune_device`).
+
+`parity` is still stored on every entry as the raw timing comparison:
 
 - **equal** — medians within the threshold
 - **production_slower** — exhaustive median is faster by more than the threshold

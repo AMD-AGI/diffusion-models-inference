@@ -41,6 +41,8 @@ def test_render_report_md_includes_improvements():
             "failed": 0,
         },
         "ms_left_on_table": 0.2,
+        "different_solver_ms_left_on_table": 0.2,
+        "same_solver_count": 0,
         "by_source": [
             {
                 "source_file": "data/miopen/workloads/flux.single_gpu.txt",
@@ -49,9 +51,14 @@ def test_render_report_md_includes_improvements():
                 "exhaustive_slower": 0,
                 "failed": 0,
                 "ms_left_on_table": 0.2,
+                "same_solver": 0,
+                "different_solver_production_slower": 1,
+                "different_solver_similar": 0,
+                "different_solver_exhaustive_slower": 0,
+                "different_solver_ms_left_on_table": 0.2,
             }
         ],
-        "production_slower": [
+        "different_solver_production_slower": [
             {
                 "command": "MIOpenDriver convbfp16 -n 1 -c 1 -H 8 -W 8 -k 1 -y 1 -x 1 -F 1 -t 1",
                 "arm_a_median_ms": 1.0,
@@ -61,6 +68,10 @@ def test_render_report_md_includes_improvements():
                 "arm_a_solver": "SolverA:very-long-config-that-the-markdown-table-clips",
                 "arm_b_solver": "SolverB",
                 "system_db_solver": "SolverA:very-long-config-that-the-markdown-table-clips",
+                "arm_a_device_ids": ["0", "0", "0"],
+                "arm_b_device_ids": ["1", "1", "1"],
+                "arm_b_tune_device": "2",
+                "same_solver": False,
                 "source_files": ["data/miopen/workloads/flux.single_gpu.txt"],
                 "shape": {
                     "batchsize": 1,
@@ -78,8 +89,12 @@ def test_render_report_md_includes_improvements():
                 },
             }
         ],
+        "production_slower": [],
         "equal": [],
         "exhaustive_slower": [],
+        "same_solver": [],
+        "different_solver_similar": [],
+        "different_solver_exhaustive_slower": [],
         "improvements": [],
         "regressions": [],
         "no_change": [],
@@ -87,9 +102,11 @@ def test_render_report_md_includes_improvements():
         "failures": [],
     }
     md = render_report_md(metadata, comparison, Path("/tmp/run"))
-    assert "Production slower than exhaustive" in md
+    assert "Different solver, exhaustive faster" in md
+    assert "Same solver" in md
     assert "flux.single_gpu.txt" in md
     assert "n1 c1 8x8 k1 1x1 F BF16" in md
+    assert "A 0 / B 1 / tune 2" in md
     assert "very-long-config-that-the-markdown-table-clips" not in md
     assert "SolverB" in md
 
@@ -99,5 +116,6 @@ def test_render_report_md_includes_improvements():
     assert md_path.exists()
     payload = json.loads(json_path.read_text())
     assert payload["summary"]["improvement"] == 1
-    assert payload["production_slower"][0]["arm_a_solver"].endswith("clips")
-    assert payload["by_source"][0]["production_slower"] == 1
+    full = payload["different_solver_production_slower"][0]
+    assert full["arm_a_solver"].endswith("clips")
+    assert payload["by_source"][0]["different_solver_production_slower"] == 1

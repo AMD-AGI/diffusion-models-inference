@@ -33,6 +33,7 @@ class Result:
     stdout: str
     stderr: str
     duration_ms: float
+    device_id: str | None = None
 
 def do_work(task: Task) -> Result:
     """Execute a task in a subprocess, capturing and printing its output.
@@ -58,6 +59,7 @@ def do_work(task: Task) -> Result:
         stdout=proc.stdout,
         stderr=proc.stderr,
         duration_ms=duration_ms,
+        device_id=os.environ.get("HIP_VISIBLE_DEVICES") or None,
     )
 
     if task.log_file is not None:

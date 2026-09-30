@@ -104,10 +104,11 @@ Arm B tuning writes per-GPU DBs under `arm_b/tuning/device_*/`, then merges them
 |--------|---------|
 | Workload | Basename of the workload file that listed the shape |
 | Shape | Short form of the convolution (`n c HxW k kernel direction precision`) |
+| GPUs | Devices that ran the Arm A repeats, the Arm B repeats, and exhaustive tuning |
 | Arm A (ms) | Out-of-the-box median latency |
 | Arm B (ms) | Exhaustive-tuned median latency |
 | Delta (ms) | Arm A − Arm B. Positive means production is slower |
 | Speedup | Percent improvement of B over A |
 | Arm A / Arm B solver | Shortened solver name. The full config is in `comparison.json` |
 
-**Production slower than exhaustive** is the list of shapes where the out-of-the-box path leaves time on the table. **Equal** is the list that already matches exhaustive tuning within the threshold. Per-file counts and the summed milliseconds are in **By workload file**.
+The performance tables list only shapes whose solver **name** differs between arms. Same-solver rows stay in `comparison.json` (`same_solver: true`) and are summarized as a count. Per-file counts and the summed milliseconds, both limited to different-solver shapes, are in **By workload file**. `arm_*_device_ids` on each comparison entry is one id per benchmark repeat, in repeat order. `arm_b/tune_devices.json` records the GPU that ran exhaustive search.

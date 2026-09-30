@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def run_exhaustive_tuning(
     log_dir: Path,
     gpus: str | None = None,
     stop_on_failure: bool = False,
-) -> None:
+) -> dict[str, str]:
     ensure_miopendriver_on_path()
     device_ids = get_device_ids(gpus)
     worker_envs = arm_b_tune_worker_envs(device_ids, tuning_root)
@@ -36,7 +37,16 @@ def run_exhaustive_tuning(
     ]
 
     logger.info("Starting exhaustive tuning for %d commands", len(tasks))
-    distritune(tasks, worker_envs, stop_on_failure=stop_on_failure)
+    raw_results = distritune(tasks, worker_envs, stop_on_failure=stop_on_failure)
+    devices = {
+        command: raw.device_id or ""
+        for command, raw in zip(commands, raw_results)
+    }
+    devices_path = log_dir.parent / "tune_devices.json"
+    with open(devices_path, "w", encoding="utf-8") as handle:
+        json.dump(devices, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    return devices
 
 
 def merge_tuning_databases(tuning_root: Path, merged_root: Path) -> Path:

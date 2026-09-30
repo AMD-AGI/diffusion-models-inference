@@ -9,12 +9,13 @@ sys.path.insert(0, str(ROOT.parents[1] / "src"))
 
 from miopen_ab.compare import (
     classify_entry,
+    compare_arms,
     find_system_udb,
     load_udb_solver_map,
     perf_db_problem,
     Outcome,
 )
-from miopen_ab.benchmark import CommandResult
+from miopen_ab.benchmark import CommandResult, save_results
 from miopen_ab.driver_output import parse_driver_output
 from miopen_ab.workloads import normalize_command, collect_workloads
 
@@ -167,12 +168,14 @@ def test_classify_regression_requires_solver_change():
         times_ms=[10.0, 10.0, 10.0],
         returncodes=[0, 0, 0],
         solver_hints=["SolverA"],
+        device_ids=["0", "0", "3"],
     )
     arm_b = CommandResult(
         command=COMMAND,
         times_ms=[11.0, 11.0, 11.0],
         returncodes=[0, 0, 0],
         solver_hints=["SolverA"],
+        device_ids=["1", "1", "1"],
     )
     entry = classify_entry(
         command=COMMAND,
@@ -186,9 +189,74 @@ def test_classify_regression_requires_solver_change():
     )
     assert entry.outcome == Outcome.NO_CHANGE.value
     assert entry.parity == "exhaustive_slower"
+    assert entry.same_solver is True
+    assert entry.arm_a_device_ids == ["0", "0", "3"]
+    assert entry.arm_b_device_ids == ["1", "1", "1"]
     assert entry.delta_ms == pytest.approx(-1.0)
     assert entry.arm_a_solver == "SolverA:params"
     assert entry.in_system_db is True
+
+
+def test_compare_arms_keeps_same_solver_out_of_the_report_lists(tmp_path, monkeypatch):
+    monkeypatch.setattr("miopen_ab.compare.find_system_udb", lambda _prefix: None)
+    same = COMMAND
+    other = COMMAND.replace("-c 128", "-c 64")
+    arm_a = {
+        same: CommandResult(
+            command=same,
+            times_ms=[10.0, 10.0, 10.0],
+            returncodes=[0, 0, 0],
+            solver_hints=["42/GemmFwdRest"],
+            device_ids=["0", "0", "0"],
+        ),
+        other: CommandResult(
+            command=other,
+            times_ms=[10.0, 10.0, 10.0],
+            returncodes=[0, 0, 0],
+            solver_hints=["7/ConvHipImplicitGemmGroupFwdXdlops"],
+            device_ids=["1", "1", "1"],
+        ),
+    }
+    arm_b = {
+        same: CommandResult(
+            command=same,
+            times_ms=[12.0, 12.0, 12.0],
+            returncodes=[0, 0, 0],
+            solver_hints=["GemmFwdRest:some-config"],
+            device_ids=["4", "4", "4"],
+        ),
+        other: CommandResult(
+            command=other,
+            times_ms=[8.0, 8.0, 8.0],
+            returncodes=[0, 0, 0],
+            solver_hints=["9/GemmFwdRest"],
+            device_ids=["5", "5", "5"],
+        ),
+    }
+    arm_a_path = tmp_path / "arm_a.jsonl"
+    arm_b_path = tmp_path / "arm_b.jsonl"
+    save_results(arm_a_path, arm_a)
+    save_results(arm_b_path, arm_b)
+    comparison = compare_arms(
+        commands=[same, other],
+        arm_a_results_path=arm_a_path,
+        arm_b_results_path=arm_b_path,
+        db_prefix="gfx950100",
+        threshold_pct=2.0,
+        benchmark_repeats=3,
+        arm_b_tune_devices={other: "2"},
+    )
+    assert comparison["same_solver_count"] == 1
+    assert comparison["different_solver_exhaustive_slower"] == []
+    faster = comparison["different_solver_production_slower"]
+    assert len(faster) == 1
+    assert faster[0]["command"] == other
+    assert faster[0]["arm_a_device_ids"] == ["1", "1", "1"]
+    assert faster[0]["arm_b_tune_device"] == "2"
+    assert comparison["different_solver_ms_left_on_table"] == pytest.approx(2.0)
+    same_row = next(item for item in comparison["entries"] if item["command"] == same)
+    assert same_row["same_solver"] is True
+    assert same_row["parity"] == "exhaustive_slower"
 
 
 def test_load_udb_solver_map_keeps_primary_config(tmp_path):

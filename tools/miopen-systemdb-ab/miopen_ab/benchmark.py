@@ -29,6 +29,7 @@ class CommandResult:
     returncodes: list[int] = field(default_factory=list)
     log_files: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)
+    device_ids: list[str] = field(default_factory=list)
 
     def is_complete(self, repeats: int) -> bool:
         if len(self.times_ms) < repeats:
@@ -64,6 +65,7 @@ def load_results(path: Path) -> dict[str, CommandResult]:
                 returncodes=payload.get("returncodes", []),
                 log_files=payload.get("log_files", []),
                 source_files=payload.get("source_files", []),
+                device_ids=payload.get("device_ids", []),
             )
     return results
 
@@ -86,6 +88,7 @@ def _merge_task_result(
     returncode: int,
     log_file: str | None,
     source_files: list[str] | None = None,
+    device_id: str | None = None,
 ) -> None:
     if command not in results:
         results[command] = CommandResult(command=command, source_files=source_files or [])
@@ -95,6 +98,7 @@ def _merge_task_result(
             if source not in item.source_files:
                 item.source_files.append(source)
     item.returncodes.append(returncode)
+    item.device_ids.append(device_id or "")
     if log_file:
         item.log_files.append(log_file)
     if parsed_time is not None:
@@ -154,6 +158,7 @@ def run_benchmarks(
             raw.returncode,
             log_path,
             source_files=source_files_by_command.get(command) if source_files_by_command else None,
+            device_id=raw.device_id,
         )
 
     save_results(results_path, results)
