@@ -5,23 +5,49 @@ suboptimal solver compared to **exhaustive tuning** (system DB overridden).
 
 ## Quick start
 
-From the repository root, on a machine with AMD GPUs and Docker:
+From the repository root, on a machine with AMD GPUs and Docker, build the
+ROCm image in [`Dockerfile`](Dockerfile) first, then point the run at that tag.
+The image is Ubuntu 24.04 plus the latest ROCm 10.1 pre-release (native
+`apt` packages; see the Dockerfile header). It contains MIOpen, HIP, and
+rocBLAS for gfx942 and gfx950. The repository is bind-mounted at run time, so
+it is not copied into the image.
 
 ```bash
+docker build \
+  -f tools/miopen-systemdb-ab/Dockerfile \
+  -t miopen-systemdb-ab:10.1.0-pre3 \
+  .
+
 # Copy and edit config if needed (GPU list, repeats, skips, etc.)
 cp tools/miopen-systemdb-ab/config.example.env tools/miopen-systemdb-ab/config.env
 
 # Full run (all workload files; GPUs and other settings from config.env)
+DOCKER_IMAGE=miopen-systemdb-ab:10.1.0-pre3 \
 bash tools/miopen-systemdb-ab/run_experiment.sh
 ```
 
 `run_experiment.sh` reads `tools/miopen-systemdb-ab/config.env` when present. Each
 `KEY=value` line sets a default only if that variable is **not** already exported, so
-one-off overrides on the command line still work.
+one-off overrides on the command line still work. Set `DOCKER_IMAGE` in
+`config.env` to the tag you built if you do not want to pass it on the command
+line. Without that setting the script uses its built-in staging image.
+
+Build a single GPU architecture, or pin another pre-release, with the
+Dockerfile `ARG`s:
+
+```bash
+docker build \
+  -f tools/miopen-systemdb-ab/Dockerfile \
+  --build-arg ROCM_GFX_TARGETS=gfx950 \
+  --build-arg ROCM_VERSION=10.1.0~pre3-36179538173 \
+  -t miopen-systemdb-ab:10.1.0-pre3 \
+  .
+```
 
 Validate on a small subset first:
 
 ```bash
+DOCKER_IMAGE=miopen-systemdb-ab:10.1.0-pre3 \
 WORKLOADS_GLOB='data/miopen/workloads/flux.single_gpu.txt' \
 HIP_VISIBLE_DEVICES=0 \
 bash tools/miopen-systemdb-ab/run_experiment.sh
@@ -32,7 +58,7 @@ bash tools/miopen-systemdb-ab/run_experiment.sh
 | Variable | Default (if unset) | Description |
 |----------|-------------------|-------------|
 | `HIP_VISIBLE_DEVICES` | `0` | Comma-separated GPU indices passed into the container |
-| `DOCKER_IMAGE` | staging image tag | Container image for ROCm / MIOpen |
+| `DOCKER_IMAGE` | staging image tag | Image from [`Dockerfile`](Dockerfile). Set this to the tag you built (`miopen-systemdb-ab:10.1.0-pre3`) |
 | `WORKLOADS_GLOB` | `data/miopen/workloads/*.txt` | Workload command files |
 | `THRESHOLD_PCT` | `2.0` | Report classification threshold |
 | `BENCHMARK_REPEATS` | `3` | Timed repetitions per command |
@@ -50,7 +76,7 @@ Copy `config.example.env` to use all eight GPUs listed there.
 ```bash
 cd /app/diffusion-models-inference
 export HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-export DOCKER_IMAGE=amdsiloai/pytorch-xdit-staging:1cdf53a-temp
+export DOCKER_IMAGE=miopen-systemdb-ab:10.1.0-pre3
 export PYTHONPATH=src:tools/miopen-systemdb-ab
 
 python tools/miopen-systemdb-ab/run_experiment.py \
@@ -103,6 +129,7 @@ script — not root.
 Override with `OUTPUT_DIR` (must stay inside the repo):
 
 ```bash
+DOCKER_IMAGE=miopen-systemdb-ab:10.1.0-pre3 \
 OUTPUT_DIR=tools/miopen-systemdb-ab/runs/my_mi350_run \
 HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 bash tools/miopen-systemdb-ab/run_experiment.sh
