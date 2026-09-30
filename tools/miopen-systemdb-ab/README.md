@@ -171,9 +171,9 @@ Each run writes to `tools/miopen-systemdb-ab/runs/<run_id>/`:
 
 | File | Description |
 |------|-------------|
-| `report.md` | Human-readable bug-ticket report |
-| `report.json` | Structured summary |
-| `comparison.json` | Full per-command comparison |
+| `report.md` | Summary by workload file, then equal / production-slower / exhaustive-slower tables |
+| `report.json` | Same summary, with full (untruncated) entries for those three lists |
+| `comparison.json` | Full per-command record, including repeat times and parsed shape |
 | `metadata.json` | GPU, ROCm, MIOpen versions (+ artifact paths after completion) |
 | `artifacts.json` | Manifest of all persisted paths, including user DB files |
 | `arm_a/results.jsonl` | Arm A timings |
@@ -184,16 +184,25 @@ Each run writes to `tools/miopen-systemdb-ab/runs/<run_id>/`:
 
 ## Classification
 
-Configurable via `--threshold-pct` (default 2%):
+Configurable via `--threshold-pct` (default 2%). `comparison.json` keeps the full
+record for every command: parsed shape, repeat times, both solver configs,
+`delta_ms` (Arm A − Arm B), `source_files`, and `in_system_db`. `report.md`
+shortens solver names and groups those records.
 
-- **improvement** — exhaustive median faster than production heuristics (Arm A)
-- **no_change** — within threshold
-- **regression** — exhaustive slower **and** solver changed
-- **system_db_miss** — shape not in installed system UDB (informational; still compared)
-- **failure / arch_mismatch_or_error** — driver failure
+`parity` is the view used by the report:
 
-On architectures without a shipped system UDB (e.g. MI350X today), all shapes may
-show as system DB misses while still producing a full heuristics-vs-exhaustive comparison.
+- **equal** — medians within the threshold
+- **production_slower** — exhaustive median is faster by more than the threshold
+- **exhaustive_slower** — exhaustive median is slower by more than the threshold
+- **failed** — driver failure or an incomplete timing
+
+`outcome` is still recorded. **improvement** matches `production_slower`.
+**regression** is the exhaustive-slower case where the solver also changed.
+**no_change** is everything else that timed successfully, including
+exhaustive-slower with the same solver. **system_db_miss** is not an outcome:
+`in_system_db` is false when the shape is absent from the installed system
+performance DB (`{prefix}.db.txt`, or a legacy `{prefix}*.udb.txt`). Those
+shapes are still compared.
 
 ## Resume / partial runs
 

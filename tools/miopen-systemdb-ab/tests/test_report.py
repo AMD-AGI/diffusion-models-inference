@@ -34,24 +34,63 @@ def test_render_report_md_includes_improvements():
             "failure": 0,
             "arch_mismatch_or_error": 0,
         },
-        "improvements": [
+        "parity_counts": {
+            "equal": 0,
+            "production_slower": 1,
+            "exhaustive_slower": 0,
+            "failed": 0,
+        },
+        "ms_left_on_table": 0.2,
+        "by_source": [
+            {
+                "source_file": "data/miopen/workloads/flux.single_gpu.txt",
+                "equal": 0,
+                "production_slower": 1,
+                "exhaustive_slower": 0,
+                "failed": 0,
+                "ms_left_on_table": 0.2,
+            }
+        ],
+        "production_slower": [
             {
                 "command": "MIOpenDriver convbfp16 -n 1 -c 1 -H 8 -W 8 -k 1 -y 1 -x 1 -F 1 -t 1",
                 "arm_a_median_ms": 1.0,
                 "arm_b_median_ms": 0.8,
+                "delta_ms": 0.2,
                 "speedup_pct": 20.0,
-                "arm_a_solver": "SolverA",
+                "arm_a_solver": "SolverA:very-long-config-that-the-markdown-table-clips",
                 "arm_b_solver": "SolverB",
-                "system_db_solver": "SolverA",
+                "system_db_solver": "SolverA:very-long-config-that-the-markdown-table-clips",
+                "source_files": ["data/miopen/workloads/flux.single_gpu.txt"],
+                "shape": {
+                    "batchsize": 1,
+                    "in_channels": 1,
+                    "in_h": 8,
+                    "in_w": 8,
+                    "in_d": None,
+                    "out_channels": 1,
+                    "fil_h": 1,
+                    "fil_w": 1,
+                    "fil_d": None,
+                    "direction": "F",
+                    "precision": "BF16",
+                    "in_layout": "NCHW",
+                },
             }
         ],
+        "equal": [],
+        "exhaustive_slower": [],
+        "improvements": [],
         "regressions": [],
         "no_change": [],
         "system_db_misses": [],
         "failures": [],
     }
     md = render_report_md(metadata, comparison, Path("/tmp/run"))
-    assert "Improvements (exhaustive faster than production heuristics)" in md
+    assert "Production slower than exhaustive" in md
+    assert "flux.single_gpu.txt" in md
+    assert "n1 c1 8x8 k1 1x1 F BF16" in md
+    assert "very-long-config-that-the-markdown-table-clips" not in md
     assert "SolverB" in md
 
     output = Path("/tmp/miopen_ab_report_test")
@@ -60,3 +99,5 @@ def test_render_report_md_includes_improvements():
     assert md_path.exists()
     payload = json.loads(json_path.read_text())
     assert payload["summary"]["improvement"] == 1
+    assert payload["production_slower"][0]["arm_a_solver"].endswith("clips")
+    assert payload["by_source"][0]["production_slower"] == 1

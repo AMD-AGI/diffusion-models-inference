@@ -7,7 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parents[1] / "src"))
 
-from miopen_ab.compare import classify_entry, load_udb_solver_map, perf_db_problem, Outcome
+from miopen_ab.compare import (
+    classify_entry,
+    find_system_udb,
+    load_udb_solver_map,
+    perf_db_problem,
+    Outcome,
+)
 from miopen_ab.benchmark import CommandResult
 from miopen_ab.driver_output import parse_driver_output
 from miopen_ab.workloads import normalize_command, collect_workloads
@@ -75,8 +81,12 @@ def test_classify_improvement_without_system_db():
         benchmark_repeats=3,
     )
     assert entry.outcome == Outcome.IMPROVEMENT.value
+    assert entry.parity == "production_slower"
+    assert entry.delta_ms == pytest.approx(2.0)
     assert entry.in_system_db is False
     assert entry.speedup_pct == pytest.approx(20.0)
+    assert entry.shape["in_channels"] == 128
+    assert entry.arm_a_times_ms == [10.0, 10.0, 10.0]
 
 
 def test_classify_improvement_in_system_db():
@@ -175,6 +185,8 @@ def test_classify_regression_requires_solver_change():
         benchmark_repeats=3,
     )
     assert entry.outcome == Outcome.NO_CHANGE.value
+    assert entry.parity == "exhaustive_slower"
+    assert entry.delta_ms == pytest.approx(-1.0)
     assert entry.arm_a_solver == "SolverA:params"
     assert entry.in_system_db is True
 
@@ -208,6 +220,32 @@ def test_load_udb_solver_map_matches_backward_data_problem(tmp_path):
     )
     conv = MIOpenConvolution.from_miopendriver_command(command)
     assert loaded[perf_db_problem(conv)] == primary
+
+
+def test_find_system_udb_prefers_installed_perf_db(tmp_path, monkeypatch):
+    db_dir = tmp_path / "db"
+    db_dir.mkdir()
+    (db_dir / "gfx950100.HIP.fdb.txt").write_text("find-db\n")
+    (db_dir / "gfx950100.udb.txt").write_text("user-copy\n")
+    installed = db_dir / "gfx950100.db.txt"
+    installed.write_text(
+        "2x128x1024x1024x1x3x3x1x128x1x1x1x0x1x1x0x1x1x0x0x1xNCHWxBF16xF=SolverA:cfg\n"
+    )
+    monkeypatch.setenv("MIOPEN_SYSTEM_DB_PATH", str(db_dir))
+    found = find_system_udb("gfx950100")
+    assert found == installed
+    loaded = load_udb_solver_map(found)
+    assert any(solver == "SolverA:cfg" for solver in loaded.values())
+
+
+def test_find_system_udb_falls_back_to_udb(tmp_path, monkeypatch):
+    db_dir = tmp_path / "db"
+    db_dir.mkdir()
+    (db_dir / "gfx942130.HIP.fdb.txt").write_text("find-db\n")
+    legacy = db_dir / "gfx942130.udb.txt"
+    legacy.write_text("k=v\n")
+    monkeypatch.setenv("MIOPEN_SYSTEM_DB_PATH", str(db_dir))
+    assert find_system_udb("gfx942130") == legacy
 
 
 def test_collect_workloads_deduplicates(tmp_path, monkeypatch):

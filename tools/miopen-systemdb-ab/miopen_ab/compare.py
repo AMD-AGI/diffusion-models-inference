@@ -38,6 +38,11 @@ class ComparisonEntry:
     in_system_db: bool
     arm_a_algorithm_id: str | None
     arm_b_algorithm_id: str | None
+    delta_ms: float | None = None
+    parity: str = "failed"
+    shape: dict[str, Any] | None = None
+    arm_a_times_ms: list[float] = field(default_factory=list)
+    arm_b_times_ms: list[float] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -205,7 +210,46 @@ def load_udb_solver_map(path: Path) -> dict[MIOpenConvolution, str]:
     return mapping
 
 
+def _is_perf_db_filename(name: str) -> bool:
+    """User and system performance DBs. Find DBs (``.fdb.txt`` / ``.ufdb.txt``) are not."""
+    if name.endswith(".fdb.txt") or name.endswith(".ufdb.txt"):
+        return False
+    return name.endswith(".db.txt") or name.endswith(".udb.txt")
+
+
+def _choose_system_perf_db(root: Path, db_prefix: str) -> Path | None:
+    if root.is_file():
+        if _is_perf_db_filename(root.name) and (not db_prefix or root.name.startswith(db_prefix)):
+            return root
+        return None
+    if not root.is_dir():
+        return None
+
+    matches = [
+        path
+        for path in root.iterdir()
+        if path.is_file()
+        and _is_perf_db_filename(path.name)
+        and (not db_prefix or path.name.startswith(db_prefix))
+    ]
+    if not matches:
+        return None
+
+    def rank(path: Path) -> tuple[int, int, str]:
+        name = path.name
+        exact_system = 0 if db_prefix and name == f"{db_prefix}.db.txt" else 1
+        system_db = 0 if name.endswith(".db.txt") and not name.endswith(".udb.txt") else 1
+        return (exact_system, system_db, name)
+
+    return sorted(matches, key=rank)[0]
+
+
 def find_system_udb(db_prefix: str) -> Path | None:
+    """Locate the installed system performance DB.
+
+    ROCm 10.1 ships ``{prefix}.db.txt`` (for example ``gfx950100.db.txt``).
+    Older installs use ``{prefix}*.udb.txt``. Find databases are ignored.
+    """
     roots: list[Path] = []
     env_path = os.environ.get("MIOPEN_SYSTEM_DB_PATH")
     if env_path:
@@ -218,14 +262,9 @@ def find_system_udb(db_prefix: str) -> Path | None:
     )
 
     for root in roots:
-        if not root.exists():
-            continue
-        if db_prefix:
-            matches = sorted(root.glob(f"{db_prefix}*.udb.txt"))
-        else:
-            matches = sorted(root.glob("*.udb.txt"))
-        if matches:
-            return matches[0]
+        chosen = _choose_system_perf_db(root, db_prefix)
+        if chosen is not None:
+            return chosen
     return None
 
 
@@ -258,6 +297,34 @@ def _most_common(values: list[str]) -> str | None:
     if not values:
         return None
     return max(set(values), key=values.count)
+
+
+def shape_from_command(command: str) -> dict[str, Any] | None:
+    try:
+        return asdict(MIOpenConvolution.from_miopendriver_command(command))
+    except Exception:
+        return None
+
+
+def parity_for(outcome: str, speedup_pct: float | None, threshold_pct: float) -> str:
+    """How Arm A (production heuristics) compares with Arm B (exhaustive)."""
+    if outcome in {Outcome.FAILURE.value, Outcome.ARCH_MISMATCH_OR_ERROR.value}:
+        return "failed"
+    if speedup_pct is None:
+        return "failed"
+    if abs(speedup_pct) <= threshold_pct:
+        return "equal"
+    if speedup_pct > threshold_pct:
+        return "production_slower"
+    return "exhaustive_slower"
+
+
+def _delta_ms(arm_a: CommandResult | None, arm_b: CommandResult | None) -> float | None:
+    if arm_a is None or arm_b is None:
+        return None
+    if arm_a.median_ms is None or arm_b.median_ms is None:
+        return None
+    return arm_a.median_ms - arm_b.median_ms
 
 
 def _failed(result: CommandResult | None, repeats: int) -> bool:
@@ -302,6 +369,35 @@ def classify_entry(
     arm_b_solver = _solver_from_result(arm_b, [arm_b_db_map], command)
     arm_a_algo = _most_common(arm_a.algorithm_ids if arm_a else [])
     arm_b_algo = _most_common(arm_b.algorithm_ids if arm_b else [])
+    shape = shape_from_command(command)
+    if arm_a is not None:
+        arm_a.finalize()
+    if arm_b is not None:
+        arm_b.finalize()
+
+    def _entry(outcome: str, speedup_pct: float | None) -> ComparisonEntry:
+        return ComparisonEntry(
+            command=command,
+            outcome=outcome,
+            arm_a_median_ms=arm_a.median_ms if arm_a else None,
+            arm_b_median_ms=arm_b.median_ms if arm_b else None,
+            arm_a_stddev_ms=arm_a.stddev_ms if arm_a else None,
+            arm_b_stddev_ms=arm_b.stddev_ms if arm_b else None,
+            speedup_pct=speedup_pct,
+            arm_a_solver=arm_a_solver,
+            arm_b_solver=arm_b_solver,
+            system_db_solver=system_db_solver,
+            in_system_db=in_system_db,
+            arm_a_algorithm_id=arm_a_algo,
+            arm_b_algorithm_id=arm_b_algo,
+            delta_ms=_delta_ms(arm_a, arm_b),
+            parity=parity_for(outcome, speedup_pct, threshold_pct),
+            shape=shape,
+            arm_a_times_ms=list(arm_a.times_ms) if arm_a else [],
+            arm_b_times_ms=list(arm_b.times_ms) if arm_b else [],
+            source_files=source_files or [],
+            notes=notes,
+        )
 
     if _failed(arm_a, benchmark_repeats) or _failed(arm_b, benchmark_repeats):
         outcome = Outcome.FAILURE
@@ -311,30 +407,12 @@ def classify_entry(
         if arm_b and arm_b.returncodes and any(code != 0 for code in arm_b.returncodes):
             outcome = Outcome.ARCH_MISMATCH_OR_ERROR
             notes.append("Arm B driver returned non-zero exit code")
-        return ComparisonEntry(
-            command=command,
-            outcome=outcome.value,
-            arm_a_median_ms=arm_a.median_ms if arm_a else None,
-            arm_b_median_ms=arm_b.median_ms if arm_b else None,
-            arm_a_stddev_ms=arm_a.stddev_ms if arm_a else None,
-            arm_b_stddev_ms=arm_b.stddev_ms if arm_b else None,
-            speedup_pct=None,
-            arm_a_solver=arm_a_solver,
-            arm_b_solver=arm_b_solver,
-            system_db_solver=system_db_solver,
-            in_system_db=in_system_db,
-            arm_a_algorithm_id=arm_a_algo,
-            arm_b_algorithm_id=arm_b_algo,
-            source_files=source_files or [],
-            notes=notes,
-        )
+        return _entry(outcome.value, None)
 
     if not in_system_db:
-        notes.append("shape not in installed system UDB")
+        notes.append("shape not in installed system performance DB")
 
     assert arm_a is not None and arm_b is not None
-    arm_a.finalize()
-    arm_b.finalize()
     time_a = arm_a.median_ms or 0.0
     time_b = arm_b.median_ms or 0.0
     speedup_pct = ((time_a - time_b) / time_a) * 100 if time_a > 0 else None
@@ -350,23 +428,7 @@ def classify_entry(
     else:
         outcome = Outcome.NO_CHANGE
 
-    return ComparisonEntry(
-        command=command,
-        outcome=outcome.value,
-        arm_a_median_ms=time_a,
-        arm_b_median_ms=time_b,
-        arm_a_stddev_ms=arm_a.stddev_ms,
-        arm_b_stddev_ms=arm_b.stddev_ms,
-        speedup_pct=speedup_pct,
-        arm_a_solver=arm_a_solver,
-        arm_b_solver=arm_b_solver,
-        system_db_solver=system_db_solver,
-        in_system_db=in_system_db,
-        arm_a_algorithm_id=arm_a_algo,
-        arm_b_algorithm_id=arm_b_algo,
-        source_files=source_files or [],
-        notes=notes,
-    )
+    return _entry(outcome.value, speedup_pct)
 
 
 def compare_arms(
@@ -411,40 +473,89 @@ def compare_arms(
         entries.append(entry)
 
     counts = {item.value: 0 for item in Outcome}
+    parity_counts = {"equal": 0, "production_slower": 0, "exhaustive_slower": 0, "failed": 0}
     for entry in entries:
         counts[entry.outcome] = counts.get(entry.outcome, 0) + 1
+        parity_counts[entry.parity] = parity_counts.get(entry.parity, 0) + 1
+    # Informational overlap with the outcome buckets above. A miss is still compared.
     counts["system_db_miss"] = sum(1 for entry in entries if not entry.in_system_db)
 
+    def _dump(selected: list[ComparisonEntry]) -> list[dict[str, Any]]:
+        return [asdict(entry) for entry in selected]
+
+    production_slower = sorted(
+        (entry for entry in entries if entry.parity == "production_slower"),
+        key=lambda entry: entry.delta_ms or 0,
+        reverse=True,
+    )
+    equal = [entry for entry in entries if entry.parity == "equal"]
+    exhaustive_slower = sorted(
+        (entry for entry in entries if entry.parity == "exhaustive_slower"),
+        key=lambda entry: entry.delta_ms or 0,
+    )
+    by_source: dict[str, list[ComparisonEntry]] = {}
+    for entry in entries:
+        sources = entry.source_files or ["(no workload file)"]
+        for source in sources:
+            by_source.setdefault(source, []).append(entry)
+    workload_summaries = []
+    for source in sorted(by_source):
+        grouped = by_source[source]
+        slower = [entry for entry in grouped if entry.parity == "production_slower"]
+        workload_summaries.append(
+            {
+                "source_file": source,
+                "equal": sum(1 for entry in grouped if entry.parity == "equal"),
+                "production_slower": len(slower),
+                "exhaustive_slower": sum(
+                    1 for entry in grouped if entry.parity == "exhaustive_slower"
+                ),
+                "failed": sum(1 for entry in grouped if entry.parity == "failed"),
+                "ms_left_on_table": sum(entry.delta_ms or 0 for entry in slower),
+            }
+        )
+
     primary_entries = [
-        e
-        for e in entries
-        if e.outcome
+        entry
+        for entry in entries
+        if entry.outcome
         in {Outcome.IMPROVEMENT.value, Outcome.NO_CHANGE.value, Outcome.REGRESSION.value}
     ]
+    ms_left_on_table = sum(entry.delta_ms or 0 for entry in production_slower)
 
     return {
         "system_udb_path": str(system_udb) if system_udb else None,
+        "system_db_path": str(system_udb) if system_udb else None,
         "threshold_pct": threshold_pct,
         "benchmark_repeats": benchmark_repeats,
         "counts": counts,
-        "entries": [asdict(e) for e in entries],
+        "parity_counts": parity_counts,
+        "ms_left_on_table": ms_left_on_table,
+        "by_source": workload_summaries,
+        "entries": _dump(entries),
+        "equal": _dump(equal),
+        "production_slower": _dump(production_slower),
+        "exhaustive_slower": _dump(exhaustive_slower),
         "improvements": sorted(
-            [asdict(e) for e in entries if e.outcome == Outcome.IMPROVEMENT.value],
+            _dump([entry for entry in entries if entry.outcome == Outcome.IMPROVEMENT.value]),
             key=lambda item: item.get("speedup_pct") or 0,
             reverse=True,
         ),
-        "regressions": [
-            asdict(e) for e in entries if e.outcome == Outcome.REGRESSION.value
-        ],
-        "no_change": [asdict(e) for e in entries if e.outcome == Outcome.NO_CHANGE.value],
-        "system_db_misses": [
-            asdict(e) for e in entries if not e.in_system_db
-        ],
-        "failures": [
-            asdict(e)
-            for e in entries
-            if e.outcome in {Outcome.FAILURE.value, Outcome.ARCH_MISMATCH_OR_ERROR.value}
-        ],
+        "regressions": _dump(
+            [entry for entry in entries if entry.outcome == Outcome.REGRESSION.value]
+        ),
+        "no_change": _dump(
+            [entry for entry in entries if entry.outcome == Outcome.NO_CHANGE.value]
+        ),
+        "system_db_misses": _dump([entry for entry in entries if not entry.in_system_db]),
+        "failures": _dump(
+            [
+                entry
+                for entry in entries
+                if entry.outcome
+                in {Outcome.FAILURE.value, Outcome.ARCH_MISMATCH_OR_ERROR.value}
+            ]
+        ),
         "primary_ab_count": len(primary_entries),
     }
 
