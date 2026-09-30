@@ -23,10 +23,17 @@ BACKWARD_DATA_ALGO_RE = re.compile(
 BACKWARD_WRW_ALGO_RE = re.compile(
     r"MIOpen Backward Weights Conv\. Algorithm:\s+(\d+)"
 )
-SOLVER_LINE_RE = re.compile(
-    r"MIOpen\(HIP\):.*\[FindConv.*\]\s+(\S+)\s+[\d.]+\s+\d+",
-    re.IGNORECASE,
+# Driver stdout (not the MIOpen logger). Printed for both immediate mode and Find
+# when -t 1 is set: "Algorithm: 5, Solution: 98/ConvMlirIgemmFwd".
+SOLUTION_LINE_RE = re.compile(
+    r"MIOpen (?P<kind>Forward|Backward Data|Backward Weights) Conv\. Algorithm:\s+-?\d+,\s+Solution:\s+(?P<solution>\S.*?)\s*$",
+    re.MULTILINE,
 )
+_KIND_TO_DIRECTION = {
+    "Forward": "F",
+    "Backward Data": "B",
+    "Backward Weights": "W",
+}
 
 
 @dataclass
@@ -35,6 +42,18 @@ class ParsedDriverOutput:
     algorithm_id: Optional[str]
     solver_hint: Optional[str]
     direction: Optional[str]
+
+
+def _solution_for_direction(text: str, direction: str) -> Optional[str]:
+    """Return the last Solution id/name printed for this convolution direction."""
+    matches = [
+        match.group("solution").strip()
+        for match in SOLUTION_LINE_RE.finditer(text)
+        if _KIND_TO_DIRECTION.get(match.group("kind")) == direction
+    ]
+    if not matches:
+        return None
+    return matches[-1]
 
 
 def _direction_from_command(command: str) -> str:
@@ -58,10 +77,9 @@ def parse_driver_output(command: str, stdout: str, stderr: str = "") -> ParsedDr
         time_match = BACKWARD_WRW_TIME_RE.search(text)
         algo_match = BACKWARD_WRW_ALGO_RE.search(text)
 
-    solver_match = SOLVER_LINE_RE.search(text)
     time_ms = float(time_match.group(1)) if time_match else None
     algorithm_id = algo_match.group(1) if algo_match else None
-    solver_hint = solver_match.group(1) if solver_match else None
+    solver_hint = _solution_for_direction(text, direction)
 
     return ParsedDriverOutput(
         time_ms=time_ms,

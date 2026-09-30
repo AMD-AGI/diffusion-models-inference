@@ -34,9 +34,9 @@ def _table_rows(entries: list[dict[str, Any]]) -> list[str]:
                 a=_fmt_ms(entry.get("arm_a_median_ms")),
                 b=_fmt_ms(entry.get("arm_b_median_ms")),
                 speedup=_fmt_pct(entry.get("speedup_pct")),
-                sa=(entry.get("arm_a_solver") or "n/a")[:60],
-                sb=(entry.get("arm_b_solver") or "n/a")[:60],
-                ss=(entry.get("system_db_solver") or "n/a")[:60],
+                sa=entry.get("arm_a_solver") or "n/a",
+                sb=entry.get("arm_b_solver") or "n/a",
+                ss=entry.get("system_db_solver") or "n/a",
             )
         )
     return rows
@@ -82,8 +82,8 @@ def render_report_md(
         f"- **Benchmark repeats**: {comparison.get('benchmark_repeats')} (median reported)",
         "- **Arm A**: production inference path (`MIOPEN_FIND_ENFORCE=1`, default find mode, prebuilt user DB, system DB enabled)",
         "- **Arm A measurement**: MIOpenDriver inline timing (`-t 1`) without forced incremental tuning",
-        "- **Arm B tuning**: exhaustive override (`MIOPEN_FIND_ENFORCE=3`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`)",
-        "- **Arm B benchmark**: `MIOPEN_FIND_ENFORCE=1` with merged exhaustive user DB",
+        "- **Arm B tuning**: exhaustive override (`MIOPEN_FIND_ENFORCE=4` SEARCH_DB_UPDATE, `MIOPEN_FIND_MODE=1`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`)",
+        "- **Arm B benchmark**: `MIOPEN_FIND_ENFORCE=1` and default find mode, reading the merged exhaustive user DB",
         "- **Regression rule**: counted only when solver changed AND exhaustive median is slower beyond threshold",
         "- **Shared kernel cache** across arms (default `~/.cache/miopen`)",
         "- **`MIOPEN_DEBUG_CONV_DIRECT=0`** on all arms (naive direct conv solvers excluded from find/tune)",

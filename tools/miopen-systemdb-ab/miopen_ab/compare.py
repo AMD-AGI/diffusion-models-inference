@@ -43,7 +43,148 @@ class ComparisonEntry:
 
 
 def _primary_solver(value: str) -> str:
-    return value.split(";", 1)[0]
+    """Primary perf-DB record, including kernel config and embedded spaces."""
+    return value.split(";", 1)[0].strip()
+
+
+def solver_name(value: str | None) -> str | None:
+    """Solver id from a driver ``id/Name`` token or a perf-DB ``Name:config`` record."""
+    if not value:
+        return None
+    token = value.split(";", 1)[0].strip()
+    slash = token.find("/")
+    if slash > 0 and token[:slash].isdigit() and ":" not in token[:slash]:
+        token = token[slash + 1 :].strip()
+    return token.split(":", 1)[0].strip() or None
+
+
+def recorded_solver(driver_hint: str | None, db_candidates: list[str | None]) -> str | None:
+    """Prefer the perf-DB record when it is the solution the driver actually ran.
+
+    The database value keeps the kernel configuration. The driver line is only
+    ``id/Name``. A database entry for a different solver is not substituted.
+    """
+    available = [value for value in db_candidates if value]
+    if driver_hint:
+        hint_name = solver_name(driver_hint)
+        for value in available:
+            if solver_name(value) == hint_name:
+                return value
+        return driver_hint
+    return available[0] if available else None
+
+
+_PERF_DB_LAYOUTS = {"NCHW", "NHWC", "NCDHW", "NDHWC"}
+_PERF_DB_DIRECTIONS = {"F", "B", "W"}
+
+
+def _conv_out(size: int, pad: int, dilation: int, kernel: int, stride: int) -> int:
+    return (size + 2 * pad - dilation * (kernel - 1) - 1) // stride + 1
+
+
+def convolution_from_perf_db_key(key: str) -> MIOpenConvolution:
+    """Parse a user/system perf-DB key (``spatial x in_channels x ...``).
+
+    Field order matches ``ProblemDescription::Visit``. For 2D, depth fields are
+    omitted so the result compares equal to a driver command.
+    """
+    parts = key.split("=", 1)[0].split("x")
+    if len(parts) != 24:
+        raise ValueError(f"perf DB key has {len(parts)} fields, expected 24")
+    spatial = int(parts[0])
+    if spatial not in (2, 3):
+        raise ValueError(f"unsupported spatial dim {spatial}")
+    layout, precision, direction = parts[21], parts[22], parts[23]
+    if layout not in _PERF_DB_LAYOUTS or direction not in _PERF_DB_DIRECTIONS:
+        raise ValueError(f"unrecognized layout or direction in {key}")
+    kwargs: dict[str, Any] = {
+        "in_channels": int(parts[1]),
+        "in_h": int(parts[2]),
+        "in_w": int(parts[3]),
+        "fil_h": int(parts[5]),
+        "fil_w": int(parts[6]),
+        "out_channels": int(parts[8]),
+        "batchsize": int(parts[9]),
+        "pad_h": int(parts[10]),
+        "pad_w": int(parts[11]),
+        "conv_stride_h": int(parts[13]),
+        "conv_stride_w": int(parts[14]),
+        "dilation_h": int(parts[16]),
+        "dilation_w": int(parts[17]),
+        "group_count": int(parts[20]),
+        "in_layout": layout,
+        "fil_layout": layout,
+        "out_layout": layout,
+        "precision": precision,
+        "direction": direction,
+    }
+    if spatial == 3:
+        kwargs.update(
+            {
+                "in_d": int(parts[4]),
+                "fil_d": int(parts[7]),
+                "pad_d": int(parts[12]),
+                "conv_stride_d": int(parts[15]),
+                "dilation_d": int(parts[18]),
+            }
+        )
+    return MIOpenConvolution(**kwargs)
+
+
+def perf_db_problem(conv: MIOpenConvolution) -> MIOpenConvolution:
+    """Problem as stored in the perf DB.
+
+    Forward entries match the driver tensors. Backward data and backward
+    weights store the forward output as ``in`` and the forward input channels
+    as ``out_channels``.
+    """
+    if conv.direction == "F":
+        return conv
+    kwargs: dict[str, Any] = {
+        "batchsize": conv.batchsize,
+        "in_channels": conv.out_channels,
+        "in_h": _conv_out(
+            conv.in_h, conv.pad_h, conv.dilation_h, conv.fil_h, conv.conv_stride_h
+        ),
+        "in_w": _conv_out(
+            conv.in_w, conv.pad_w, conv.dilation_w, conv.fil_w, conv.conv_stride_w
+        ),
+        "out_channels": conv.in_channels,
+        "fil_h": conv.fil_h,
+        "fil_w": conv.fil_w,
+        "pad_h": conv.pad_h,
+        "pad_w": conv.pad_w,
+        "conv_stride_h": conv.conv_stride_h,
+        "conv_stride_w": conv.conv_stride_w,
+        "dilation_h": conv.dilation_h,
+        "dilation_w": conv.dilation_w,
+        "group_count": conv.group_count,
+        "in_layout": conv.in_layout,
+        "fil_layout": conv.fil_layout,
+        "out_layout": conv.out_layout,
+        "precision": conv.precision,
+        "direction": conv.direction,
+    }
+    if conv.spatial_dim == 3 and conv.in_d is not None and conv.fil_d is not None:
+        kwargs.update(
+            {
+                "in_d": _conv_out(
+                    conv.in_d, conv.pad_d, conv.dilation_d, conv.fil_d, conv.conv_stride_d
+                ),
+                "fil_d": conv.fil_d,
+                "pad_d": conv.pad_d,
+                "conv_stride_d": conv.conv_stride_d,
+                "dilation_d": conv.dilation_d,
+            }
+        )
+    return MIOpenConvolution(**kwargs)
+
+
+def _convolution_from_udb_key(key: str) -> MIOpenConvolution:
+    parts = key.split("=", 1)[0].split("x")
+    if len(parts) == 24 and parts[0] in {"2", "3"}:
+        return convolution_from_perf_db_key(key)
+    return MIOpenConvolution.from_db_key(key)
 
 
 def load_udb_solver_map(path: Path) -> dict[MIOpenConvolution, str]:
@@ -57,7 +198,7 @@ def load_udb_solver_map(path: Path) -> dict[MIOpenConvolution, str]:
                 continue
             key, value = raw.split("=", 1)
             try:
-                conv = MIOpenConvolution.from_db_key(key)
+                conv = _convolution_from_udb_key(key)
                 mapping[conv] = _primary_solver(value)
             except Exception:
                 continue
@@ -88,18 +229,29 @@ def find_system_udb(db_prefix: str) -> Path | None:
     return None
 
 
-def _solver_from_result(
-    result: CommandResult | None,
-    solver_map: dict[MIOpenConvolution, str],
-    command: str,
+def _db_solver(
+    solver_map: dict[MIOpenConvolution, str], command: str
 ) -> str | None:
-    if result and result.solver_hints:
-        return result.solver_hints[-1]
     try:
-        conv = MIOpenConvolution.from_miopendriver_command(command)
-        return solver_map.get(conv)
+        conv = perf_db_problem(MIOpenConvolution.from_miopendriver_command(command))
     except Exception:
         return None
+    value = solver_map.get(conv)
+    if value is None:
+        return None
+    return _primary_solver(value)
+
+
+def _solver_from_result(
+    result: CommandResult | None,
+    solver_maps: list[dict[MIOpenConvolution, str]],
+    command: str,
+) -> str | None:
+    driver_hint = result.solver_hints[-1] if result and result.solver_hints else None
+    return recorded_solver(
+        driver_hint,
+        [_db_solver(solver_map, command) for solver_map in solver_maps],
+    )
 
 
 def _most_common(values: list[str]) -> str | None:
@@ -138,15 +290,16 @@ def classify_entry(
     system_db_solver: str | None = None
 
     try:
-        conv = MIOpenConvolution.from_miopendriver_command(command)
+        conv = perf_db_problem(MIOpenConvolution.from_miopendriver_command(command))
         system_db_solver = system_db_map.get(conv)
         in_system_db = system_db_solver is not None
     except Exception as exc:
         notes.append(f"failed to parse command: {exc}")
-        conv = None
 
-    arm_a_solver = _solver_from_result(arm_a, arm_a_db_map, command)
-    arm_b_solver = _solver_from_result(arm_b, arm_b_db_map, command)
+    arm_a_solver = _solver_from_result(
+        arm_a, [arm_a_db_map, system_db_map], command
+    )
+    arm_b_solver = _solver_from_result(arm_b, [arm_b_db_map], command)
     arm_a_algo = _most_common(arm_a.algorithm_ids if arm_a else [])
     arm_b_algo = _most_common(arm_b.algorithm_ids if arm_b else [])
 
@@ -192,7 +345,7 @@ def classify_entry(
         outcome = Outcome.NO_CHANGE
     elif speedup_pct > threshold_pct:
         outcome = Outcome.IMPROVEMENT
-    elif speedup_pct < -threshold_pct and arm_a_solver != arm_b_solver:
+    elif speedup_pct < -threshold_pct and solver_name(arm_a_solver) != solver_name(arm_b_solver):
         outcome = Outcome.REGRESSION
     else:
         outcome = Outcome.NO_CHANGE
@@ -208,7 +361,7 @@ def classify_entry(
         arm_a_solver=arm_a_solver,
         arm_b_solver=arm_b_solver,
         system_db_solver=system_db_solver,
-        in_system_db=True,
+        in_system_db=in_system_db,
         arm_a_algorithm_id=arm_a_algo,
         arm_b_algorithm_id=arm_b_algo,
         source_files=source_files or [],
