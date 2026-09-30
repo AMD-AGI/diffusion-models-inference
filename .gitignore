@@ -1,6 +1,7 @@
 # Configuration files
 *.env
 .env
+!tools/miopen-systemdb-ab/config.example.env
 
 # IDE generated
 ./.vscode/*
