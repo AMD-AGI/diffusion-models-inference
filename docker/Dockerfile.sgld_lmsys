@@ -34,6 +34,7 @@ ENV MIOPEN_DEBUG_CONV_DIRECT=0
 # copy CI scripts and bench configs
 COPY .ci/run.py /app/.ci/run.py
 COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
+COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY .ci/integrations/sgld/ /app/.ci/integrations/sgld/
 COPY benchmark_configs/ /app/.ci/benchmark_configs/
 # copy assets
