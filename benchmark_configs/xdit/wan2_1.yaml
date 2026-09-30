@@ -19,6 +19,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: wan2_1.default.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
@@ -57,6 +58,7 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: wan2_1.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -76,3 +78,4 @@
     num_inference_steps: 40
     use_torch_compile: true
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
