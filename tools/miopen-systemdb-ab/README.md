@@ -63,12 +63,14 @@ python tools/miopen-systemdb-ab/run_experiment.py \
 
 | Arm | Description |
 |-----|-------------|
-| **A** | Production inference path: `MIOPEN_FIND_ENFORCE=1` (no forced tuning), default find mode, prebuilt user DB, system DB enabled |
-| **B** | Exhaustive override: `MIOPEN_FIND_ENFORCE=3`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`, then benchmark merged user DB |
+| **A** | Out-of-the-box path: `MIOPEN_FIND_ENFORCE=1` (no forced tuning), default find mode, prebuilt user DB, then system DB, then production heuristics when the shape misses the system DB |
+| **B** | Exhaustive override: `MIOPEN_FIND_ENFORCE=4` (`SEARCH_DB_UPDATE`), `MIOPEN_FIND_MODE=1`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`, then time the merged user DB with `MIOPEN_FIND_ENFORCE=1` and the default find mode |
 
-Arm A matches benchmark/inference containers: MIOpen uses the shipped user DB, system DB,
-and heuristics (`DYNAMIC_HYBRID`) without incremental inline tuning. Arm B is the
-exhaustive-tuned upper bound for the same shapes.
+Arm A matches the out-of-the-box container path. MIOpen uses the shipped user DB, then the
+system DB, then heuristics (`DYNAMIC_HYBRID`) when the shape is not in the system DB.
+It does not run incremental inline tuning. Arm B is the exhaustive-tuned upper bound for
+the same shapes: tuning uses `SEARCH_DB_UPDATE` so the winner is written, and the
+follow-up benchmark times that merged user DB instead of searching again.
 
 Each command is timed **3 times**; the report uses the **median**.
 

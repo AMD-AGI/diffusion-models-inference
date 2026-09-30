@@ -11,6 +11,8 @@ MIOPEN_DEBUG_CONV_DIRECT = 0
 
 # MIOpen default when MIOPEN_FIND_ENFORCE is unset (NONE).
 MIOPEN_FIND_ENFORCE_NONE = 1
+# SEARCH_DB_UPDATE: force a full search and write the user performance DB.
+MIOPEN_FIND_ENFORCE_SEARCH_DB_UPDATE = 4
 
 
 def resolve_production_user_db(
@@ -58,7 +60,7 @@ def arm_a_worker_envs(device_ids: list[str], user_db_path: Path) -> list[dict[st
 def arm_b_tune_worker_envs(
     device_ids: list[str], tuning_root: Path
 ) -> list[dict[str, str]]:
-    """Exhaustive override: ENFORCE=3, SYSTEM_DB_PATH equals USER_DB_PATH."""
+    """Exhaustive override: SEARCH_DB_UPDATE, SYSTEM_DB_PATH equals USER_DB_PATH."""
     tuning_root.mkdir(parents=True, exist_ok=True)
     envs: list[dict[str, str]] = []
     for device_id in device_ids:
@@ -68,7 +70,7 @@ def arm_b_tune_worker_envs(
             device_id.strip(),
             tuning_database_path=device_db,
             miopen_find_mode=1,
-            miopen_find_enforce=3,
+            miopen_find_enforce=MIOPEN_FIND_ENFORCE_SEARCH_DB_UPDATE,
             miopen_debug_conv_direct=MIOPEN_DEBUG_CONV_DIRECT,
             miopen_system_db_path=device_db,
         )
@@ -79,15 +81,15 @@ def arm_b_tune_worker_envs(
 def arm_b_benchmark_worker_envs(
     device_ids: list[str], merged_db_path: Path
 ) -> list[dict[str, str]]:
-    """Benchmark tuned user DB without further tuning."""
+    """Time the merged user DB with the default find mode, without another full search."""
     merged_db_path.mkdir(parents=True, exist_ok=True)
     envs: list[dict[str, str]] = []
     for device_id in device_ids:
         env = create_miopen_worker_environment(
             device_id.strip(),
             tuning_database_path=merged_db_path,
-            miopen_find_mode=1,
-            miopen_find_enforce=1,
+            miopen_find_mode=None,
+            miopen_find_enforce=MIOPEN_FIND_ENFORCE_NONE,
             miopen_debug_conv_direct=MIOPEN_DEBUG_CONV_DIRECT,
         )
         envs.append(env)
@@ -105,17 +107,17 @@ ARM_A_METHODOLOGY = {
 }
 
 ARM_B_TUNE_METHODOLOGY = {
-    "description": "Exhaustive tuning with system DB override (docs Method 1)",
-    "MIOPEN_FIND_ENFORCE": "3",
-    "MIOPEN_FIND_MODE": "1",
+    "description": "Exhaustive tuning with system DB override (SEARCH_DB_UPDATE)",
+    "MIOPEN_FIND_ENFORCE": "4 (SEARCH_DB_UPDATE — search and write the user DB)",
+    "MIOPEN_FIND_MODE": "1 (NORMAL — benchmark applicable solvers)",
     "MIOPEN_SYSTEM_DB_PATH": "same as MIOPEN_USER_DB_PATH per device",
     "MIOPEN_DEBUG_CONV_DIRECT": "0",
 }
 
 ARM_B_BENCHMARK_METHODOLOGY = {
-    "description": "Benchmark merged exhaustive user DB",
-    "MIOPEN_FIND_ENFORCE": "1",
-    "MIOPEN_FIND_MODE": "1",
+    "description": "Time the merged exhaustive user DB without a second full search",
+    "MIOPEN_FIND_ENFORCE": "1 (NONE)",
+    "MIOPEN_FIND_MODE": "unset (default DYNAMIC_HYBRID / 5)",
     "MIOPEN_DEBUG_CONV_DIRECT": "0",
     "MIOPEN_USER_DB_PATH": "tuning_merged/",
 }

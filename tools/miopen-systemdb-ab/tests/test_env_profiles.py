@@ -14,6 +14,7 @@ from miopen_ab.env_profiles import (
 
 def test_all_arms_set_miopen_debug_conv_direct_zero(tmp_path):
     device_ids = ["0", "1"]
+    (tmp_path / "arm_a").mkdir()
     for envs in (
         arm_a_worker_envs(device_ids, tmp_path / "arm_a"),
         arm_b_tune_worker_envs(device_ids, tmp_path / "arm_b_tune"),
@@ -22,3 +23,18 @@ def test_all_arms_set_miopen_debug_conv_direct_zero(tmp_path):
         assert len(envs) == 2
         for env in envs:
             assert env["MIOPEN_DEBUG_CONV_DIRECT"] == "0"
+
+
+def test_arm_b_tune_uses_search_db_update(tmp_path):
+    envs = arm_b_tune_worker_envs(["0"], tmp_path / "tune")
+    assert envs[0]["MIOPEN_FIND_ENFORCE"] == "4"
+    assert envs[0]["MIOPEN_FIND_MODE"] == "1"
+    assert envs[0]["MIOPEN_SYSTEM_DB_PATH"] == envs[0]["MIOPEN_USER_DB_PATH"]
+
+
+def test_arm_b_benchmark_uses_merged_db_without_full_find(tmp_path):
+    merged = tmp_path / "merged"
+    envs = arm_b_benchmark_worker_envs(["0"], merged)
+    assert envs[0]["MIOPEN_FIND_ENFORCE"] == "1"
+    assert "MIOPEN_FIND_MODE" not in envs[0]
+    assert envs[0]["MIOPEN_USER_DB_PATH"] == str(merged)
