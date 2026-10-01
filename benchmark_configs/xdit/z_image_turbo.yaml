@@ -8,14 +8,31 @@
   args:
     seed: 42
     prompt: A crowded beach
-    height: 1088
-    width: 1920
+    height: 1024
+    width: 1024
     num_inference_steps: 9
     ulysses_degree: 2
     use_torch_compile: true
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: aiter
+
+- name: z_image_turbo.quantgemm.gfx950
+  tags: [instinct, gfx950, mi350p]
+  model: Tongyi-MAI/Z-Image-Turbo
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A crowded beach
+    height: 1024
+    width: 1024
+    num_inference_steps: 9
+    ulysses_degree: 2
+    use_torch_compile: true
+    guidance_scale: 0.0
+    num_iterations: 50
+    attention_backend: aiter
+    use_fp4_gemms: true
 
 - name: z_image_turbo.default.hopper
   tags: [hopper, h100, h200]
@@ -24,8 +41,8 @@
   args:
     seed: 42
     prompt: A crowded beach
-    height: 1088
-    width: 1920
+    height: 1024
+    width: 1024
     num_inference_steps: 9
     ulysses_degree: 2
     use_torch_compile: true
@@ -40,8 +57,8 @@
   args:
     seed: 42
     prompt: A crowded beach
-    height: 1088
-    width: 1920
+    height: 1024
+    width: 1024
     num_inference_steps: 9
     ulysses_degree: 2
     use_torch_compile: true
