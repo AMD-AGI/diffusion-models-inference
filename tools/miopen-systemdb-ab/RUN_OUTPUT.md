@@ -110,6 +110,6 @@ Arm B tuning writes per-GPU DBs under `arm_b/tuning/device_*/`, then merges them
 | Delta (ms) | Arm A − Arm B. Positive means production is slower |
 | Speedup | Percent improvement of B over A |
 | Arm A / Arm B solver | Solver name. The full record is in `comparison.json` |
-| Arm A / Arm B kernel | Perf config after `:`, `single kernel`, or `not recorded` |
+| Arm A / Arm B kernel | Perf config after `:`, `single kernel`, or `not recorded`. Benchmark logs take it from `Candidate Selection selected:` (`MIOPEN_LOG_LEVEL=5`), because `MIOPEN_PERFORMANCE_LOGS=1` often leaves `kernels` null |
 
 The performance tables list shapes whose kernel instance differs, and shapes where a multi-kernel solver ran but the instance was not recorded. Same-kernel rows stay in `comparison.json` (`same_kernel: true`). `kernel_difference` is `same_kernel`, `different_solver`, `different_kernel`, or `kernel_not_recorded`. Per-file counts and the summed milliseconds are in **By workload file**. `arm_*_device_ids` on each comparison entry is one id per benchmark repeat, in repeat order. `arm_b/tune_devices.json` records the GPU that ran exhaustive search.

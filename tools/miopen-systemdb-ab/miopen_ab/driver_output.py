@@ -55,6 +55,47 @@ class ParsedDriverOutput:
     direction: Optional[str]
 
 
+_CANDIDATE_RE = re.compile(
+    r"\]\s+(?P<solver>[^:\s]+):\s+Candidate Selection selected:\s+(?P<config>.+?)\s*$",
+    re.MULTILINE,
+)
+_CHOSEN_ALGO_RE = re.compile(r"Chosen Algorithm:\s*(?P<solver>[^,]+?)\s*,")
+
+
+def _hint_solver_name(solver_hint: str | None) -> str | None:
+    if not solver_hint:
+        return None
+    token = solver_hint.split(";", 1)[0].strip()
+    slash = token.find("/")
+    if slash > 0 and token[:slash].isdigit() and ":" not in token[:slash]:
+        token = token[slash + 1 :]
+    return token.split(":", 1)[0].strip() or None
+
+
+def _kernel_from_info_log(text: str, solver_hint: str | None) -> str | None:
+    """Perf config from ``MIOPEN_LOG_LEVEL=5`` info lines.
+
+    ``MIOPEN_PERFORMANCE_LOGS=1`` often prints ``"kernels": null``. The info
+    line names the instance, for example ``Candidate Selection selected:
+    DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<...>``.
+    """
+    chosen = _hint_solver_name(solver_hint)
+    if chosen is None:
+        match = _CHOSEN_ALGO_RE.search(text)
+        if match:
+            chosen = match.group("solver").strip()
+    matched: str | None = None
+    fallback: str | None = None
+    for match in _CANDIDATE_RE.finditer(text):
+        config = match.group("config").strip()
+        if not config:
+            continue
+        fallback = config
+        if chosen is None or match.group("solver").strip() == chosen:
+            matched = config
+    return matched or fallback
+
+
 def _kernel_from_performance_log(stderr: str, solver_hint: str | None) -> str | None:
     """Kernel instance from ``MIOPEN_PERFORMANCE_LOGS`` JSON, if MIOpen printed one.
 
@@ -62,13 +103,7 @@ def _kernel_from_performance_log(stderr: str, solver_hint: str | None) -> str | 
     the JSON is the kernel instance (the same text the performance DB stores
     after ``:``). Level 1 logs the executed solution and does not change find.
     """
-    hint_name = None
-    if solver_hint:
-        token = solver_hint.split(";", 1)[0].strip()
-        slash = token.find("/")
-        if slash > 0 and token[:slash].isdigit() and ":" not in token[:slash]:
-            token = token[slash + 1 :]
-        hint_name = token.split(":", 1)[0].strip() or None
+    hint_name = _hint_solver_name(solver_hint)
 
     matched: str | None = None
     fallback: str | None = None
@@ -171,7 +206,10 @@ def parse_driver_output(command: str, stdout: str, stderr: str = "") -> ParsedDr
             algorithm_id = str(record["algorithm"])
         if solver_hint is None and record.get("solution"):
             solver_hint = str(record["solution"]).strip()
-    solver_hint = _with_kernel(solver_hint, _kernel_from_performance_log(stderr, solver_hint))
+    kernel = _kernel_from_performance_log(stderr, solver_hint) or _kernel_from_info_log(
+        text, solver_hint
+    )
+    solver_hint = _with_kernel(solver_hint, kernel)
 
     return ParsedDriverOutput(
         time_ms=time_ms,

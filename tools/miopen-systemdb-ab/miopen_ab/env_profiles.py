@@ -26,6 +26,17 @@ def prepare_empty_user_db(path: Path) -> Path:
     return path.resolve()
 
 
+def _record_executed_kernel(env: dict[str, str]) -> None:
+    """Log the kernel instance without changing which kernel find selects.
+
+    Performance-log level 1 often leaves ``"kernels": null``. Info logs
+    (``MIOPEN_LOG_LEVEL=5``) print ``Candidate Selection selected:`` with the
+    perf config. Find enforce stays NONE so find mode is not forced to NORMAL.
+    """
+    env["MIOPEN_PERFORMANCE_LOGS"] = "1"
+    env["MIOPEN_LOG_LEVEL"] = "5"
+
+
 def arm_a_worker_envs(device_ids: list[str], user_db_path: Path) -> list[dict[str, str]]:
     """Out-of-the-box path: ENFORCE=1, default find mode, empty user DB."""
     if not user_db_path.is_dir():
@@ -39,10 +50,7 @@ def arm_a_worker_envs(device_ids: list[str], user_db_path: Path) -> list[dict[st
             miopen_find_enforce=MIOPEN_FIND_ENFORCE_NONE,
             miopen_debug_conv_direct=MIOPEN_DEBUG_CONV_DIRECT,
         )
-        # Level 1 logs the executed solution's perf config (the kernel instance)
-        # without forcing Find Mode NORMAL. Any MIOPEN_FIND_ENFORCE other than
-        # NONE does that, so the config cannot be captured by writing the user DB.
-        env["MIOPEN_PERFORMANCE_LOGS"] = "1"
+        _record_executed_kernel(env)
         envs.append(env)
     return envs
 
@@ -82,7 +90,7 @@ def arm_b_benchmark_worker_envs(
             miopen_find_enforce=MIOPEN_FIND_ENFORCE_NONE,
             miopen_debug_conv_direct=MIOPEN_DEBUG_CONV_DIRECT,
         )
-        env["MIOPEN_PERFORMANCE_LOGS"] = "1"
+        _record_executed_kernel(env)
         envs.append(env)
     return envs
 
@@ -95,7 +103,8 @@ ARM_A_METHODOLOGY = {
     "MIOPEN_USER_DB_PATH": "empty directory created for this run (arm_a/user_db)",
     "MIOPEN_SYSTEM_DB_PATH": "default install path",
     "measurement": "MIOpenDriver inline timing (-t 1) without incremental DB updates",
-    "MIOPEN_PERFORMANCE_LOGS": "1 (executed solution perf config; does not change find)",
+    "MIOPEN_PERFORMANCE_LOGS": "1 (executed solution; kernels often null)",
+    "MIOPEN_LOG_LEVEL": "5 (info log prints Candidate Selection selected: <kernel>)",
 }
 
 ARM_B_TUNE_METHODOLOGY = {
@@ -112,5 +121,6 @@ ARM_B_BENCHMARK_METHODOLOGY = {
     "MIOPEN_FIND_MODE": "unset (default DYNAMIC_HYBRID / 5)",
     "MIOPEN_DEBUG_CONV_DIRECT": "0",
     "MIOPEN_USER_DB_PATH": "tuning_merged/",
-    "MIOPEN_PERFORMANCE_LOGS": "1 (executed solution perf config; does not change find)",
+    "MIOPEN_PERFORMANCE_LOGS": "1 (executed solution; kernels often null)",
+    "MIOPEN_LOG_LEVEL": "5 (info log prints Candidate Selection selected: <kernel>)",
 }

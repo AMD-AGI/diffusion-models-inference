@@ -47,6 +47,24 @@ def test_parse_driver_output_forward():
     assert parsed.solver_hint is None
 
 
+def test_parse_driver_output_reads_candidate_selection_when_kernels_are_null():
+    stdout = """
+{"performance":{"algorithm":5,"solution":"138/ConvHipImplicitGemm3DGroupFwdXdlops","direction":"forward","results":{"average_time_ms":0.584157}}}
+"""
+    stderr = """
+MIOpen: Info [RunAIHeuristics] ConvAsmImplicitGemmGTCDynamicFwdXdlopsNHWC: Candidate Selection selected: fwd,nhwc,bf16,0,1,128
+MIOpen: Info [RunAIHeuristics] ConvHipImplicitGemm3DGroupFwdXdlops: Candidate Selection selected: DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<256, 64, 128>
+MIOpen: Info [FillFindReturnParameters] FW Chosen Algorithm: ConvHipImplicitGemm3DGroupFwdXdlops , 4e00000, 0.605634
+{"solution":"ConvHipImplicitGemm3DGroupFwdXdlops","solver_id":138,"performance_configs":[{"config_name":"ConvHipImplicitGemm3DGroupFwdXdlops","kernels":null}]}
+"""
+    parsed = parse_driver_output(COMMAND, stdout, stderr)
+    assert parsed.time_ms == pytest.approx(0.584157)
+    assert (
+        parsed.solver_hint
+        == "138/ConvHipImplicitGemm3DGroupFwdXdlops:DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<256, 64, 128>"
+    )
+
+
 def test_parse_driver_output_reads_performance_json():
     stdout = """
 {"performance":{"name":"fwd-conv1x11u1","algorithm":5,"solution":"137/ConvHipImplicitGemmGroupFwdXdlops","direction":"forward","operation":"conv","results":{"average_time_ms":0.145735}}}
