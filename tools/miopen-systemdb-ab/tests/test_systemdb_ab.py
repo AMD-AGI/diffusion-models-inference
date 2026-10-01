@@ -65,6 +65,43 @@ MIOpen: Info [FillFindReturnParameters] FW Chosen Algorithm: ConvHipImplicitGemm
     )
 
 
+def test_parse_driver_output_reads_hardcoded_heuristic_kernel():
+    stdout = """
+{"performance":{"algorithm":5,"solution":"138/ConvHipImplicitGemm3DGroupFwdXdlops","direction":"forward","results":{"average_time_ms":14.571}}}
+"""
+    stderr = """
+MIOpen: Info [FindSolutionImpl] ConvHipImplicitGemm3DGroupFwdXdlops
+MIOpen: Info [FindSolutionImpl] Perf Db: record not found for: ConvHipImplicitGemm3DGroupFwdXdlops
+MIOpen: Info [HeuristicInit] Step 2: Hard-coded heuristics selected kernel: DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<256, 256, 256, 32, Default, 32, 32, 4, 4, 8, 8, 8, 1, 1, BlkGemmPipelineScheduler: Intrawave, BlkGemmPipelineVersion: v3> at index: 27
+MIOpen: Info [FindSolutionImpl] GemmFwdRest (not searchable)
+MIOpen: Info [RunAIHeuristics] GemmFwdRest: Candidate Selection selected: ignored-other-solver
+MIOpen: Info [FillFindReturnParameters] FW Chosen Algorithm: ConvHipImplicitGemm3DGroupFwdXdlops , 93e8ec00, 14.6086
+{"solution":"ConvHipImplicitGemm3DGroupFwdXdlops","performance_configs":[{"config_name":"ConvHipImplicitGemm3DGroupFwdXdlops","kernels":null}]}
+"""
+    parsed = parse_driver_output(COMMAND, stdout, stderr)
+    assert parsed.time_ms == pytest.approx(14.571)
+    assert parsed.solver_hint == (
+        "138/ConvHipImplicitGemm3DGroupFwdXdlops:"
+        "DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<256, 256, 256, 32, Default, 32, 32, 4, 4, 8, 8, 8, 1, 1, BlkGemmPipelineScheduler: Intrawave, BlkGemmPipelineVersion: v3>"
+    )
+
+
+def test_parse_driver_output_reads_loaded_perf_db_kernel():
+    stdout = """
+{"performance":{"algorithm":5,"solution":"138/ConvHipImplicitGemm3DGroupFwdXdlops","direction":"forward","results":{"average_time_ms":8.36866}}}
+"""
+    stderr = """
+MIOpen: Info [GetValues] 3x128x146x258x131x3x3x3x128x1x0x0x0x1x1x1x1x1x1x0x1xNCDHWxBF16xF=ConvHipImplicitGemm3DGroupFwdXdlops:DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle<256, 256, 128, 32, Default, 32, 32, 4, 2, 8, 8, 8, 1, 1, 1>
+MIOpen: Info [GetValues] other=ConvAsmImplicitGemmGTCDynamicFwdXdlopsNHWC:fwd,nhwc,bf16,0,1,128
+MIOpen: Info [FillFindReturnParameters] FW Chosen Algorithm: ConvHipImplicitGemm3DGroupFwdXdlops , 93e8ec00, 8.44429
+"""
+    parsed = parse_driver_output(COMMAND, stdout, stderr)
+    assert parsed.solver_hint == (
+        "138/ConvHipImplicitGemm3DGroupFwdXdlops:"
+        "DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle<256, 256, 128, 32, Default, 32, 32, 4, 2, 8, 8, 8, 1, 1, 1>"
+    )
+
+
 def test_parse_driver_output_reads_performance_json():
     stdout = """
 {"performance":{"name":"fwd-conv1x11u1","algorithm":5,"solution":"137/ConvHipImplicitGemmGroupFwdXdlops","direction":"forward","operation":"conv","results":{"average_time_ms":0.145735}}}
@@ -172,6 +209,21 @@ def test_classify_improvement_in_system_db():
     assert entry.arm_a_solver == "SolverA:params"
     assert entry.arm_b_solver == "SolverB"
     assert entry.speedup_pct == pytest.approx(20.0)
+
+
+def test_recorded_solver_keeps_logged_kernel_when_db_has_another():
+    from miopen_ab.compare import recorded_solver
+
+    logged = (
+        "138/ConvHipImplicitGemm3DGroupFwdXdlops:"
+        "DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<256, 256, 256, 32>"
+    )
+    stored = (
+        "ConvHipImplicitGemm3DGroupFwdXdlops:"
+        "DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle<256, 256, 128, 32>"
+    )
+    assert recorded_solver(logged, [stored]) == logged
+    assert recorded_solver("138/ConvHipImplicitGemm3DGroupFwdXdlops", [stored]) == stored
 
 
 def test_recorded_solver_keeps_driver_choice_when_db_differs():

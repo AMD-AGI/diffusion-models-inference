@@ -145,14 +145,18 @@ def _solver_token(value: str) -> str:
 
 
 def recorded_solver(driver_hint: str | None, db_candidates: list[str | None]) -> str | None:
-    """Prefer the perf-DB record when it is the solution the driver actually ran.
+    """Solver that ran, with its kernel config when one was recorded.
 
-    The database value keeps the kernel configuration. The driver hint is
-    ``id/Name``, plus the perf config when performance logs recorded one.
-    A database entry for a different solver is not substituted.
+    A driver hint that already includes a perf config is the instance that
+    ran, including when a database row names the same solver and a different
+    kernel. The database fills in the config only when the hint is ``id/Name``
+    and the row is for that same solver. A row for a different solver is not
+    substituted.
     """
     available = [value for value in db_candidates if value]
     if driver_hint:
+        if kernel_config(driver_hint):
+            return driver_hint
         hint_name = solver_name(driver_hint)
         for value in available:
             if solver_name(value) == hint_name:

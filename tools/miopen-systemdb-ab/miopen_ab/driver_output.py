@@ -56,8 +56,20 @@ class ParsedDriverOutput:
 
 
 _CANDIDATE_RE = re.compile(
-    r"\]\s+(?P<solver>[^:\s]+):\s+Candidate Selection selected:\s+(?P<config>.+?)\s*$",
-    re.MULTILINE,
+    r"\]\s+(?P<solver>[^:\s]+):\s+Candidate Selection selected:\s+(?P<config>.+?)\s*$"
+)
+_HEURISTIC_KERNEL_RE = re.compile(
+    r"Hard-coded heuristics selected kernel:\s+(?P<config>.+?)"
+    r"(?:\s+at index:\s+\d+)?\s*$"
+)
+_GET_VALUES_RE = re.compile(
+    r"\[GetValues\]\s+\S+=(?P<solver>[^:\s]+):(?P<config>.+?)\s*$"
+)
+_FIND_SOLUTION_RE = re.compile(
+    r"\[FindSolutionImpl\]\s+(?P<solver>[A-Za-z][\w]*)\s*(?:\(.*\))?\s*$"
+)
+_RECORD_NOT_FOUND_RE = re.compile(
+    r"record not found for:\s+(?P<solver>[A-Za-z][\w]*)"
 )
 _CHOSEN_ALGO_RE = re.compile(r"Chosen Algorithm:\s*(?P<solver>[^,]+?)\s*,")
 
@@ -72,28 +84,48 @@ def _hint_solver_name(solver_hint: str | None) -> str | None:
     return token.split(":", 1)[0].strip() or None
 
 
-def _kernel_from_info_log(text: str, solver_hint: str | None) -> str | None:
-    """Perf config from ``MIOPEN_LOG_LEVEL=5`` info lines.
+def _kernels_from_info_log(text: str) -> dict[str, str]:
+    """Map solver name to the perf config printed at ``MIOPEN_LOG_LEVEL=5``.
 
-    ``MIOPEN_PERFORMANCE_LOGS=1`` often prints ``"kernels": null``. The info
-    line names the instance, for example ``Candidate Selection selected:
-    DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<...>``.
+    Three lines carry that config. ``Candidate Selection selected:`` is the AI
+    heuristic. ``Hard-coded heuristics selected kernel:`` is the fallback when
+    the performance DB has no record. ``GetValues`` is the record that was
+    loaded and then run. The last line for a solver is the one find used.
     """
+    by_solver: dict[str, str] = {}
+    current_solver: str | None = None
+    for line in text.splitlines():
+        found = _FIND_SOLUTION_RE.search(line)
+        if found:
+            current_solver = found.group("solver")
+        missing = _RECORD_NOT_FOUND_RE.search(line)
+        if missing:
+            current_solver = missing.group("solver")
+        loaded = _GET_VALUES_RE.search(line)
+        if loaded and loaded.group("config").strip():
+            by_solver[loaded.group("solver")] = loaded.group("config").strip()
+        candidate = _CANDIDATE_RE.search(line)
+        if candidate and candidate.group("config").strip():
+            by_solver[candidate.group("solver")] = candidate.group("config").strip()
+        heuristic = _HEURISTIC_KERNEL_RE.search(line)
+        if heuristic and current_solver and heuristic.group("config").strip():
+            by_solver[current_solver] = heuristic.group("config").strip()
+    return by_solver
+
+
+def _kernel_from_info_log(text: str, solver_hint: str | None) -> str | None:
+    """Perf config from ``MIOPEN_LOG_LEVEL=5`` info lines for the solver that ran."""
     chosen = _hint_solver_name(solver_hint)
     if chosen is None:
         match = _CHOSEN_ALGO_RE.search(text)
         if match:
             chosen = match.group("solver").strip()
-    matched: str | None = None
-    fallback: str | None = None
-    for match in _CANDIDATE_RE.finditer(text):
-        config = match.group("config").strip()
-        if not config:
-            continue
-        fallback = config
-        if chosen is None or match.group("solver").strip() == chosen:
-            matched = config
-    return matched or fallback
+    by_solver = _kernels_from_info_log(text)
+    if chosen is not None:
+        return by_solver.get(chosen)
+    if not by_solver:
+        return None
+    return next(reversed(by_solver.values()))
 
 
 def _kernel_from_performance_log(stderr: str, solver_hint: str | None) -> str | None:

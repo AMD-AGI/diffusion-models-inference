@@ -249,7 +249,7 @@ def render_report_md(
             f"- **Threshold**: {threshold}% relative median timing difference",
             f"- **Benchmark repeats**: {comparison.get('benchmark_repeats')} (median reported)",
             "- **Arm A**: out-of-the-box path (`MIOPEN_FIND_ENFORCE=1`, default find mode, empty user DB, system DB enabled)",
-            "- **Arm A measurement**: MIOpenDriver inline timing (`-t 1`) without forced incremental tuning. `MIOPEN_PERFORMANCE_LOGS=1` and `MIOPEN_LOG_LEVEL=5` record the executed kernel (`Candidate Selection selected:`). Level 1 alone often leaves `kernels` null",
+            "- **Arm A measurement**: MIOpenDriver inline timing (`-t 1`) without forced incremental tuning. `MIOPEN_PERFORMANCE_LOGS=1` and `MIOPEN_LOG_LEVEL=5` record the executed kernel (`Candidate Selection selected:`, `Hard-coded heuristics selected kernel:`, or a loaded `GetValues` record). Level 1 alone often leaves `kernels` null",
             "- **Arm B tuning**: exhaustive override (`MIOPEN_FIND_ENFORCE=4` SEARCH_DB_UPDATE, `MIOPEN_FIND_MODE=1`, `MIOPEN_SYSTEM_DB_PATH=$MIOPEN_USER_DB_PATH`)",
             "- **Arm B benchmark**: `MIOPEN_FIND_ENFORCE=1` and default find mode, reading the merged exhaustive user DB, with `MIOPEN_PERFORMANCE_LOGS=1` and `MIOPEN_LOG_LEVEL=5`",
             "- **Shared kernel cache** across arms (default `~/.cache/miopen`)",

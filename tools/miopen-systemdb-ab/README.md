@@ -156,8 +156,9 @@ Benchmark and tuning tasks are distributed across GPUs using
 `arm_a/user_db`. No prebuilt user DB is loaded. `MIOPEN_FIND_ENFORCE=1` does not
 write tuning results. `MIOPEN_PERFORMANCE_LOGS=1` plus `MIOPEN_LOG_LEVEL=5`
 record the kernel instance that ran. The performance log often leaves
-`kernels` null; the info line `Candidate Selection selected:` has the perf
-config. Raising find-enforce to write the user DB would force a full search
+`kernels` null. The info log names the perf config on `Candidate Selection
+selected:`, `Hard-coded heuristics selected kernel:`, or the loaded `GetValues`
+record. Raising find-enforce to write the user DB would force a full search
 and would no longer be the production path.
 
 **Arm B (exhaustive tuning):** each worker writes to its own directory
