@@ -15,8 +15,7 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: true
-    enable_slicing: true
+    use_parallel_vae: true
     use_torch_compile: true
     attention_backend: aiter
 
@@ -34,8 +33,7 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: true
-    enable_slicing: true
+    use_parallel_vae: true
     use_torch_compile: true
     attention_backend: aiter_bf16
 
@@ -53,8 +51,7 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: true
-    enable_slicing: true
+    use_parallel_vae: true
     use_torch_compile: true
     attention_backend: flash_3
 
@@ -72,7 +69,6 @@
     num_inference_steps: 50
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: true
-    enable_slicing: true
+    use_parallel_vae: true
     use_torch_compile: true
     attention_backend: cudnn
