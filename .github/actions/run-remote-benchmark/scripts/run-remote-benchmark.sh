@@ -76,11 +76,11 @@ require_choice() {
 
 RESOURCE_FIELDS=()
 if [ "$REQUEST_CPU" != "default" ]; then
-  require_choice cpu "$REQUEST_CPU" 16 32 64 128
+  require_choice cpu "$REQUEST_CPU" 16 32 64 128 256
   RESOURCE_FIELDS+=("\"cpu\":\"${REQUEST_CPU}\"")
 fi
 if [ "$REQUEST_MEMORY" != "default" ]; then
-  require_choice memory "$REQUEST_MEMORY" 32Gi 64Gi 128Gi 256Gi 512Gi 1024Gi
+  require_choice memory "$REQUEST_MEMORY" 64Gi 128Gi 256Gi 512Gi 1024Gi 2048Gi
   RESOURCE_FIELDS+=("\"memory\":\"${REQUEST_MEMORY}\"")
 fi
 if [ "$REQUEST_GPU" != "default" ]; then
