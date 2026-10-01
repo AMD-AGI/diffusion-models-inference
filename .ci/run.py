@@ -334,7 +334,7 @@ def _is_determinism_check_enabled(exp: Experiment) -> bool:
     is enabled by the experiment config.
     """
     # global overrider
-    if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_REPORT", "0") == "1":
+    if env_enabled(os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_REPORT", "0")):
         return True
 
     ret = False
@@ -669,12 +669,8 @@ def main():
         logger.warning("No experiments matched the given filters.")
         return
 
-    collect_memory_stats = args.collect_memory_stats or env_enabled(
-        os.environ.get("CI_RUN_PY_COLLECT_MEMORY", "0")
-    )
-    collect_miopen_driver_commands = env_enabled(
-        os.environ.get("CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS", "0")
-    )
+    collect_memory_stats = args.collect_memory_stats or env_enabled(os.environ.get("CI_RUN_PY_COLLECT_MEMORY", "0"))
+    collect_miopen_driver_commands = env_enabled(os.environ.get("CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS", "0"))
     miopen_command_collector = None
     if collect_miopen_driver_commands:
         try:
@@ -699,7 +695,7 @@ def main():
     override_args = json.loads(args.override_args_json)
     # assumes `override_args` aren't mutated in the loop below
 
-    if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_CHECK", "0") == "1":
+    if env_enabled(os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_CHECK", "0")):
         if "determinism_check" not in override_args:
             override_args["determinism_check"] = 1  # this will enable the check
         if "determinism_check_report_ranks" not in override_args:
