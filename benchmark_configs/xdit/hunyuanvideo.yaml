@@ -17,7 +17,7 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    ues_parallel_vae: true
+    use_parallel_vae: true
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: aiter
@@ -39,7 +39,7 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    ues_parallel_vae: true
+    use_parallel_vae: true
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: aiter_bf16
@@ -60,7 +60,7 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    ues_parallel_vae: true
+    use_parallel_vae: true
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: flash_3
@@ -82,7 +82,7 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    ues_parallel_vae: true
+    use_parallel_vae: true
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: cudnn
