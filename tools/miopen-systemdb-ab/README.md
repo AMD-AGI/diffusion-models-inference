@@ -226,6 +226,32 @@ including exhaustive-slower on the same kernel. **system_db_miss** is not an out
 performance DB (`{prefix}.db.txt`, or a legacy `{prefix}*.udb.txt`). Those
 shapes are still compared.
 
+## Compare two MIOpen versions
+
+`compare_versions.py` reads two finished runs and writes a new report. It only
+reads `comparison.json` and `metadata.json`. It does not benchmark, tune, or
+write inside either run directory.
+
+The baseline is the reference version. The candidate is the version under
+evaluation. Shapes are joined on the MIOpenDriver command. `delta_ms` is
+baseline time minus candidate time, so a positive delta means the candidate
+is faster. Production tables compare Arm A (out of the box). Exhaustive
+tables compare Arm B (tuned upper bound). The default similarity threshold
+is 2% of the baseline time, the same cutoff the per-run report uses.
+
+```bash
+PYTHONPATH=src:tools/miopen-systemdb-ab \
+python tools/miopen-systemdb-ab/compare_versions.py \
+  --baseline tools/miopen-systemdb-ab/runs/20261001_011510 \
+  --candidate tools/miopen-systemdb-ab/runs/20261001_001452
+```
+
+That example treats MIOpen 3.5.2 (`20261001_011510`) as the baseline and
+MIOpen 3.6.1 (`20261001_001452`) as the candidate. The report is written to
+`tools/miopen-systemdb-ab/comparisons/<baseline>_vs_<candidate>/`
+(`report.md` and `report.json`). `--output-dir` overrides the directory, and
+that directory has to sit outside both runs.
+
 ## Resume / partial runs
 
 Re-running the same `--output-dir` skips benchmark repetitions already recorded
