@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-- name: hunyuanvideo.default
+- name: hunyuanvideo.default.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
