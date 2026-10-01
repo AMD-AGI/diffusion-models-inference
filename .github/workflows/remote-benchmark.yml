@@ -26,13 +26,13 @@ on:
         required: false
         type: choice
         default: '16'
-        options: ['16', '32', '64', '128']
+        options: ['16', '32', '64', '128', '256']
       memory:
         description: 'Memory to request'
         required: false
         type: choice
         default: '64Gi'
-        options: ['64Gi', '128Gi', '256Gi', '512Gi', '1024Gi']
+        options: ['64Gi', '128Gi', '256Gi', '512Gi', '1024Gi', '2048Gi']
       benchmark_flags:
         description: 'Flags used to filter benchmarks, leave empty to run all. Only --tag and --name are accepted. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
         required: false
