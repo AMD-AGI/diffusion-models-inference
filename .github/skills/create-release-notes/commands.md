@@ -46,20 +46,22 @@ For commits without an associated public PR, retain changed paths locally:
 git diff-tree --no-commit-id --name-only -r COMMIT_SHA
 ```
 
-## Diff dependency commits
+## Diff dependency pins
 
-Show which dependency commit values changed in `docker/Dockerfile.ci` between releases.
-Include `*_COMMIT` pins and non-empty `*_COMMIT_OVERRIDE` values:
+Show which dependency pins changed in `docker/Dockerfile.ci` between releases.
+Include `*_COMMIT`, `ROCM_RELEASE_ID`, and `ROCM_DEB_SERIES`:
 
 ```bash
 git diff FROM_TAG..TO_REF -- docker/Dockerfile.ci | \
-  grep -E '^[+-]ARG\s+\w+_COMMIT(_OVERRIDE)?=' | sort
+  grep -E '^[+-]ARG\s+(\w+_COMMIT|ROCM_RELEASE_ID|ROCM_DEB_SERIES)=' | sort
 ```
 
 ## Look up upstream changes
 
 For each changed commit hash (`OLD_HASH` → `NEW_HASH`), query the upstream repo
 to see what was added. Use the repo mapping below to resolve the GitHub org/repo.
+Record `ROCM_RELEASE_ID` and `ROCM_DEB_SERIES` changes as TheRock nightly deb
+snapshot updates; they are not Git commit hashes.
 
 ```bash
 gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
@@ -83,8 +85,6 @@ gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
 | XDIT_COMMIT | xdit-project/xDiT |
 | AO_COMMIT | pytorch/ao |
 | ARBITER_COMMIT | fal-ai/arbiter |
-| ROCM_LIBRARIES_COMMIT_OVERRIDE | ROCm/rocm-libraries |
-| ROCM_SYSTEMS_COMMIT_OVERRIDE | ROCm/rocm-systems |
 
 ## Release notes template
 

@@ -294,14 +294,10 @@ jobs:
         with:
           run_number: ${{ github.run_number }}
       
-      - name: Pull image and extract version information
-        run: |
-          mkdir -p versions
-          git rev-parse HEAD > versions/repository.txt
-          docker pull ${{ steps.metadata.outputs.working_image }}
-          docker create --name core ${{ steps.metadata.outputs.working_image }}
-          docker cp core:/opt/rocm/share/therock/ versions/ || true
-          docker rm core
+      - name: Record repository and ROCm versions
+        uses: ./.github/actions/record-image-versions
+        with:
+          image: ${{ steps.metadata.outputs.working_image }}
       
       - name: Upload version artifacts
         uses: actions/upload-artifact@v7
