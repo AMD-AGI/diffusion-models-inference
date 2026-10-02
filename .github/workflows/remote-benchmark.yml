@@ -93,6 +93,14 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
+      - name: Run MIOpen tuning
+        uses: ./.github/actions/run-miopen-tuning
+        with:
+          image: ${{ steps.resolve.outputs.tag }}
+          arch: ${{ needs.resolve.outputs.arch }}
+          artifact_name: ${{ github.run_number }}-miopen-${{ needs.resolve.outputs.arch }}
+          force_retuning: false
+
       - name: Run remote benchmark
         uses: ./.github/actions/run-remote-benchmark
         with:
