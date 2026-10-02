@@ -180,7 +180,6 @@ RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 # rocm_tree and rocm_base install the same packages from `base`. The archive
 # delete has to be inside the install it applies to: a child cannot drop
 # files from a parent layer, and rocm_devel needs the archives this stage keeps.
-# The apt cache mount is shared and is not part of either image.
 FROM base AS rocm_tree
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
@@ -189,8 +188,7 @@ COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
 COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
 COPY docker/setup_rocm_llvm_layout.sh /usr/local/bin/setup_rocm_llvm_layout
 COPY docker/setup_origami_cmake.sh /usr/local/bin/setup_origami_cmake
-RUN --mount=type=cache,id=rocm-apt,target=/var/cache/apt,sharing=locked \
-    chmod +x /usr/local/bin/install_rocm_debs \
+RUN chmod +x /usr/local/bin/install_rocm_debs \
         /usr/local/bin/setup_amdsmi \
         /usr/local/bin/setup_rocm_llvm_layout \
         /usr/local/bin/setup_origami_cmake \
@@ -223,8 +221,7 @@ COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
 COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
 COPY docker/setup_rocm_llvm_layout.sh /usr/local/bin/setup_rocm_llvm_layout
 COPY docker/setup_origami_cmake.sh /usr/local/bin/setup_origami_cmake
-RUN --mount=type=cache,id=rocm-apt,target=/var/cache/apt,sharing=locked \
-    chmod +x /usr/local/bin/install_rocm_debs \
+RUN chmod +x /usr/local/bin/install_rocm_debs \
         /usr/local/bin/setup_amdsmi \
         /usr/local/bin/setup_rocm_llvm_layout \
         /usr/local/bin/setup_origami_cmake \
@@ -243,8 +240,7 @@ FROM rocm_tree AS rocm_devel
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS
-RUN --mount=type=cache,id=rocm-apt,target=/var/cache/apt,sharing=locked \
-    install_rocm_debs devel
+RUN install_rocm_debs devel
 ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
 FROM rocm_tree AS build_torch_stack

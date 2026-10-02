@@ -34,8 +34,7 @@ install step, and `rocm_tree` keeps them so `rocm_devel` can inherit the files.
 not depend on `amdrocm-core`. `core` is `FROM ${ROCM_PARENT}`, which defaults to
 `rocm_devel`. Both parents install the wheels built by `build_torch_stack`.
 `deps` installs rocprofiler-compute's Python requirements only when that tree
-is present. Downloaded debs sit in a BuildKit cache mount shared by the two
-installs and are not part of either image.
+is present.
 
 ```sh
 # developer tools included
