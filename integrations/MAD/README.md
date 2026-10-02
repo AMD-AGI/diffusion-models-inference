@@ -2,9 +2,9 @@
 
 To make these changes effective in MAD
 
-- copy `MAD/README.md`, `MAD/pyt_xdit.ubuntu.amd.Dockerfile` and `MAD/run.sh` to
-  MAD repository under `benchmark/xdit`, `docker` and `scripts/pyt_xdit` respectively
-- concatenate MAD `models.json` with the contents of `models.json` in this
-  directory while maintaining json-lines format
+- copy `MAD/README.md` and `MAD/pyt_xdit.ubuntu.amd.Dockerfile` to
+  MAD repository under `benchmark/xdit` and `docker` respectively
+- copy `MAD/models.json` and `MAD/run.sh` to MAD repository under
+  `scripts/pyt_xdit`
 
 and make sure that these changes get integrated into ROCm/MAD.

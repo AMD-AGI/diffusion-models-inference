@@ -26,14 +26,14 @@ Complete the shared [repository skill preflight](../preflight/SKILL.md) before c
    3.2. Previous tag (default: latest version tag)
    3.3. Draft? (default: no)
    3.4. Release-note edits or exclusions
-   3.5. Optional known-good `prebuilt_untuned_image_tag`; omit for a full source build
+   3.5. Optional known-good `base_image` (with `rebuild` off to use it directly, or on to use it as a build cache); omit for a full source build
    3.6. `gpu_runners` (default from the workflow: `gfx942,gfx950`)
    3.7. Any supported build overrides from `trigger-build-and-benchmark`
 4. **Generate release notes** — follow `create-release-notes` with `FROM_TAG` = previous tag
    and `TO_REF` = target branch
 5. **Construct and validate all commands**
    5.1. Follow `create-release` using explicit generated notes
-   5.2. Follow `trigger-build-and-benchmark` using the prebuilt untuned profile when a tag was supplied,
+   5.2. Follow `trigger-build-and-benchmark` using the prebuilt-image profile when a tag was supplied,
         otherwise the full standard profile
    5.3. Published release build ref = release tag; draft build ref = target branch
    5.4. Record current workflow run IDs for deterministic capture

@@ -24,6 +24,7 @@ gh workflow run "build-core-image.yml" \
   --field runner="RUNNER"
   --field prebuilt_core_image_tag="PREBUILT_TAG"
   --field disable_docker_cache=true
+  --field cache_scope="CACHE_SCOPE"
 ```
 
 ## Identify the new run
@@ -52,4 +53,5 @@ gh run list --repo "$REPO" --workflow build-core-image.yml \
 | `tag` | Image tag; short commit SHA used if empty. Untuned image gets `-temp` suffix. | *(auto)* |
 | `runner` | Runner label | Workflow default |
 | `prebuilt_core_image_tag` | Skip core build, build untuned image from this tag | *(empty)* |
-| `disable_docker_cache` | Disable the core Docker build cache | `false` |
+| `disable_docker_cache` | Disable the core Docker build cache. The cache is still re-exported, so this is how a stale cache gets replaced. | `false` |
+| `cache_scope` | Layer cache scope. Defaults to the branch name, so only builds of `main` touch the mainline cache. Set it to isolate a test build launched from `main`. | *(branch name)* |

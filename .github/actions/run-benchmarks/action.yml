@@ -37,6 +37,9 @@ inputs:
   artifact_name:
     description: 'Full artifact name for upload'
     required: true
+  miopen_workloads_artifact_name:
+    description: 'Full artifact name for collected MIOpen workload commands'
+    required: true
 
 runs:
   using: composite
@@ -76,4 +79,14 @@ runs:
       uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.artifact_name }}
-        path: ${{ inputs.output_dir }}/${{ inputs.arch }}/**
+        path: |
+          ${{ inputs.output_dir }}/${{ inputs.arch }}/**
+          !${{ inputs.output_dir }}/${{ inputs.arch }}/miopen_workloads/**
+
+    - name: Upload MIOpen workload commands
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ inputs.miopen_workloads_artifact_name }}
+        path: ${{ inputs.output_dir }}/${{ inputs.arch }}/miopen_workloads/
+        if-no-files-found: warn

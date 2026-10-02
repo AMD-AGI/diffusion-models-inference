@@ -1,8 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-- name: hunyuanvideo.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+- name: hunyuanvideo.default.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
@@ -17,11 +17,33 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: true
-    enable_slicing: true
+    use_parallel_vae: true
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: aiter
+    memory_efficient_replicated_load: true
+
+- name: hunyuanvideo.default.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: tencent/HunyuanVideo
+  revision: refs/pr/18
+  runner: xdit
+  args:
+    prompt: In the large cage, two puppies were wagging their tails at each other.
+    batch_size: 1
+    height: 720
+    width: 1280
+    seed: 1168860793
+    num_frames: 129
+    num_inference_steps: 50
+    warmup_calls: 1
+    num_iterations: 1
+    ulysses_degree: 8
+    use_parallel_vae: true
+    guidance_scale: 6.0
+    use_torch_compile: true
+    attention_backend: aiter_bf16
+    memory_efficient_replicated_load: true
 
 - name: hunyuanvideo.default.hopper
   tags: [lucid, hopper, h100, h200]
@@ -39,11 +61,11 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: true
-    enable_slicing: true
+    use_parallel_vae: true
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: hunyuanvideo.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -61,8 +83,8 @@
     warmup_calls: 1
     num_iterations: 1
     ulysses_degree: 8
-    enable_tiling: true
-    enable_slicing: true
+    use_parallel_vae: true
     guidance_scale: 6.0
     use_torch_compile: true
     attention_backend: cudnn
+    memory_efficient_replicated_load: true

@@ -16,6 +16,7 @@
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: aiter
+    memory_efficient_replicated_load: true
 
 - name: z_image_turbo.quantgemm.gfx950
   tags: [instinct, gfx950, mi350p]
@@ -33,6 +34,7 @@
     num_iterations: 50
     attention_backend: aiter
     use_fp4_gemms: true
+    memory_efficient_replicated_load: true
 
 - name: z_image_turbo.default.hopper
   tags: [hopper, h100, h200]
@@ -49,6 +51,7 @@
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: flash_3
+    memory_efficient_replicated_load: true
 
 - name: z_image_turbo.default.blackwell
   tags: [blackwell, b200, b300]
@@ -65,6 +68,7 @@
     guidance_scale: 0.0
     num_iterations: 50
     attention_backend: cudnn
+    memory_efficient_replicated_load: true
 
 - name: z_image_turbo.4gpu.rdna4
   tags: [rdna4, gfx1201]

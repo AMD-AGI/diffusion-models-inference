@@ -24,8 +24,18 @@ on:
         required: false
         type: string
         default: 'amdsiloai/pytorch-xdit-staging'
+      cache_image_name:
+        description: 'Repository holding the registry layer cache tags'
+        required: false
+        type: string
+        default: 'amdsiloai/pytorch-xdit-buildcache'
+      cache_scope:
+        description: 'Cache scope override. Defaults to a slug of git_ref, so branch builds cannot overwrite the mainline cache.'
+        required: false
+        type: string
+        default: ''
       prebuilt_core_image_tag:
-        description: 'Prebuilt core image tag to use as cache (skips core build if provided)'
+        description: 'Prebuilt core image tag or full Docker Hub path to use as cache (skips core build if provided)'
         required: false
         type: string
         default: ''
@@ -90,31 +100,51 @@ jobs:
           
           if [ -n "$PREBUILT_CORE_TAG" ]; then
             echo "skip_core_build=true" >> $GITHUB_OUTPUT
-            echo "cache_source=${CORE_IMAGE_NAME}:${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+            # Check if tag contains "/" or ":", and if it does, assume it's a full Docker Hub path
+            if [[ "$PREBUILT_CORE_TAG" == *"/"* ]] || [[ "$PREBUILT_CORE_TAG" == *":"* ]]; then
+              echo "cache_source=${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+            else
+              echo "cache_source=${CORE_IMAGE_NAME}:${PREBUILT_CORE_TAG}" >> $GITHUB_OUTPUT
+            fi
           else
             echo "skip_core_build=false" >> $GITHUB_OUTPUT
             echo "cache_source=${CORE_IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
           fi
       
+      # The core build is the only step in the pipeline that exports cache. Its
+      # expensive stages (build_rocm, build_torch_stack, ffmpeg_builder) never
+      # reach the final image, so only a mode=max registry export can describe
+      # them; the untuned and tuned builds import what this step writes.
+      - name: Resolve core build cache
+        id: core_cache
+        if: ${{ steps.images.outputs.skip_core_build == 'false' }}
+        uses: ./.github/actions/resolve-build-cache
+        with:
+          cache_image_name: ${{ inputs.cache_image_name }}
+          channel: 'core'
+          ref: ${{ inputs.git_ref }}
+          cache_scope: ${{ inputs.cache_scope }}
+          extra_cache_from: ${{ steps.images.outputs.cache_source }}
+          export: 'true'
+          disable_cache: ${{ inputs.disable_docker_cache }}
+
       - name: Build core image
         if: ${{ steps.images.outputs.skip_core_build == 'false' }}
         env:
           BUILDKIT_PROGRESS: plain
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
+          CACHE_FROM_FLAGS: ${{ steps.core_cache.outputs.cache_from_flags }}
+          CACHE_TO_FLAG: ${{ steps.core_cache.outputs.cache_to_flag }}
         run: |
           NO_CACHE_FLAG=""
           if [ "${DISABLE_CACHE}" = "true" ]; then
             NO_CACHE_FLAG="--no-cache"
           fi
-          
-          # The remote builder imports cache straight from the registry, so a
-          # missing tag must not fail the build.
-          CACHE_FROM_FLAG=""
-          if docker buildx imagetools inspect "${CACHE_IMAGE}" >/dev/null 2>&1; then
-            CACHE_FROM_FLAG="--cache-from ${CACHE_IMAGE}"
-          fi
 
+          # The export runs even under --no-cache, which makes a disabled-cache
+          # run the way to replace a stale cache rather than something the cache
+          # needs protecting from.
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
@@ -122,29 +152,61 @@ jobs:
             --pull \
             --push \
             ${NO_CACHE_FLAG} \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            ${CACHE_FROM_FLAG} \
+            ${CACHE_FROM_FLAGS} \
+            ${CACHE_TO_FLAG} \
             -t "${CACHE_IMAGE}" \
             .
       
+      # ignore-error=true on the export keeps a failed cache push from failing
+      # the image push, so a broken export is otherwise completely silent, and
+      # the private cache repository means nobody notices by browsing it either.
+      - name: Check cache export
+        if: ${{ steps.images.outputs.skip_core_build == 'false' }}
+        env:
+          EXPORT_REF: ${{ steps.core_cache.outputs.export_ref }}
+          DIGEST_BEFORE: ${{ steps.core_cache.outputs.export_ref_digest }}
+        run: |
+          DIGEST_AFTER=""
+          if RAW=$(docker buildx imagetools inspect --raw "${EXPORT_REF}" 2>/dev/null); then
+            DIGEST_AFTER=$(printf '%s' "${RAW}" | sha256sum | cut -d' ' -f1)
+          fi
+
+          if [ -z "${DIGEST_AFTER}" ]; then
+            echo "::warning::Cache export to ${EXPORT_REF} wrote nothing: the ref does not exist after the build."
+          elif [ "${DIGEST_AFTER}" = "${DIGEST_BEFORE}" ]; then
+            echo "::warning::Cache export ref ${EXPORT_REF} is unchanged. Expected when the build was fully cached; otherwise the export failed and was ignored, so check the 'exporting cache to registry' line above."
+          else
+            echo "Cache export updated ${EXPORT_REF} (${DIGEST_BEFORE:-absent} -> ${DIGEST_AFTER})"
+          fi
+      
+      # Resolved separately because this step also runs when the core build was
+      # skipped for a prebuilt core image, which is the path that used to have
+      # no warm cache at all. It imports the same refs and exports none:
+      # the deps stage it would add is not worth a second exporter.
+      - name: Resolve untuned build cache
+        id: untuned_cache
+        if: ${{ inputs.build_untuned_image }}
+        uses: ./.github/actions/resolve-build-cache
+        with:
+          cache_image_name: ${{ inputs.cache_image_name }}
+          channel: 'core'
+          ref: ${{ inputs.git_ref }}
+          cache_scope: ${{ inputs.cache_scope }}
+          extra_cache_from: ${{ steps.images.outputs.cache_source }}
+          export: 'false'
+
       - name: Build untuned image
         if: ${{ inputs.build_untuned_image }}
         env:
           BUILDKIT_PROGRESS: plain
-          CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
+          CACHE_FROM_FLAGS: ${{ steps.untuned_cache.outputs.cache_from_flags }}
           IMAGE_TAG: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
         run: |
-          CACHE_FROM_FLAG=""
-          if docker buildx imagetools inspect "${CACHE_IMAGE}" >/dev/null 2>&1; then
-            CACHE_FROM_FLAG="--cache-from ${CACHE_IMAGE}"
-          fi
-
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --push \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            ${CACHE_FROM_FLAG} \
+            ${CACHE_FROM_FLAGS} \
             -t "${IMAGE_TAG}" \
             .
       

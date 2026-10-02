@@ -12,7 +12,7 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="9100ec681955d4af7e1c720fb5c9b208fc838172"
+ARG THEROCK_COMMIT="ab56f1f7c5b54746bf9f7948fff3f306b2bef8b2"
 ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
@@ -31,17 +31,17 @@ ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
 ARG ROCM_LIBRARIES_COMMIT_OVERRIDE=""
 # Set ROCM_SYSTEMS_COMMIT_OVERRIDE to force to use a specific commit of rocm-systems monorepo instead of the one pinned in TheRock.
 ARG ROCM_SYSTEMS_COMMIT_OVERRIDE=""
-ARG TRITON_COMMIT="a272dfa85e20c6c167a1ec0fab48f7f9f4fd47c4"
-ARG PYTORCH_COMMIT="ff65f5bc672795c5e5033900ea0a0c4f8566c8cf"
-ARG PYTORCH_VISION_COMMIT="b919bd0c56abbb3c5ca056a3a458af9fd1cabf52"
-ARG PYTORCH_AUDIO_COMMIT="e3c6ee2b6588b7cd27a84182de74bf12fe043831"
-ARG PYTORCH_CODEC_COMMIT="6df7fc8e81c9509e86833ca48695609c583e2953"
+ARG TRITON_COMMIT="669b31acc1dd1b3fd93286afd5db67f65d9f7557"
+ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
+ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
+ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
+ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
 # deps image arguments
-ARG AITER_COMMIT="0c2b0f77b2ff6d13c677d12466abf87299f8b260"
+ARG AITER_COMMIT="e2d019f15599b73360ae027b73b8d72961903bd2"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="3aa7b34ec3f1d4f86f0befc5f09384333067846c"
+ARG XDIT_COMMIT="4865f4e48fffb5aca2f507647305e8b427b391dc"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -128,6 +128,16 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libglib2.0-dev \
     libglu1-mesa-dev \
     libopenblas-dev \
+    # Workaround: rocprofiler-sdk SQL output sources include <sqlite3.h>, but
+    # rocm-systems#6664 no longer propagates bundled SQLite headers to
+    # rocprofiler-sdk-output-library. Remove once fixed upstream:
+    # https://github.com/ROCm/TheRock/issues/5868
+    libsqlite3-dev \
+    # Workaround: profiler-hub generates its bundled SQLite3 amalgamation via
+    # `make sqlite3.c`, which requires tclsh even with --disable-tcl. Remove
+    # once fixed upstream:
+    # https://github.com/ROCm/rocm-systems/issues/10059
+    tcl \
     libtool \
     ninja-build \
     texinfo \
@@ -262,7 +272,7 @@ RUN --mount=type=cache,target=/app/TheRock/.ccache,id=therock-ccache,sharing=loc
     -DTHEROCK_ENABLE_MEDIA_LIBS=ON && \
     cmake --build /app/TheRock/build --target therock-artifacts && \
     echo "CCache stats:" && ccache -s -v && \
-    cp -r /app/TheRock/build/artifacts /app/TheRock/artifacts
+    mv /app/TheRock/build/artifacts /app/TheRock/artifacts
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /license-evidence \
@@ -279,9 +289,11 @@ RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | tr '\n' ' '); \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
         -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-# Install amdsmi Python module
-RUN cd /opt/rocm/share/amd_smi && \
-    pip install --no-cache-dir .
+# Install amdsmi Python module into system site-packages. TheRock stages
+# sources under share/amd_smi/amdsmi/ without setup.py (packaging rework in
+# rocm-systems 5bc651a8+); pip install from share/amd_smi no longer works.
+RUN AMDSMI_SITELIB="$(python3 -c "import site; print([p for p in site.getsitepackages() if not p.startswith('/usr/local')][0])")" && \
+    cp -r /opt/rocm/share/amd_smi/amdsmi "${AMDSMI_SITELIB}/"
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
     echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
     ldconfig
@@ -319,8 +331,8 @@ WORKDIR /app/TheRock/external-builds/pytorch
 RUN pip install -r /app/TheRock/requirements.txt && \
     python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1 && \
     python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1 && \
-    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/pytorch/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
-    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/pytorch/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
+    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/ROCm/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
+    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/ROCm/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
 # fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
 RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
     cd pytorch_codec && \
@@ -331,7 +343,7 @@ RUN cd triton && \
     pip install -r python/requirements.txt && \
     pip wheel . --wheel-dir dist/ && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install pytorch
 RUN cd pytorch && \
     UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
@@ -348,26 +360,26 @@ RUN cd pytorch && \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install vision
 RUN cd pytorch_vision && \
     FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install audio
 RUN cd pytorch_audio && \
     PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 # install torchcodec
 RUN pip install --no-cache-dir pybind11 pybind11[global] && \
     cd pytorch_codec && \
     PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
     python -m build --wheel -vvv --no-isolation -o dist && \
     pip install dist/*.whl && \
-    cp dist/*.whl /install
+    mv dist/*.whl /install
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /install/license-evidence \
@@ -486,9 +498,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git clone https://github.com/ROCm/aiter.git && \
     cd aiter && \
     git reset --hard ${AITER_COMMIT} && \
-    # PyTorch 2.9 Dynamo graph-breaks on PEP 604 in nested _validate_cu (aiter/ops/mha.py).
-    # Remove this patch after PyTorch is bumped above 2.9.
-    git apply /patches/aiter_mha_pep604_dynamo.patch && \
+    git apply /patches/aiter_mha_functional_varlen.patch && \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
@@ -572,7 +582,8 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/xfuser_minimax_h3.patch && \
+    git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
+    git apply /patches/xfuser_sd3_joint_attn_kv_cache.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute runtime dependencies
@@ -603,6 +614,8 @@ COPY assets/data /app/data
 # copy instructions and CI prerequisites
 COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
+COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
+COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 COPY .ci/quality_check.py /app/.ci/quality_check.py

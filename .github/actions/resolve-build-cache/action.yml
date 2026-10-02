@@ -1,0 +1,69 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Resolve Build Cache'
+description: >-
+  Resolves registry layer-cache refs for a docker buildx build. Probes the
+  registry with docker buildx imagetools, so it must run after the Docker Hub
+  login step on a runner where BUILDX_BUILDER is set.
+
+inputs:
+  cache_image_name:
+    description: 'Repository that holds the cache tags'
+    required: false
+    default: 'amdsiloai/pytorch-xdit-buildcache'
+  channel:
+    description: 'Cache channel, used as the tag prefix (e.g. core)'
+    required: true
+  ref:
+    description: 'Git ref being built; the cache scope is derived from it'
+    required: true
+  cache_scope:
+    description: 'Explicit cache scope, overrides the ref-derived one'
+    required: false
+    default: ''
+  extra_cache_from:
+    description: 'Space-separated extra refs to import from when they exist'
+    required: false
+    default: ''
+  export:
+    description: 'Whether to emit a --cache-to flag for the scoped ref'
+    required: false
+    default: 'false'
+  disable_cache:
+    description: 'Skip every import; a requested export still happens'
+    required: false
+    default: 'false'
+
+outputs:
+  scope:
+    description: 'Cache scope used to build the tags'
+    value: ${{ steps.resolve.outputs.scope }}
+  cache_from_flags:
+    description: '--cache-from flags for refs that exist, empty if none do'
+    value: ${{ steps.resolve.outputs.cache_from_flags }}
+  cache_to_flag:
+    description: '--cache-to flag, empty unless export is true'
+    value: ${{ steps.resolve.outputs.cache_to_flag }}
+  export_ref:
+    description: 'Ref the build exports to, empty unless export is true'
+    value: ${{ steps.resolve.outputs.export_ref }}
+  export_ref_digest:
+    description: 'Digest of the export ref before the build, empty if absent'
+    value: ${{ steps.resolve.outputs.export_ref_digest }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve build cache refs
+      id: resolve
+      shell: bash
+      env:
+        CACHE_IMAGE_NAME: ${{ inputs.cache_image_name }}
+        CHANNEL: ${{ inputs.channel }}
+        REF: ${{ inputs.ref }}
+        CACHE_SCOPE: ${{ inputs.cache_scope }}
+        EXTRA_CACHE_FROM: ${{ inputs.extra_cache_from }}
+        EXPORT: ${{ inputs.export }}
+        DISABLE_CACHE: ${{ inputs.disable_cache }}
+      run: ${{ github.action_path }}/scripts/resolve-build-cache.sh

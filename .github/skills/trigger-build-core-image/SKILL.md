@@ -20,6 +20,7 @@ Complete the shared [repository skill preflight](../preflight/SKILL.md) before c
    1.3. Runner: omit to use the workflow default
    1.4. `prebuilt_core_image_tag`: omit
    1.5. `disable_docker_cache`: false
+   1.6. `cache_scope`: omit (derived from the branch, which already isolates the mainline cache)
 2. **Apply user overrides** — only include fields the user explicitly provides
 3. **Validate** — branch is non-empty, booleans are `true` or `false`, and tag values contain no whitespace
 4. **Build command** — [dispatch template](./commands.md#dispatch-template); include `--field` only for overrides

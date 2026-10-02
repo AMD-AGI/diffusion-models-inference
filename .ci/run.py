@@ -21,6 +21,8 @@ import numpy as np
 import pandas as pd
 
 from huggingface_hub import snapshot_download, scan_cache_dir, DryRunFileInfo
+from memory_sampler import MemorySampler
+from miopen_driver_commands import MIOpenDriverCommandCollector, env_enabled
 
 
 logger = logging.getLogger(__name__)
@@ -183,6 +185,15 @@ def _parse_args():
             "<results-directory>/<experiment_name>/hipblaslt_gemms_pid<PID>.yaml "
             "(one file per worker process). "
             "Adds runtime overhead, intended for ad-hoc GEMM tuning data collection only."
+        ),
+    )
+    parser.add_argument(
+        "--collect-memory-stats",
+        action="store_true",
+        help=(
+            "Record peak per-GPU VRAM and peak host anonymous memory for each benchmark in "
+            "<results-directory>/<experiment_name>/memory.json. "
+            "Also enabled by CI_RUN_PY_COLLECT_MEMORY=1."
         ),
     )
     parser.add_argument(
@@ -375,6 +386,8 @@ def _run_experiment(
     dry_run: bool,
     benchmark_output_directory: Path,
     collect_hipblaslt_logs: bool = False,
+    collect_miopen_driver_commands: bool = False,
+    collect_memory_stats: bool = False,
 ) -> bool:
     """Runs a single experiment."""
 
@@ -385,6 +398,8 @@ def _run_experiment(
     benchmark_output_directory.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["TQDM_DISABLE"] = "1"
+    if collect_miopen_driver_commands:
+        env["MIOPEN_ENABLE_LOGGING_CMD"] = "1"
     if collect_hipblaslt_logs:
         # %i is substituted with the worker process ID by hipBLASLt at runtime,
         # so multi-rank benchmarks (e.g. ulysses_degree > 1) get one file per process.
@@ -394,14 +409,16 @@ def _run_experiment(
         )
     stdout_path = benchmark_output_directory / "stdout.txt"
     stderr_path = benchmark_output_directory / "stderr.txt"
+    memory_path = benchmark_output_directory / "memory.json"
     with open(stdout_path, "w", buffering=1) as stdout_file, open(stderr_path, "w", buffering=1) as stderr_file:
-        r = subprocess.run(
-            cmd,
-            stdout=stdout_file,
-            stderr=stderr_file,
-            text=True,
-            env=env,
-        )
+        with MemorySampler(memory_path, enabled=collect_memory_stats):
+            r = subprocess.run(
+                cmd,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                text=True,
+                env=env,
+            )
     if r.returncode != 0:
         logger.info(f"Experiment {exp.name} failed!")
         return False
@@ -627,6 +644,23 @@ def main():
         logger.warning("No experiments matched the given filters.")
         return
 
+    collect_memory_stats = args.collect_memory_stats or env_enabled(
+        os.environ.get("CI_RUN_PY_COLLECT_MEMORY", "0")
+    )
+    collect_miopen_driver_commands = env_enabled(
+        os.environ.get("CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS", "0")
+    )
+    miopen_command_collector = None
+    if collect_miopen_driver_commands:
+        try:
+            miopen_command_collector = MIOpenDriverCommandCollector(
+                Path(args.results_directory), (exp.name for exp in experiments)
+            )
+        except OSError as exc:
+            logger.warning(
+                "Failed to initialize MIOpenDriver command collection: %s", exc
+            )
+
     # Write Experiment configurations to file
     if args.export_config_path:
         _export_config(experiments, args.export_config_path)
@@ -671,25 +705,43 @@ def main():
             cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + ["--output-directory", benchmark_output_directory]
 
             t0 = time.monotonic()
-            if not _run_experiment(
+            process_succeeded = _run_experiment(
                 exp,
                 cmd,
                 args.dry_run,
                 benchmark_output_directory,
                 collect_hipblaslt_logs=args.collect_hipblaslt_logs,
-            ):
-                timing["experiments"].append({"name": exp.name, "seconds": round(time.monotonic() - t0, 2)})
+                collect_miopen_driver_commands=collect_miopen_driver_commands,
+                collect_memory_stats=collect_memory_stats,
+            )
+            seconds = round(time.monotonic() - t0, 2)
+            timing["experiments"].append({"name": exp.name, "seconds": seconds})
+            if not args.dry_run:
+                wall_clock_path = benchmark_output_directory / "wall_clock.json"
+                try:
+                    with open(wall_clock_path, "w") as handle:
+                        json.dump({"seconds": seconds}, handle, indent=2)
+                except OSError as error:
+                    logger.warning(f"Failed to write wall clock to {wall_clock_path}: {error}")
+            if miopen_command_collector is not None and not args.dry_run:
+                miopen_command_collector.collect(
+                    exp.name,
+                    benchmark_output_directory / "stderr.txt",
+                    process_succeeded,
+                )
+
+            if not process_succeeded:
                 msg = f"Experiment {exp.name} failed to complete. Reason: Failed to run command: {cmd}. See {benchmark_output_directory}/stderr.txt for stderr logs."
                 errors.append(msg)
                 logger.error(msg)
                 continue
 
-            timing["experiments"].append({"name": exp.name, "seconds": round(time.monotonic() - t0, 2)})
-
             if not args.dry_run:
                 latency_output_filepath = Path(benchmark_output_directory) / "timings.json" # benchmark scripts are expected to write latencies to "timings.json"
                 median_latency = _get_median_latency(latency_output_filepath)
                 if not median_latency:
+                    if miopen_command_collector is not None:
+                        miopen_command_collector.mark_metrics_failed(exp.name)
                     msg = f"Experiment {exp.name} failed to complete. Reason: Failed to compute median latency from output files. See logs for more details."
                     errors.append(msg)
                     logger.error(msg)
@@ -701,6 +753,8 @@ def main():
                 logger.info(f"Median latency for {exp.name}: {median_latency} seconds")
 
                 _save_mad_latency_metric(args.csv_output_path, exp.name, median_latency)
+                if miopen_command_collector is not None:
+                    miopen_command_collector.mark_succeeded(exp.name)
 
         should_clear_cache = args.clear_model_cache or (
             preserve_original_state and not model_existed_before

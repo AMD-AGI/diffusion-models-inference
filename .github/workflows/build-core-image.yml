@@ -40,6 +40,10 @@ on:
         type: boolean
         required: false
         default: false
+      cache_scope:
+        description: "Layer cache scope. Defaults to the branch name, so only builds of main touch the mainline cache; set it to isolate a test build launched from main."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -70,6 +74,8 @@ jobs:
                 "runner": "${{ inputs.runner || 'build-only' }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
                 "force_trigger_tuning": "${{ inputs.force_trigger_tuning || 'false' }}",
+                "cache_scope": "${{ inputs.cache_scope || github.ref_name }}",
+                "cache_image_name": "${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}",
                 "short_sha": "${{ steps.short_sha.outputs.sha }}"
               }
             }
@@ -83,6 +89,8 @@ jobs:
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
       core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
       staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      cache_scope: ${{ inputs.cache_scope }}
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
@@ -110,7 +118,7 @@ jobs:
 
   tuning-matrix:
     name: Generate tuning matrix
-    needs: [check-changes, build-xdit-images]
+    needs: [get-short-sha, check-changes, build-xdit-images]
     runs-on: ubuntu-latest
     if: |
       !cancelled() &&
@@ -141,7 +149,7 @@ jobs:
               "Trigger": {
                 "forced": "${{ inputs.force_trigger_tuning || 'false' }}",
                 "qualifying_paths": "${{ needs.check-changes.outputs.changed_paths }}",
-                "untuned_image": "${{ needs.build-xdit-images.outputs.staging_image_with_tag }}",
+                "untuned_image": "${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}:${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}-temp",
                 "gpu_runners": "${{ inputs.gpu_runners || 'gfx942,gfx950' }}"
               }
             }
@@ -152,7 +160,7 @@ jobs:
 
   tune:
     name: ${{ matrix.arch }} tuning
-    needs: [build-xdit-images, tuning-matrix]
+    needs: [get-short-sha, build-xdit-images, tuning-matrix]
     if: ${{ !cancelled() && needs.tuning-matrix.result == 'success' }}
     strategy:
       fail-fast: false
@@ -160,7 +168,7 @@ jobs:
     uses: ./.github/workflows/miopen-tune-reusable.yml
     with:
       git_ref: ${{ github.ref_name }}
-      image: ${{ needs.build-xdit-images.outputs.staging_image_with_tag }}
+      image: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}:${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}-temp
       arch: ${{ matrix.arch }}
       runner: ${{ matrix.runner }}
       timeout_minutes: ${{ matrix.timeout }}

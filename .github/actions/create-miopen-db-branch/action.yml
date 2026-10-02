@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 name: 'Create MIOpen Database branch'
-description: 'Creates a branch with MIOpen database changes and pushes it'
+description: 'Creates a branch with MIOpen database changes, pushes it, and links a prefilled pull request form'
 
 inputs:
   branch_name:
@@ -11,6 +11,18 @@ inputs:
   run_number:
     description: 'GitHub Actions run number'
     required: true
+  base_branch:
+    description: 'Branch the pull request targets'
+    required: false
+    default: ${{ github.ref_name }}
+
+outputs:
+  has_changes:
+    description: 'Whether the tuning run produced database changes'
+    value: ${{ steps.check_changes.outputs.has_changes }}
+  compare_url:
+    description: 'Prefilled pull request form URL, empty when nothing was pushed'
+    value: ${{ steps.summary.outputs.compare_url }}
 
 runs:
   using: 'composite'
@@ -62,3 +74,24 @@ runs:
       run: |
         echo "Pushing branch: ${BRANCH_NAME}"
         git push origin "${BRANCH_NAME}"
+
+    - name: Summarize pull request link
+      id: summary
+      if: steps.check_changes.outputs.has_changes == 'true'
+      shell: bash
+      env:
+        BRANCH_NAME: ${{ inputs.branch_name }}
+        BASE_BRANCH: ${{ inputs.base_branch }}
+        RUN_NUMBER: ${{ inputs.run_number }}
+        REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+      run: |
+        COMPARE_URL="${REPO_URL}/compare/${BASE_BRANCH}...${BRANCH_NAME}?expand=1"
+        {
+          echo "## MIOpen database update"
+          echo
+          echo "Branch \`${BRANCH_NAME}\` was pushed with the tuning results from run #${RUN_NUMBER}."
+          echo
+          echo "[Create pull request into \`${BASE_BRANCH}\`](${COMPARE_URL})"
+        } >> "$GITHUB_STEP_SUMMARY"
+        echo "compare_url=${COMPARE_URL}" >> "$GITHUB_OUTPUT"
+        echo "Create the pull request at: ${COMPARE_URL}"

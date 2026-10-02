@@ -1,0 +1,54 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Cleanup core build cache
+
+on:
+  delete:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Cleanup mode'
+        type: choice
+        options:
+          - inherit
+          - 'true'
+          - 'false'
+        default: inherit
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cleanup-core-build-cache
+  cancel-in-progress: false
+
+env:
+  BUILDCACHE_IMAGE: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+  CACHE_CLEANUP_DRY_RUN: ${{ vars.CACHE_CLEANUP_DRY_RUN || 'true' }}
+  CACHE_CLEANUP_GRACE_DAYS: ${{ vars.CACHE_CLEANUP_GRACE_DAYS || '3' }}
+
+jobs:
+  cleanup:
+    name: Clean orphaned core cache tags
+    if: ${{ github.event_name != 'delete' || github.event.ref_type == 'branch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Clean orphaned cache tags
+        uses: ./.github/actions/cleanup-build-cache
+        with:
+          cache_image_name: ${{ env.BUILDCACHE_IMAGE }}
+          grace_period_days: ${{ env.CACHE_CLEANUP_GRACE_DAYS }}
+          dry_run_setting: ${{ env.CACHE_CLEANUP_DRY_RUN }}
+          manual_dry_run: ${{ inputs.dry_run || 'inherit' }}
+          github_token: ${{ github.token }}
+          dockerhub_username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_OAT }}

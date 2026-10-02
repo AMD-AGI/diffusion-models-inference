@@ -47,3 +47,35 @@ docker run \
 ```
 
 to generate the user database.
+
+## Collect workload commands
+
+The Build and Benchmark workflow enables command-only MIOpen logging for every
+benchmark run. It uploads one artifact per architecture named
+`<run-number>-miopen-workloads-<architecture>`. Full MIOpen API logging is not
+enabled.
+
+Each artifact contains:
+
+- `<workload>.txt` for a benchmark process that exited successfully.
+- `<workload>.partial.txt` for commands captured before a benchmark process
+  exited unsuccessfully. Review and rename these files before adding them to
+  `data/miopen/workloads`.
+- `manifest.json`, which records every selected workload, its benchmark and
+  collection statuses, its unique command count, and its output filename.
+  Workloads that emitted no commands have no text file but remain in the
+  manifest.
+
+Commands are de-duplicated within each workload and sorted. They are not
+de-duplicated across workloads or architecture artifacts because `tune.sh`
+handles that when it prepares the tuning input.
+
+Successful text files can be copied directly into `data/miopen/workloads`.
+Workloads without an architecture suffix can appear in more than one
+architecture artifact; compare those files before choosing the repository
+version.
+
+Collection is disabled by default when `.ci/run.py` is invoked directly. To
+enable it for an interactive run, set
+`CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS=1`. The values `true`, `yes`, and
+`on` are also accepted, case-insensitively.
