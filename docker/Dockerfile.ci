@@ -12,7 +12,7 @@
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
-ARG THEROCK_COMMIT="9100ec681955d4af7e1c720fb5c9b208fc838172"
+ARG THEROCK_COMMIT="ab56f1f7c5b54746bf9f7948fff3f306b2bef8b2"
 ARG CCACHE_VERSION="4.11.2"
 # AMDGPU_FAMILIES is a ";" separated list of values, choices can be found
 # at https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
@@ -37,11 +37,11 @@ ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
 ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
 ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
 # deps image arguments
-ARG AITER_COMMIT="0c2b0f77b2ff6d13c677d12466abf87299f8b260"
+ARG AITER_COMMIT="e2d019f15599b73360ae027b73b8d72961903bd2"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="c1bf5295093561eb49e7c841fb5167c160b652d0"
+ARG XDIT_COMMIT="4865f4e48fffb5aca2f507647305e8b427b391dc"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -128,6 +128,16 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libglib2.0-dev \
     libglu1-mesa-dev \
     libopenblas-dev \
+    # Workaround: rocprofiler-sdk SQL output sources include <sqlite3.h>, but
+    # rocm-systems#6664 no longer propagates bundled SQLite headers to
+    # rocprofiler-sdk-output-library. Remove once fixed upstream:
+    # https://github.com/ROCm/TheRock/issues/5868
+    libsqlite3-dev \
+    # Workaround: profiler-hub generates its bundled SQLite3 amalgamation via
+    # `make sqlite3.c`, which requires tclsh even with --disable-tcl. Remove
+    # once fixed upstream:
+    # https://github.com/ROCm/rocm-systems/issues/10059
+    tcl \
     libtool \
     ninja-build \
     texinfo \
@@ -279,9 +289,11 @@ RUN --mount=type=bind,from=build_rocm,source=/app/TheRock,target=/app/TheRock/ \
     PREFIXES=$(sed '/^#/d; /^$/d' /tmp/rocm_runtime_artifacts.txt | tr '\n' ' '); \
     python3 /app/TheRock/build_tools/fileset_tool.py artifact-flatten-split \
         -o "${O}" --artifacts-dir "${A}" ${PREFIXES}
-# Install amdsmi Python module
-RUN cd /opt/rocm/share/amd_smi && \
-    pip install --no-cache-dir .
+# Install amdsmi Python module into system site-packages. TheRock stages
+# sources under share/amd_smi/amdsmi/ without setup.py (packaging rework in
+# rocm-systems 5bc651a8+); pip install from share/amd_smi no longer works.
+RUN AMDSMI_SITELIB="$(python3 -c "import site; print([p for p in site.getsitepackages() if not p.startswith('/usr/local')][0])")" && \
+    cp -r /opt/rocm/share/amd_smi/amdsmi "${AMDSMI_SITELIB}/"
 RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf && \
     echo "/opt/rocm/lib/rocm_sysdeps/lib/" > /etc/ld.so.conf.d/rocm_sysdeps.conf && \
     ldconfig
@@ -602,6 +614,7 @@ COPY assets/data /app/data
 # copy instructions and CI prerequisites
 COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
+COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
 COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py

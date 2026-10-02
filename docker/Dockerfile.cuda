@@ -14,7 +14,7 @@ ARG FLASHATTENTION_COMMIT="fffabc3"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="c1bf5295093561eb49e7c841fb5167c160b652d0"
+ARG XDIT_COMMIT="4865f4e48fffb5aca2f507647305e8b427b391dc"
 ARG SAGEATTENTION_COMMIT="d1a57a5"
 ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
 ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
@@ -140,6 +140,8 @@ COPY assets/data /app/data
 # copy instructions and CI prerequisites
 COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
+COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
+COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 # apex causes rms_forward_affine crash in SD3.5
