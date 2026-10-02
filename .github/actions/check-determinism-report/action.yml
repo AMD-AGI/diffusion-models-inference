@@ -1,0 +1,26 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Check Determinism Report
+description: >
+  Summarise the determinism report of one architecture and fail when any
+  benchmark was non-deterministic, so GitHub's own run-failure notification
+  reaches whoever dispatched the run.
+
+inputs:
+  results_dir:
+    description: 'Benchmark results directory holding determinism_report.json'
+    required: true
+  arch:
+    description: 'GPU tag from the matrix (e.g. gfx942, mi300, gfx950)'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check determinism report
+      shell: bash
+      env:
+        RESULTS_DIR: ${{ inputs.results_dir }}
+        ARCH: ${{ inputs.arch }}
+      run: python3 "$GITHUB_ACTION_PATH/scripts/check-determinism.py"
