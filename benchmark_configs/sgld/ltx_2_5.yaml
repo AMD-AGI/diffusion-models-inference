@@ -1,0 +1,66 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: ltx_2_5.default
+  tags: [instinct, gfx942, gfx950]
+  model: Lightricks/LTX-2.5-Diffusers
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    run_type: cli
+    pipeline_class_name: LTX2Pipeline
+    prompt: "A cinematic shot of a red fox walking through a snowy forest at dawn, the camera tracking alongside, snow crunching underfoot."
+    height: 1024
+    width: 1536
+    num_frames: 121
+    num_inference_steps: 8
+    guidance_scale: 1.0
+    ulysses_degree: 8
+    ring_degree: 1
+    use_torch_compile: True
+    use_diffusion_decoder: True
+    num_iterations: 25
+    attention_backend: aiter
+    seed: 42
+
+- name: ltx_2_5.default.hopper.h200
+  tags: [lucid, hopper, h200]
+  model: Lightricks/LTX-2.5-Diffusers
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    run_type: cli
+    pipeline_class_name: LTX2Pipeline
+    prompt: "A cinematic shot of a red fox walking through a snowy forest at dawn, the camera tracking alongside, snow crunching underfoot."
+    height: 1024
+    width: 1536
+    num_frames: 121
+    num_inference_steps: 8
+    guidance_scale: 1.0
+    ulysses_degree: 8
+    ring_degree: 1
+    use_torch_compile: True
+    use_diffusion_decoder: True
+    num_iterations: 25
+    seed: 42
+
+- name: ltx_2_5.default.blackwell
+  tags: [lucid, blackwell, b200, b300]
+  model: Lightricks/LTX-2.5-Diffusers
+  runner: python
+  entrypoint: /app/.ci/runner.py
+  args:
+    run_type: cli
+    pipeline_class_name: LTX2Pipeline
+    prompt: "A cinematic shot of a red fox walking through a snowy forest at dawn, the camera tracking alongside, snow crunching underfoot."
+    height: 1024
+    width: 1536
+    num_frames: 121
+    num_inference_steps: 8
+    guidance_scale: 1.0
+    ulysses_degree: 8
+    ring_degree: 1
+    use_torch_compile: True
+    use_diffusion_decoder: True
+    num_iterations: 25
+    seed: 42
