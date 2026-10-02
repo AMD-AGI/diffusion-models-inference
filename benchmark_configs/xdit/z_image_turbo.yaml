@@ -1,6 +1,22 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+- name: z_image_turbo.default
+  tags: [release, instinct, gfx942, gfx950]
+  model: Tongyi-MAI/Z-Image-Turbo
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A small cat
+    height: 1024
+    width: 1024
+    num_inference_steps: 9
+    guidance_scale: 0.0
+    ulysses_degree: 8
+    use_torch_compile: true
+    num_iterations: 1
+    attention_backend: aiter
+
 - name: z_image_turbo.4gpu.rdna4
   tags: [rdna4, gfx1201]
   model: Tongyi-MAI/Z-Image-Turbo
