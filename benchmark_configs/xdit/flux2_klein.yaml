@@ -20,7 +20,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux2_klein.quantgemm.gfx950
-  tags: [release, mad, lucid, instinct, gfx950, mi350p]
+  tags: [release, mad, lucid, instinct, gfx950]
   model: black-forest-labs/FLUX.2-klein-9B
   runner: xdit
   args:

@@ -19,7 +19,7 @@
     memory_efficient_replicated_load: true
 
 - name: z_image.quantgemm.gfx950
-  tags: [release, mad, lucid, instinct, gfx950, mi350p]
+  tags: [release, mad, lucid, instinct, gfx950]
   model: Tongyi-MAI/Z-Image
   runner: xdit
   args:
