@@ -113,14 +113,6 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Run MIOpen tuning
-        uses: ./.github/actions/run-miopen-tuning
-        with:
-          image: ${{ steps.resolve.outputs.tag }}
-          arch: ${{ needs.resolve.outputs.arch }}
-          artifact_name: ${{ github.run_number }}-miopen-${{ needs.resolve.outputs.arch }}
-          force_retuning: false
-
       - name: Run remote benchmark
         uses: ./.github/actions/run-remote-benchmark
         with:
@@ -134,10 +126,14 @@ jobs:
   run-benchmark:
     name: '${{ needs.resolve.outputs.arch }} benchmark'
     needs: resolve
-    permissions: {}
+    permissions:
+      contents: read
     runs-on: bench-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.resolve.outputs.arch }}
     timeout-minutes: 1440
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Resolve benchmark tag
         id: tag
         env:
@@ -156,11 +152,28 @@ jobs:
             echo "flags=--tag ${TAG}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Run MIOpen tuning
+        env:
+          ARCH: ${{ needs.resolve.outputs.arch }}
+          ROOTDIR: ${{ github.workspace }}
+          MIOPEN_USER_DB_PATH: ${{ github.workspace }}/data/miopen/userdb
+          MIOPEN_FIND_MODE: '1'
+          MIOPEN_FIND_ENFORCE: '3'
+          FORCE_RETUNING: 'false'
+          OMP_NUM_THREADS: '16'
+        run: |
+          rm -f "${ROOTDIR}/.tuning_successful"
+          bash "${ROOTDIR}/data/miopen/tune.sh"
+          # tune.sh can fall out of its final concatenation without failing.
+          [ -f "${ROOTDIR}/.tuning_successful" ] || {
+            echo "::error::MIOpen tuning did not complete"; exit 1; }
+
       - name: Run benchmarks
         env:
           FLAGS: ${{ steps.tag.outputs.flags }}
           GPUS: ${{ inputs.gpu }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MIOPEN_USER_DB_PATH: ${{ github.workspace }}/data/miopen/userdb
         run: |
           mkdir -p "${RUNNER_TEMP}/results"
           # The configs are baked into the image and pin 8-way parallelism, so
