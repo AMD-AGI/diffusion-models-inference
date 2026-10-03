@@ -19,7 +19,7 @@
     memory_efficient_replicated_load: true
 
 - name: z_image_turbo.quantgemm.gfx950
-  tags: [instinct, gfx950]
+  tags: [instinct, gfx950, mi350p]
   model: Tongyi-MAI/Z-Image-Turbo
   runner: xdit
   args:
