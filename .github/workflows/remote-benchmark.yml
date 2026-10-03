@@ -52,6 +52,23 @@ jobs:
     outputs:
       arch: ${{ steps.parse.outputs.arch }}
     steps:
+      - name: Write summary
+        uses: ./.github/actions/write-workflow-summary
+        with:
+          title: 'Remote Benchmark Configuration'
+          tables: |
+            {
+              "Workflow Inputs": {
+                "benchmark_image": "${{ inputs.benchmark_image }}",
+                "gpu_arch": "${{ inputs.gpu_arch }}",
+                "gpu": "${{ inputs.gpu }}",
+                "cpu": "${{ inputs.cpu }}",
+                "memory": "${{ inputs.memory }}",
+                "benchmark_flags": "${{ inputs.benchmark_flags }}",
+                "runner_label": "${{ inputs.runner_label }}"
+              }
+            }
+
       - name: Normalise architecture name
         id: parse
         env:
