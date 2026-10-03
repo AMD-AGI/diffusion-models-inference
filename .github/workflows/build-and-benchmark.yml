@@ -52,6 +52,9 @@ jobs:
     outputs:
       arch: ${{ steps.parse.outputs.arch }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        
       - name: Write summary
         uses: ./.github/actions/write-workflow-summary
         with:
