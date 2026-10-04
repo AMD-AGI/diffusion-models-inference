@@ -33,7 +33,6 @@
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
-    use_fp4_gemms: true
     memory_efficient_replicated_load: true
 
 - name: z_image.default.hopper
