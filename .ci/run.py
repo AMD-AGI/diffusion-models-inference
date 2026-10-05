@@ -464,6 +464,9 @@ def _run_experiment(
         logger.info(f"Experiment {exp.name} failed!")
         return False
 
+    if _is_determinism_check_enabled(exp):
+        _report_determinism_check_results(exp, benchmark_output_directory)
+
     logger.info(f"Experiment: {exp.name} completed successfully.")
     return True
 
@@ -724,7 +727,7 @@ def main():
     for model_name, exps in experiments_per_model.items():
         logger.info(f"Running experiments for model: {model_name}")
 
-        revision = exps[0].revision  # Remark: assumes model experiments uses same revision.
+        revision = exps[0].revision # Remark: assumes model experiments uses same revision.
         model_existed_before = _model_in_cache(model_name, revision)
         try:
             t0 = time.monotonic()
