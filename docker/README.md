@@ -18,40 +18,43 @@ snapshot or ROCm release series. `ROCM_GFX_TARGETS` controls which architecture-
 package shards are installed and is independent of `PYTORCH_ROCM_ARCH`, which
 controls the architectures built into PyTorch and related wheels.
 
-ROCm is layered as three named stages (later layers add packages only):
+Leaf packages install under `/opt/rocm/core-<series>`. `rocm_tree` and `rocm_base`
+both register the unversioned `/opt/rocm/{bin,lib,include,...}` links that the
+`amdrocm-core` postinst would have created. They are separate installs from
+`base`: `rocm_base` drops LLVM static archives outside `lib/clang` in that same
+install step, and `rocm_tree` keeps them so `rocm_devel` can inherit the files.
 
 | Target | Packages | Use |
 | --- | --- | --- |
-| `rocm_runtime` | `amdrocm-core${ROCM_DEB_SERIES}-${gfx}` | Runtime libs and `hipcc` |
-| `rocm_runtime_jit` | plus `amdrocm-core-dev${ROCM_DEB_SERIES}-${gfx}` | Headers for AITER / Triton compile |
-| `rocm_devel` | plus developer-tools, RDC, OpenCL, blas/rccl tests | Parent of `core` / `final` / `build_torch_stack` |
+| `rocm_tree` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers. LLVM static archives kept | Parent of `build_torch_stack` and `rocm_devel` |
+| `rocm_base` | Same packages. LLVM static archives outside `lib/clang` removed | Lean runtime target |
+| `rocm_devel` | `rocm_tree` plus developer-tools, RDC, OpenCL, blas/rccl tests | Default parent of `core` / `deps` / `final` |
 
-`--target core` and `--target final` still inherit `rocm_devel` (full tools and
-test debs). `rocm_runtime` and `rocm_runtime_jit` are ancestor cache layers and a
-placeholder for a leaner product image; they are not CI tags.
+`amdrocm-developer-tools` pulls the profiler, emulator, and debugger. It does
+not depend on `amdrocm-core`. `core` is `FROM ${ROCM_PARENT}`, which defaults to
+`rocm_devel`. Both parents install the wheels built by `build_torch_stack`.
+`deps` installs rocprofiler-compute's Python requirements only when that tree
+is present.
 
-A later lean cutover is: point `core` at `rocm_runtime_jit`. That drops
-developer-tools, RDC, OpenCL, and test debs from the shipped image, and the
-`deps` rocprofiler-compute pip install must move or go away with that parent.
-`build_torch_stack` can move to `rocm_runtime_jit` in the same change if torch
-rebuilds should no longer follow test/tool deb churn.
+```sh
+# developer tools included
+docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
+
+# runtime + torch stack + AITER JIT, without developer tools
+docker build -f docker/Dockerfile.ci --target final \
+    --build-arg ROCM_PARENT=rocm_base -t pytorch-xdit-lean .
+```
 
 The image does not build ROCm from source and does not support
 `rocm-libraries` or `rocm-systems` commit overrides. Changes that are not
 available in the pinned nightly must first be published in a nightly snapshot.
-
-To build and validate every stage locally without a GPU:
-
-```sh
-docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
-```
 
 ### amd-smi Python bindings
 
 `docker/setup_amdsmi.sh` links the ROCm Python bindings into the venv, because
 the nightly debs ship them under `${ROCM_HOME}/share/amd_smi/amdsmi` with no
 `setup.py`, where pip cannot install them and nothing can import them. It runs
-in `rocm_runtime`; the script header explains why a symlink is the only correct
+in `rocm_tree` and `rocm_base`; the script header explains why a symlink is the only correct
 mechanism.
 
 If a future nightly puts the bindings on `sys.path` itself, a build log prints
@@ -59,7 +62,7 @@ a `setup_amdsmi: RETIRE THIS SHIM` banner and the script makes no changes —
 delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping `ROCM_RELEASE_ID`:
 
 ```sh
-docker build -f docker/Dockerfile.ci --target rocm_runtime . --progress=plain 2>&1 \
+docker build -f docker/Dockerfile.ci --target rocm_base . --progress=plain 2>&1 \
     | grep -i 'setup_amdsmi'
 ```
 
@@ -68,7 +71,7 @@ docker build -f docker/Dockerfile.ci --target rocm_runtime . --progress=plain 2>
 `docker/setup_rocm_llvm_layout.sh` links `${ROCM_PATH}/lib/llvm/bin` tools into
 `${ROCM_PATH}/llvm/bin`. Nightly debs install `ld.lld` under `lib/llvm/bin` and
 leave `llvm/bin` as clang `.cfg` stubs; FlyDSL/MLIR still invoke
-`$ROCM_PATH/llvm/bin/ld.lld`. It runs in `rocm_runtime` after the ROCm `ENV`
+`$ROCM_PATH/llvm/bin/ld.lld`. It runs in `rocm_tree` and `rocm_base` after the ROCm `ENV`
 block, which also puts `lib/llvm/bin` on `PATH`.
 
 If a future nightly ships an executable `ld.lld` at the classic path, a build
@@ -81,7 +84,7 @@ looking for `$ROCM_PATH/llvm/bin/ld.lld` and uses `lib/llvm/bin`,
 print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
 
 ```sh
-docker build -f docker/Dockerfile.ci --target rocm_runtime . --progress=plain 2>&1 \
+docker build -f docker/Dockerfile.ci --target rocm_base . --progress=plain 2>&1 \
     | grep -i 'setup_rocm_llvm_layout'
 ```
 
@@ -92,7 +95,7 @@ so `find_package(hipblaslt)` can configure. hipBLASLt's installed package config
 requires `find_package(origami)` in a sibling `lib/cmake/origami` directory
 (`NO_DEFAULT_PATH`, so `CMAKE_PREFIX_PATH` does not help). Nightly debs ship
 `liborigami.so` in the BLAS host package but omit that CMake package from
-BLAS devel. It runs in `rocm_runtime_jit` after the `-dev` debs, which is when
+BLAS devel. It runs in `rocm_tree` and `rocm_base` after the `-dev` debs, which is when
 hipBLASLt's CMake files land. The script header explains why a stub imported
 target is the only correct mechanism.
 
@@ -103,6 +106,6 @@ point. The shim can also be deleted if hipBLASLt stops `find_dependency(origami)
 that will not print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
 
 ```sh
-docker build -f docker/Dockerfile.ci --target rocm_runtime_jit . --progress=plain 2>&1 \
+docker build -f docker/Dockerfile.ci --target rocm_base . --progress=plain 2>&1 \
     | grep -i 'setup_origami_cmake'
 ```
