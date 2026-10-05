@@ -23,6 +23,7 @@ import pandas as pd
 from huggingface_hub import snapshot_download, scan_cache_dir, DryRunFileInfo
 from memory_sampler import MemorySampler
 from miopen_driver_commands import MIOpenDriverCommandCollector, env_enabled
+import determinism_report
 
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,6 @@ _handler.setFormatter(logging.Formatter(
     datefmt='%Y-%m-%d %H:%M:%S',
 ))
 logger.addHandler(_handler)
-DETERMINISM_REPORT_FILENAME = "determinism_report.json"
 
 
 def import_xfuser_determinism_check_results():
@@ -325,9 +325,18 @@ def _delete_model_cache(model: str, revision: Optional[str] = None, dry_run: boo
 
 
 def _is_determinism_check_enabled(exp: Experiment) -> bool:
-    """Assuming that xFuser doesn't enable determinism check by default, and that the `exp.args`
-    has configuration arguments AND `--override-args-json` already merged, checks if the check
-    is enabled by the experiment config.
+    """Decide whether the determinism check should be reported for an experiment.
+
+    Assumes that xFuser doesn't enable the determinism check by default, and
+    that `exp.args` has configuration arguments AND `--override-args-json`
+    already merged.
+
+    Args:
+        exp: The experiment to check.
+
+    Returns:
+        True if `CI_RUN_PY_FORCE_DETERMINISM_CHECK` is set, or if the
+        experiment's own args enable `determinism_check`.
     """
     # global overrider
     if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_CHECK", "0") == "1":
@@ -348,7 +357,16 @@ def _is_determinism_check_enabled(exp: Experiment) -> bool:
 
 
 def _report_determinism_check_results(exp: Experiment, benchmark_output_directory: Path) -> Dict[str, Any]:
-    """Report determinism check results for one experiment and return a summary entry."""
+    """Report determinism check results for one experiment.
+
+    Args:
+        exp: The experiment the determinism check ran for.
+        benchmark_output_directory: The experiment's output directory, where
+            xFuser leaves whatever determinism check results it produced.
+
+    Returns:
+        A summary entry built by `determinism_report.make_entry`.
+    """
     global tried_import_xfuser_determinism_check_results, determinism_check_results, readable_bytes
     if not tried_import_xfuser_determinism_check_results:
         tried_import_xfuser_determinism_check_results = True
@@ -356,68 +374,43 @@ def _report_determinism_check_results(exp: Experiment, benchmark_output_director
         if readable_bytes is None:
             readable_bytes = lambda x: f"{x} bytes"  # noqa: E731
 
-    entry: Dict[str, Any] = {
-        "name": exp.name,
-        "status": "unavailable",
-        "failed_checks": 0,
-        "dump_bytes": 0,
-        "output_directory": str(benchmark_output_directory),
-    }
+    status = determinism_report.STATUS_UNAVAILABLE
+    failed_checks = 0
+    dump_bytes = 0
 
-    if determinism_check_results is None:  # import must have failed
-        return entry
+    if determinism_check_results is not None:  # otherwise the import failed
+        try:
+            det_check = determinism_check_results(benchmark_output_directory)
+            if not isinstance(det_check, dict):
+                logger.error(f"Expected a dictionary in results report, got {type(det_check)}")
+                status = determinism_report.STATUS_ERROR
+            elif 0 == len(det_check):
+                logger.info(f"Determinism checks passed for {exp.name}")
+                status = determinism_report.STATUS_PASSED
+            elif "" in det_check:
+                if 1 != len(det_check):
+                    logger.error("Expected exactly one top-level directory in results report")
+                res = det_check[""]
+                logger.warning(
+                    f"Determinism check failed for {exp.name}: {res[0]} checks failed, "
+                    f"{readable_bytes(res[1])} is occupied by dumps"
+                )
+                status = determinism_report.STATUS_FAILED
+                failed_checks = int(res[0])
+                dump_bytes = int(res[1])
+            else:
+                logger.error("Results for the top-level directory not found. Skipping report.")
+                status = determinism_report.STATUS_ERROR
+        except Exception:  # ruff: ignore[blind-except]
+            logger.error("Error getting determinism check results.", exc_info=True)
+            status = determinism_report.STATUS_ERROR
 
-    try:
-        det_check = determinism_check_results(benchmark_output_directory)
-        if not isinstance(det_check, dict):
-            logger.error(f"Expected a dictionary in results report, got {type(det_check)}")
-            entry["status"] = "error"
-            return entry
-        if 0 == len(det_check):
-            logger.info(f"Determinism checks passed for {exp.name}")
-            entry["status"] = "passed"
-            return entry
-
-        if 1 != len(det_check):
-            logger.error("Expected exactly one top-level directory in results report")
-        if "" in det_check:
-            res = det_check[""]
-            logger.warning(
-                f"Determinism check failed for {exp.name}: {res[0]} checks failed, "
-                f"{readable_bytes(res[1])} is occupied by dumps"
-            )
-            entry["status"] = "failed"
-            entry["failed_checks"] = int(res[0])
-            entry["dump_bytes"] = int(res[1])
-        else:
-            logger.error("Results for the top-level directory not found. Skipping report.")
-            entry["status"] = "error"
-    except Exception:  # ruff: ignore[blind-except]
-        logger.error("Error getting determinism check results.", exc_info=True)
-        entry["status"] = "error"
-
-    return entry
-
-
-def _write_determinism_report(results_directory: Path, entries: List[Dict[str, Any]]) -> None:
-    """Write a machine-readable determinism summary consumed by CI notifications."""
-    report = {
-        "experiments": entries,
-        "failed_experiments": sum(1 for e in entries if e["status"] == "failed"),
-        "failed_checks": sum(e["failed_checks"] for e in entries),
-    }
-    report_path = results_directory / DETERMINISM_REPORT_FILENAME
-    try:
-        results_directory.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(json.dumps(report, indent=2) + "\n")
-    except OSError as exc:
-        logger.warning("Failed to write determinism report to %s: %s", report_path, exc)
-        return
-    logger.info(
-        "Determinism report written to %s (%d of %d experiments failed).",
-        report_path,
-        report["failed_experiments"],
-        len(entries),
+    return determinism_report.make_entry(
+        exp.name,
+        status=status,
+        failed_checks=failed_checks,
+        dump_bytes=dump_bytes,
+        output_directory=str(benchmark_output_directory),
     )
 
 
@@ -463,9 +456,6 @@ def _run_experiment(
     if r.returncode != 0:
         logger.info(f"Experiment {exp.name} failed!")
         return False
-
-    if _is_determinism_check_enabled(exp):
-        _report_determinism_check_results(exp, benchmark_output_directory)
 
     logger.info(f"Experiment: {exp.name} completed successfully.")
     return True
@@ -811,7 +801,7 @@ def main():
                 logger.error(e, stack_info=True, exc_info=True)
 
     if determinism_entries:
-        _write_determinism_report(Path(args.results_directory), determinism_entries)
+        determinism_report.write_report(Path(args.results_directory), determinism_entries)
 
     if args.print_timing_summary and (timing.get("download_model") or timing.get("experiments")):
         _print_timing_summary(timing)

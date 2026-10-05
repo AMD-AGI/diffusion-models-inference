@@ -55,6 +55,7 @@ RUN curl --fail --location --retry 3 \
 COPY .ci/run.py /app/.ci/run.py
 COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
 COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
+COPY .ci/determinism_report.py /app/.ci/determinism_report.py
 COPY .ci/integrations/vllm_omni/online_runner.py /app/.ci/online_runner.py
 COPY benchmark_configs/omni/ /app/.ci/benchmark_configs/
 

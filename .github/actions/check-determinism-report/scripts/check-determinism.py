@@ -4,21 +4,38 @@
 
 """Check the determinism report of one architecture.
 
-Reads ``determinism_report.json`` from RESULTS_DIR, writes a job summary table
-and annotations, and exits non-zero when any benchmark failed its determinism
-check, so the run is marked failed and GitHub notifies the dispatcher.
+Reads ``determinism_report.json`` from RESULTS_DIR (schema defined in
+.ci/determinism_report.py), writes a job summary table and annotations, and
+exits non-zero when any benchmark failed its determinism check, so the run is
+marked failed and GitHub notifies the dispatcher.
 
-Expects env vars: RESULTS_DIR, ARCH.
+Expects env vars: RESULTS_DIR, ARCH, GITHUB_WORKSPACE.
 """
 
-import json
 import os
+import sys
 from pathlib import Path
 
-REPORT_FILENAME = "determinism_report.json"
+# .ci/ isn't a package on sys.path by default; add it to reuse run.py's report schema.
+sys.path.insert(0, str(Path(os.environ["GITHUB_WORKSPACE"]) / ".ci"))
+from determinism_report import (  # noqa: E402
+    REPORT_FILENAME,
+    failed_entries,
+    load_report,
+    render_summary_table,
+    unavailable_entries,
+)
 
 
 def append_summary(text: str) -> None:
+    """Append text to the current GitHub Actions job summary, if configured.
+
+    Args:
+        text: Markdown text to append.
+
+    Returns:
+        None.
+    """
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
         with open(summary_path, "a", encoding="utf-8") as handle:
@@ -26,33 +43,34 @@ def append_summary(text: str) -> None:
 
 
 def main() -> int:
+    """Check one architecture's determinism report and summarise the outcome.
+
+    Reads ``RESULTS_DIR``/``determinism_report.json``, appends a pass/fail
+    matrix to the job summary, and prints GitHub Actions annotations for any
+    failed or unavailable determinism checks.
+
+    Returns:
+        1 if the report is missing or any benchmark failed its determinism
+        check; 0 if every benchmark passed.
+    """
     arch = os.environ.get("ARCH", "unknown")
     results_dir = Path(os.environ["RESULTS_DIR"])
-    report_path = results_dir / REPORT_FILENAME
 
-    if not report_path.is_file():
+    report = load_report(results_dir)
+    if report is None:
+        # Message intentionally unchanged: it's the key signal for debugging
+        # why determinism checks didn't run at all for this architecture.
         print(
             f"::warning::No {REPORT_FILENAME} found in {results_dir}; determinism "
             "checks did not run or produced no results."
         )
-        return 0
+        return 1
 
-    report = json.loads(report_path.read_text())
     experiments = report.get("experiments", [])
-    failures = [e for e in experiments if e.get("status") == "failed"]
-    unavailable = [e for e in experiments if e.get("status") in ("unavailable", "error")]
+    failures = failed_entries(report)
+    unavailable = unavailable_entries(report)
 
-    summary_lines = [
-        f"\n### Determinism checks ({arch})\n\n",
-        "| Benchmark | Status | Failed checks | Dump bytes |\n",
-        "| --- | --- | --- | --- |\n",
-    ]
-    for entry in experiments:
-        summary_lines.append(
-            f"| {entry.get('name', '?')} | {entry.get('status', '?')} | "
-            f"{entry.get('failed_checks', 0)} | {entry.get('dump_bytes', 0)} |\n"
-        )
-    append_summary("".join(summary_lines))
+    append_summary(f"\n### Determinism checks ({arch})\n\n{render_summary_table(report)}")
 
     if unavailable:
         print(f"::warning::Determinism results unavailable for {len(unavailable)} benchmark(s) on {arch}.")
