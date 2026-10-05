@@ -330,7 +330,7 @@ def _is_determinism_check_enabled(exp: Experiment) -> bool:
     is enabled by the experiment config.
     """
     # global overrider
-    if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_REPORT", "0") == "1":
+    if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_CHECK", "0") == "1":
         return True
 
     ret = False
@@ -714,7 +714,7 @@ def main():
     override_args = json.loads(args.override_args_json)
     # assumes `override_args` aren't mutated in the loop below
 
-    if env_enabled(os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_CHECK", "0")):
+    if os.environ.get("CI_RUN_PY_FORCE_DETERMINISM_CHECK", "0") == "1":
         if "determinism_check" not in override_args:
             override_args["determinism_check"] = 1  # this will enable the check
         if "determinism_check_report_ranks" not in override_args:
