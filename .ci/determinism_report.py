@@ -1,13 +1,15 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Schema, I/O, and presentation for the xFuser determinism check report.
+"""Schema and I/O for the xFuser determinism check report.
 
 Written by ``run.py`` after each experiment that ran with the determinism
 check enabled, and read by ``.github/actions/check-determinism-report`` to
 decide whether a benchmark run's architecture should be treated as failed.
-Both sides import this module so the report's shape, and how it's rendered,
-has a single definition.
+Both sides import this module so the report's shape has a single definition.
+This module deliberately holds only raw data and its I/O: how a report gets
+rendered (e.g. icons, summary tables) and what counts as a failure are
+policy decisions left to the action that consumes the report.
 """
 
 import json
@@ -21,13 +23,6 @@ STATUS_PASSED = "passed"
 STATUS_FAILED = "failed"
 STATUS_ERROR = "error"
 STATUS_UNAVAILABLE = "unavailable"
-
-_STATUS_ICONS = {
-    STATUS_PASSED: "✅",
-    STATUS_FAILED: "❌",
-    STATUS_ERROR: "⚠️",
-    STATUS_UNAVAILABLE: "❓",
-}
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -124,61 +119,3 @@ def load_report(results_directory: Path) -> Optional[Dict[str, Any]]:
     if not path.is_file():
         return None
     return json.loads(path.read_text())
-
-
-def failed_entries(report: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Return the entries whose determinism check failed.
-
-    Args:
-        report: A report as returned by `load_report`.
-
-    Returns:
-        The subset of `report`'s ``experiments`` with status `STATUS_FAILED`.
-    """
-    return [e for e in report.get("experiments", []) if e.get("status") == STATUS_FAILED]
-
-
-def unavailable_entries(report: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Return entries whose determinism check result couldn't be obtained.
-
-    Args:
-        report: A report as returned by `load_report`.
-
-    Returns:
-        The subset of `report`'s ``experiments`` with status
-        `STATUS_UNAVAILABLE` or `STATUS_ERROR`.
-    """
-    return [e for e in report.get("experiments", []) if e.get("status") in (STATUS_UNAVAILABLE, STATUS_ERROR)]
-
-
-def status_icon(status: str) -> str:
-    """Return the icon representing a determinism check status.
-
-    Args:
-        status: One of the ``STATUS_*`` constants. `STATUS_ERROR` gets a
-            warning icon (something went wrong while checking);
-            `STATUS_UNAVAILABLE` gets a question mark (a result is missing
-            when one was expected). Any other value falls back to the
-            warning icon.
-
-    Returns:
-        A single emoji character summarising the status.
-    """
-    return _STATUS_ICONS.get(status, "⚠️")
-
-
-def render_summary_table(report: Dict[str, Any]) -> str:
-    """Render a Markdown table mapping benchmark name to determinism result.
-
-    Args:
-        report: A report as returned by `load_report`.
-
-    Returns:
-        A Markdown table with one row per experiment, with the status
-        rendered as an icon (see `status_icon`), suitable for appending to a
-        GitHub Actions job summary.
-    """
-    lines = ["| Benchmark | Result |", "| --- | --- |"]
-    for entry in report.get("experiments", []):
-        lines.append(f"| {entry.get('name', '?')} | {status_icon(entry.get('status', ''))} |")
-    return "\n".join(lines) + "\n"
