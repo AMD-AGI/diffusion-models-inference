@@ -7,13 +7,18 @@ set -euo pipefail
 # Run xDiT benchmarks in a Docker container.
 # Expects env vars: BENCHMARK_ONLY, RUN_PY_FLAGS, INPUT_BENCHMARK_FLAGS,
 #   OUTPUT_DIR, ARCH, HF_CACHE_ARGS, HF_TOKEN, DOCKER_IMAGE,
-#   COLLECT_HIPBLASLT_LOGS
+#   COLLECT_HIPBLASLT_LOGS, FORCE_DETERMINISM_CHECK
 
 MIOPEN_USER_DB_PATH_ARGS=()
 if [ "$BENCHMARK_ONLY" != "true" ]; then
   MIOPEN_USER_DB_PATH_ARGS=(
     -e "MIOPEN_USER_DB_PATH=$GITHUB_WORKSPACE/data/miopen/userdb"
   )
+fi
+
+DETERMINISM_ARGS=()
+if [ "${FORCE_DETERMINISM_CHECK:-false}" = "true" ]; then
+  DETERMINISM_ARGS=(-e CI_RUN_PY_FORCE_DETERMINISM_CHECK=1)
 fi
 
 HF_CACHE_DOCKER_ARGS=()
@@ -40,6 +45,7 @@ docker run \
   --mount type=bind,src="$RUNNER_WORK_ROOT",dst="$RUNNER_WORK_ROOT" \
   "${HF_CACHE_DOCKER_ARGS[@]}" \
   "${MIOPEN_USER_DB_PATH_ARGS[@]}" \
+  "${DETERMINISM_ARGS[@]}" \
   -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
   -e OMP_NUM_THREADS=16 \
   -e HF_TOKEN="$HF_TOKEN" \
