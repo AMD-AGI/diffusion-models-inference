@@ -1,0 +1,71 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Run Remote Benchmark
+description: Benchmark an existing image on an external cluster and stream results back
+
+inputs:
+  image_tag:
+    description: 'Image tag (short git SHA) of the image to benchmark'
+    required: true
+  gpu_arch:
+    description: 'GPU architecture to target (e.g. mi350p, gfx1201)'
+    required: true
+  benchmark_flags:
+    description: 'Flags used to filter benchmarks, leave empty to run all. Only --tag and --name are accepted. Examples: --tag release; or --name CONFIG_NAME to run a specific named config.'
+    required: false
+    default: ''
+  cpu:
+    description: "CPU cores to request; 'default' keeps the executor's configured value"
+    required: false
+    default: 'default'
+  memory:
+    description: "Memory to request; 'default' keeps the executor's configured value"
+    required: false
+    default: 'default'
+  gpu:
+    description: "GPUs to request; 'default' keeps the executor's configured value"
+    required: false
+    default: 'default'
+
+runs:
+  using: composite
+  steps:
+    - name: Run remote benchmark
+      shell: bash
+      env:
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        GPU_ARCH: ${{ inputs.gpu_arch }}
+        BENCHMARK_FLAGS: ${{ inputs.benchmark_flags }}
+        REQUEST_CPU: ${{ inputs.cpu }}
+        REQUEST_MEMORY: ${{ inputs.memory }}
+        REQUEST_GPU: ${{ inputs.gpu }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+      # Invoked through bash so the step does not depend on the checkout
+      # preserving the executable bit.
+      run: bash "${{ github.action_path }}/scripts/run-remote-benchmark.sh"
+
+    # Cancellation only: a workload that ended on its own has nothing left to
+    # free, and deleting it would discard the status and artifacts needed to
+    # work out why it failed. TTL cleans those up instead.
+    - name: Stop remote workload
+      if: cancelled()
+      shell: bash
+      env:
+        GPU_ARCH: ${{ inputs.gpu_arch }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: |
+        REQUESTS_DIR="/home/runner/kube-requests"
+        RUN_KEY="${RUN_ID}-${RUN_ATTEMPT}-${GPU_ARCH}"
+        if [ ! -d "$REQUESTS_DIR" ]; then
+          echo "No request volume on this runner; nothing to stop."
+          exit 0
+        fi
+        if [ ! -f "${REQUESTS_DIR}/job-${RUN_KEY}.json" ]; then
+          echo "No request was submitted; nothing to stop."
+          exit 0
+        fi
+        : > "${REQUESTS_DIR}/cancel-${RUN_KEY}"
+        echo "Asked the executor to stop the remote workload for ${RUN_KEY}."
