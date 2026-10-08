@@ -1,0 +1,115 @@
+{
+  "subjects": [
+    {
+      "description": "A russet fox with a full winter coat, black lower legs, and a white-tipped tail walking along a packed snow path.",
+      "appearance_details": "Frost on the guard hairs, amber eyes, breath visible in the cold air. Paw prints trail behind it in the packed snow.",
+      "relationship": "Primary subject moving through the forest",
+      "location": "Center of frame on the trail",
+      "relative_size": "Large within frame",
+      "orientation": "Approaching the camera, body angled slightly to the left",
+      "pose": "Four-beat walk with the tail held level",
+      "action": "Walking the trail, pausing once to scent the air, then continuing",
+      "state_changes": "Snow on the coat sheds in small clumps as the fox moves; breath plumes appear and fade",
+      "clothing": "",
+      "expression": "Alert, ears forward",
+      "gender": "",
+      "age": "adult",
+      "skin_tone_and_texture": "",
+      "facial_features": "Narrow muzzle, black nose, whiskers catching frost",
+      "number_of_subjects": 1,
+      "number_of_arms": 0,
+      "number_of_legs": 4
+    },
+    {
+      "description": "A snow-covered pine forest flanking a narrow packed trail, with a pale gold dawn sky between the trunks.",
+      "appearance_details": "Blue shadows in the drifts, snow clinging to needles, scattered fallen cones along the path edge.",
+      "relationship": "Environment surrounding the fox",
+      "location": "Full background and both sides of the trail",
+      "relative_size": "Fills the frame beyond the fox",
+      "orientation": "Vertical trunks receding in perspective",
+      "pose": "Stationary woodland",
+      "action": "Loose snow drifts from branches in a light breeze",
+      "state_changes": "Dawn light warms from cool blue to a faint gold on the upper trunks",
+      "clothing": "",
+      "expression": "",
+      "gender": "",
+      "age": "",
+      "skin_tone_and_texture": "",
+      "facial_features": "",
+      "number_of_subjects": 0,
+      "number_of_arms": 0,
+      "number_of_legs": 0
+    }
+  ],
+  "background_setting": "A quiet boreal trail at dawn. Packed snow underfoot, deep powder in the understory, and tall pines forming a corridor. No buildings, vehicles, or people.",
+  "lighting": {
+    "conditions": "Soft dawn light, low sun not yet in frame, cool shadows with a warm rim on snow-facing trunks",
+    "direction": "Key light from the far end of the trail, slightly above and ahead of the fox",
+    "shadows": "Long, soft shadows of trunks across the path; the fox casts a short shadow to its right",
+    "illumination_effect": "Clear winter morning with gentle contrast and visible breath in the cold air"
+  },
+  "aesthetics": {
+    "composition": "Fox centered on the trail with converging pine trunks leading into the distance",
+    "color_scheme": "Russet, cream, pine green, and cool white with a hint of dawn gold",
+    "mood_atmosphere": "Calm, cold, observational wildlife footage",
+    "patterns": "Repeating vertical trunks and textured snow"
+  },
+  "cinematography": {
+    "camera_motion": "Slow lateral track matching the fox's walk, with a slight push-in during the scent pause",
+    "framing": "Medium-wide shot holding the fox and nearby trunks",
+    "camera_angle": "Eye level with the fox, roughly 50 cm above the snow",
+    "depth_of_field": "Moderate",
+    "focus": "Sharp on the fox's face and forelegs; distant trees slightly soft",
+    "lens_focal_length": "35mm equivalent"
+  },
+  "style_medium": "Live-action video",
+  "artistic_style": "Naturalistic wildlife cinematography",
+  "context": "A short text-to-video benchmark clip of a fox walking a snowy pine trail at dawn",
+  "actions": [
+    {
+      "time": "0:00-0:02",
+      "description": "The fox enters along the packed trail, walking toward the camera with a steady gait"
+    },
+    {
+      "time": "0:02-0:03",
+      "description": "The fox stops, lifts its muzzle, and scents the air while snow falls from a nearby branch"
+    },
+    {
+      "time": "0:03-0:05",
+      "description": "The fox resumes walking; the camera keeps pace as dawn light warms the far trunks"
+    }
+  ],
+  "text_and_signage_elements": [],
+  "segments": [
+    {
+      "segment_index": 0,
+      "time_range": "0:00-0:02",
+      "description": "Approach along the trail",
+      "key_changes": "Fox becomes the clear subject; paw prints accumulate behind it",
+      "camera": "Lateral track at walking speed"
+    },
+    {
+      "segment_index": 1,
+      "time_range": "0:02-0:03",
+      "description": "Scent pause",
+      "key_changes": "Motion of the body stops; head lifts; a breath plume appears",
+      "camera": "Slight push-in, still eye level"
+    },
+    {
+      "segment_index": 2,
+      "time_range": "0:03-0:05",
+      "description": "Walk resumes to the end of the clip",
+      "key_changes": "Gait returns; more snow sheds from the coat",
+      "camera": "Track resumes, holding center framing"
+    }
+  ],
+  "transitions": [],
+  "temporal_caption": "At dawn a russet fox walks a packed snow trail between pines. In the first two seconds it approaches at a steady walk. Around two to three seconds it pauses and scents the air, breath visible in the cold. In the last two seconds it continues forward as the camera tracks beside it and the sky brightens between the trunks.",
+  "resolution": {
+    "W": 1280,
+    "H": 720
+  },
+  "aspect_ratio": "16,9",
+  "duration": "5s",
+  "fps": 24
+}

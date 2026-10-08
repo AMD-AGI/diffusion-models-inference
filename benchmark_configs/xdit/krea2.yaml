@@ -1,0 +1,17 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: krea2_turbo.default
+  tags: [release, instinct, gfx942, gfx950]
+  model: krea/Krea-2-Turbo
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A fox walking in the snow
+    height: 2048
+    width: 2048
+    num_inference_steps: 8
+    ulysses_degree: 8
+    use_torch_compile: true
+    num_iterations: 1
+    attention_backend: aiter
