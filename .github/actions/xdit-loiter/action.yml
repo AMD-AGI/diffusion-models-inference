@@ -1,0 +1,47 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Watch and dispatch xDiT hardware tests'
+description: 'Waits for an allowed xDiT workflow run and dispatches the hardware workflow'
+
+inputs:
+  github_token:
+    description: 'Token used to read public Actions data and dispatch workflows'
+    required: true
+  xdit_repo:
+    description: 'Upstream xDiT repository'
+    required: true
+  xdit_workflow:
+    description: 'Workflow filename in the xDiT repository'
+    required: true
+  heavy_workflow:
+    description: 'Hardware workflow filename in this repository'
+    required: true
+  self_workflow:
+    description: 'Poller workflow filename in this repository'
+    required: true
+  poll_interval_seconds:
+    description: 'Delay between xDiT Actions API polls'
+    required: true
+  loiter_seconds:
+    description: 'Maximum time to watch before handing over to a fresh poller'
+    required: true
+  allowed_actors:
+    description: 'Comma-separated xDiT actor logins allowed to use GPU capacity'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Watch xDiT and dispatch hardware test
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        XDIT_REPO: ${{ inputs.xdit_repo }}
+        XDIT_WORKFLOW: ${{ inputs.xdit_workflow }}
+        HEAVY_WORKFLOW: ${{ inputs.heavy_workflow }}
+        SELF_WORKFLOW: ${{ inputs.self_workflow }}
+        POLL_INTERVAL_SECONDS: ${{ inputs.poll_interval_seconds }}
+        LOITER_SECONDS: ${{ inputs.loiter_seconds }}
+        ALLOWED_ACTORS: ${{ inputs.allowed_actors }}
+      run: bash "${{ github.action_path }}/scripts/loiter.sh"

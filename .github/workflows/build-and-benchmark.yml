@@ -14,6 +14,10 @@ on:
         description: 'Image tag or full Docker Hub path'
         required: false
         default: ''
+      image_tag:
+        description: 'Image tag override; defaults to the checked-out repository short SHA'
+        required: false
+        default: ''
       rebuild:
         description: '(Re)build the image, on by default if base_image is empty'
         type: boolean
@@ -39,14 +43,6 @@ on:
         type: boolean
         required: false
         default: false
-      miopen_find_mode:
-        description: 'MIOpen find mode (integer)'
-        required: false
-        default: '1'
-      miopen_find_enforce:
-        description: 'MIOpen find enforce (integer)'
-        required: false
-        default: '3'
       force_retuning:
         description: 'Force full retuning (delete existing tuning databases before tuning)'
         type: boolean
@@ -83,6 +79,95 @@ on:
         description: 'Comma-separated list of GPU runner labels'
         required: true
         default: 'gfx942,gfx950'
+  workflow_call:
+    inputs:
+      git_branch:
+        description: 'Git branch to build from'
+        required: false
+        type: string
+        default: ''
+      base_image:
+        description: 'Image tag or full Docker Hub path'
+        required: false
+        type: string
+        default: ''
+      image_tag:
+        description: 'Image tag override; defaults to the checked-out repository short SHA'
+        required: false
+        type: string
+        default: ''
+      rebuild:
+        description: 'Rebuild the image when a base image is supplied'
+        required: false
+        type: boolean
+        default: false
+      run_miopen_tuning:
+        description: 'Run MIOpen tuning'
+        required: false
+        type: boolean
+        default: true
+      run_benchmarks:
+        description: 'Run benchmarks'
+        required: false
+        type: boolean
+        default: true
+      build_final:
+        description: 'Build the final tuned image'
+        required: false
+        type: boolean
+        default: true
+      create_miopen_db_branch:
+        description: 'Create MIOpen DB branch'
+        required: false
+        type: boolean
+        default: false
+      force_retuning:
+        description: 'Force full retuning'
+        required: false
+        type: boolean
+        default: false
+      benchmark_flags:
+        description: 'Flags used to filter benchmarks'
+        required: false
+        type: string
+        default: ''
+      collect_hipblaslt_logs:
+        description: 'Collect hipBLASLt logs per benchmark'
+        required: false
+        type: boolean
+        default: false
+      disable_docker_cache:
+        description: 'Disable Docker cache on core build'
+        required: false
+        type: boolean
+        default: false
+      build_runner:
+        description: 'Runner label for build jobs'
+        required: false
+        type: string
+        default: 'build-only'
+      cache_scope:
+        description: 'Layer cache scope'
+        required: false
+        type: string
+        default: ''
+      gpu_runners:
+        description: 'Comma-separated list of GPU runner labels'
+        required: false
+        type: string
+        default: 'gfx942,gfx950'
+      docker_build_args:
+        description: 'Newline-separated Docker build arguments in KEY=VALUE form'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      DOCKERHUB_ORGANIZATION:
+        required: true
+      DOCKERHUB_OAT:
+        required: true
+      HF_TOKEN:
+        required: true
 
 permissions:
   contents: write
@@ -117,8 +202,10 @@ jobs:
 
       - name: Generate image tag
         id: generate_tag
+        env:
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
         run: |
-          IMAGE_TAG=$(git rev-parse --short HEAD)
+          IMAGE_TAG="${IMAGE_TAG_INPUT:-$(git rev-parse --short HEAD)}"
           {
             echo "tag=${IMAGE_TAG}"
             echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}"
@@ -232,6 +319,7 @@ jobs:
       prebuilt_core_image_tag: ${{ inputs.base_image }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache }}
+      docker_build_args: ${{ inputs.docker_build_args }}
       runner: ${{ inputs.build_runner || vars.BUILD_RUNNER || 'build-only' }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
@@ -323,8 +411,6 @@ jobs:
           image: ${{ steps.metadata.outputs.working_image }}
           arch: ${{ matrix.arch }}
           artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
-          miopen_find_mode: ${{ inputs.miopen_find_mode }}
-          miopen_find_enforce: ${{ inputs.miopen_find_enforce }}
           force_retuning: ${{ inputs.force_retuning }}
       
       - name: Run benchmarks
@@ -442,12 +528,19 @@ jobs:
           BUILDKIT_PROGRESS: plain
           WORKING_IMAGE: ${{ steps.metadata.outputs.working_image }}
           IMAGE_TAG: ${{ steps.metadata.outputs.staging_image_with_tag }}
+          DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
           CACHE_FROM_FLAGS: ${{ steps.final_cache.outputs.cache_from_flags }}
         run: |
+          BUILD_ARGS=()
+          while IFS= read -r build_arg; do
+            [[ -z "${build_arg}" ]] || BUILD_ARGS+=(--build-arg "${build_arg}")
+          done <<< "${DOCKER_BUILD_ARGS}"
+
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             ${CACHE_FROM_FLAGS} \
+            "${BUILD_ARGS[@]}" \
             -t "${IMAGE_TAG}" \
             --push \
             .

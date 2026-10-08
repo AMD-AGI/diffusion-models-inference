@@ -54,6 +54,11 @@ on:
         required: false
         type: boolean
         default: false
+      docker_build_args:
+        description: 'Newline-separated Docker build arguments in KEY=VALUE form'
+        required: false
+        type: string
+        default: ''
     outputs:
       core_image_with_tag:
         description: 'Full core image with tag'
@@ -133,10 +138,16 @@ jobs:
         env:
           BUILDKIT_PROGRESS: plain
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
+          DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
           CACHE_IMAGE: ${{ steps.images.outputs.cache_source }}
           CACHE_FROM_FLAGS: ${{ steps.core_cache.outputs.cache_from_flags }}
           CACHE_TO_FLAG: ${{ steps.core_cache.outputs.cache_to_flag }}
         run: |
+          BUILD_ARGS=()
+          while IFS= read -r build_arg; do
+            [[ -z "${build_arg}" ]] || BUILD_ARGS+=(--build-arg "${build_arg}")
+          done <<< "${DOCKER_BUILD_ARGS}"
+
           NO_CACHE_FLAG=""
           if [ "${DISABLE_CACHE}" = "true" ]; then
             NO_CACHE_FLAG="--no-cache"
@@ -154,6 +165,7 @@ jobs:
             ${NO_CACHE_FLAG} \
             ${CACHE_FROM_FLAGS} \
             ${CACHE_TO_FLAG} \
+            "${BUILD_ARGS[@]}" \
             -t "${CACHE_IMAGE}" \
             .
       
@@ -199,14 +211,21 @@ jobs:
         if: ${{ inputs.build_untuned_image }}
         env:
           BUILDKIT_PROGRESS: plain
+          DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
           CACHE_FROM_FLAGS: ${{ steps.untuned_cache.outputs.cache_from_flags }}
           IMAGE_TAG: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
         run: |
+          BUILD_ARGS=()
+          while IFS= read -r build_arg; do
+            [[ -z "${build_arg}" ]] || BUILD_ARGS+=(--build-arg "${build_arg}")
+          done <<< "${DOCKER_BUILD_ARGS}"
+
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             --push \
             ${CACHE_FROM_FLAGS} \
+            "${BUILD_ARGS[@]}" \
             -t "${IMAGE_TAG}" \
             .
       

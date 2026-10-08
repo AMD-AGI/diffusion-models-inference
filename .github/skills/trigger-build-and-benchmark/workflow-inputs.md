@@ -8,6 +8,7 @@ Complete reference for all `build-and-benchmark.yml` workflow_dispatch inputs.
 |---|---|---|---|
 | `git_branch` | string | `''` | Git branch to build from. Empty uses the repo default branch. |
 | `base_image` | string | `''` | Tag or full Docker Hub path to start from. Empty always forces a rebuild. |
+| `image_tag` | string | `''` | Override the built image tag. Empty uses the checked-out repository short SHA. |
 | `rebuild` | boolean | `false` | Attempt to rebuild the image using `base_image` as a prebuilt core image. Forced on when `base_image` is empty. With `base_image` set, this uses it as a build cache source (bare tag against the core image) instead of using it directly. May trigger full rebuild if `base_image` has drifted from the branch the workflow has been dispatched from. |
 
 ### Build source behavior
@@ -35,8 +36,6 @@ benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `miopen_find_mode` | string | `1` | MIOpen find mode (integer). Almost never changed. |
-| `miopen_find_enforce` | string | `3` | MIOpen find enforce (integer). Almost never changed. |
 | `force_retuning` | boolean | `false` | Delete existing tuning databases before tuning. |
 
 ## Benchmark Control
@@ -49,6 +48,7 @@ benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
 | `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. The cache is still re-exported, so this is how a stale cache gets replaced. |
 | `cache_scope` | string | `''` | Layer cache scope. Defaults to the built branch, so only builds of `main` touch the mainline cache. Set it to isolate a test build launched from `main`. |
 | `build_runner` | string | `''` | Runner label for the build jobs (core/untuned build, final image build, MIOpen branch). Empty uses the repository default. |
+| `docker_build_args` | string | `''` | Newline-separated Docker build arguments in `KEY=VALUE` form. |
 
 ## GPU Runners
 

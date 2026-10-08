@@ -1,0 +1,158 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Runs the full build, MIOpen tuning, and filtered benchmark pipeline on behalf of xDiT.
+name: xDiT Hardware Compat
+run-name: "xDiT compat ${{ inputs.xdit_sha }} [xdit-run:${{ inputs.xdit_run_id }}]"
+
+on:
+  workflow_dispatch:
+    inputs:
+      xdit_sha:
+        description: 'xDiT commit SHA under test'
+        required: true
+      benchmarks:
+        description: 'Comma-separated benchmark names requested by xDiT'
+        required: true
+      architectures:
+        description: 'Comma-separated GPU architectures requested by xDiT'
+        required: true
+      xdit_run_id:
+        description: 'Original xDiT run ID waiting on this workflow'
+        required: true
+      amd_ref:
+        description: 'AMD-AGI branch or release tag used as the image build context'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  prepare:
+    name: Prepare xDiT image tag
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      image: ${{ steps.tag.outputs.image }}
+      benchmark_flags: ${{ steps.benchmarks.outputs.benchmark_flags }}
+      architectures: ${{ steps.architectures.outputs.architectures }}
+    steps:
+      - name: Create image tag
+        id: tag
+        env:
+          XDIT_SHA: ${{ inputs.xdit_sha }}
+          XDIT_RUN_ID: ${{ inputs.xdit_run_id }}
+          STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+        run: |
+          if [[ ! "$XDIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::Invalid xDiT SHA: '${XDIT_SHA}'"
+            exit 1
+          fi
+          if [[ ! "$XDIT_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid xDiT run ID: '${XDIT_RUN_ID}'"
+            exit 1
+          fi
+          image_tag="xdit-${XDIT_SHA:0:7}-${XDIT_RUN_ID}"
+          {
+            echo "image_tag=${image_tag}"
+            echo "image=${STAGING_IMAGE}:${image_tag}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate benchmark names
+        id: benchmarks
+        env:
+          REQUESTED_BENCHMARKS: ${{ inputs.benchmarks }}
+        run: |
+          set -euo pipefail
+          benchmark_flags=()
+          IFS=',' read -r -a requested <<< "$REQUESTED_BENCHMARKS"
+          for name in "${requested[@]}"; do
+            name=${name#"${name%%[![:space:]]*}"}
+            name=${name%"${name##*[![:space:]]}"}
+            if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+              echo "::error::Invalid benchmark name: '${name}'"
+              exit 1
+            fi
+            benchmark_flags+=(--name "$name")
+          done
+          if [ "${#benchmark_flags[@]}" -eq 0 ]; then
+            echo "::error::At least one benchmark name is required"
+            exit 1
+          fi
+          echo "benchmark_flags=${benchmark_flags[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate architectures
+        id: architectures
+        env:
+          REQUESTED_ARCHITECTURES: ${{ inputs.architectures }}
+        run: |
+          set -euo pipefail
+          architectures=()
+          IFS=',' read -r -a requested <<< "$REQUESTED_ARCHITECTURES"
+          for architecture in "${requested[@]}"; do
+            architecture=${architecture#"${architecture%%[![:space:]]*}"}
+            architecture=${architecture%"${architecture##*[![:space:]]}"}
+            if [[ ! "$architecture" =~ ^(gfx942|gfx950)$ ]]; then
+              echo "::error::Invalid architecture: '${architecture}'"
+              exit 1
+            fi
+            architectures+=("$architecture")
+          done
+          if [ "${#architectures[@]}" -eq 0 ]; then
+            echo "::error::At least one architecture is required"
+            exit 1
+          fi
+          sanitized_architectures=$(IFS=,; echo "${architectures[*]}")
+          echo "architectures=${sanitized_architectures}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate AMD ref
+        env:
+          AMD_REF: ${{ inputs.amd_ref }}
+        run: |
+          if [[ ! "$AMD_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] ||
+             ! git check-ref-format "refs/heads/${AMD_REF}" >/dev/null 2>&1; then
+            echo "::error::Invalid AMD ref: '${AMD_REF}'"
+            exit 1
+          fi
+
+  build-image:
+    name: Build xDiT image
+    needs: [prepare]
+    uses: ./.github/workflows/build-core-image-reusable.yml
+    with:
+      git_ref: ${{ inputs.amd_ref }}
+      image_tag: ${{ needs.prepare.outputs.image_tag }}
+      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
+      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      cache_scope: 'xdit-external'
+      build_untuned_image: true
+      docker_build_args: |
+        XDIT_COMMIT=${{ inputs.xdit_sha }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  compat:
+    needs: [prepare, build-image]
+    uses: ./.github/workflows/build-and-benchmark.yml
+    with:
+      git_branch: ${{ inputs.amd_ref }}
+      base_image: ${{ needs.build-image.outputs.staging_image_with_tag }}
+      image_tag: ${{ needs.prepare.outputs.image_tag }}
+      rebuild: false
+      run_miopen_tuning: true
+      run_benchmarks: true
+      build_final: true
+      create_miopen_db_branch: false
+      benchmark_flags: ${{ needs.prepare.outputs.benchmark_flags }}
+      cache_scope: 'xdit-external'
+      docker_build_args: |
+        XDIT_COMMIT=${{ inputs.xdit_sha }}
+      gpu_runners: ${{ needs.prepare.outputs.architectures }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+      HF_TOKEN: ${{ secrets.XDIT_HF_TOKEN }}

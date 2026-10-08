@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # Run MIOpen kernel tuning in a Docker container.
-# Expects env vars: ARCH, FORCE_RETUNING, MIOPEN_FIND_MODE, MIOPEN_FIND_ENFORCE, DOCKER_IMAGE
+# Expects env vars: ARCH, FORCE_RETUNING, DOCKER_IMAGE
 
 rm -f .tuning_successful
 RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
@@ -26,8 +26,8 @@ docker run \
   -e FORCE_RETUNING="$FORCE_RETUNING" \
   -e ROOTDIR="$GITHUB_WORKSPACE" \
   -e MIOPEN_USER_DB_PATH="$GITHUB_WORKSPACE/data/miopen/userdb" \
-  -e MIOPEN_FIND_MODE="$MIOPEN_FIND_MODE" \
-  -e MIOPEN_FIND_ENFORCE="$MIOPEN_FIND_ENFORCE" \
+  -e MIOPEN_FIND_MODE="1" \
+  -e MIOPEN_FIND_ENFORCE="3" \
   -e HOST_UID="$(id -u)" \
   -e HOST_GID="$(id -g)" \
   -e GITHUB_WORKSPACE \
