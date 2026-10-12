@@ -23,7 +23,7 @@ Complete the shared [repository skill preflight](../preflight/SKILL.md) before c
    2.2. [Resolve PRs associated with each commit](./commands.md#resolve-associated-prs)
    2.3. If no public PR is associated, retain the commit SHA, subject, and changed files. Never
         convert a historical `#N` subject into a public PR link without API confirmation.
-   2.4. [Diff dependency commit values](./commands.md#diff-dependency-commits) in `docker/Dockerfile.ci`
+   2.4. [Diff dependency pins](./commands.md#diff-dependency-pins) in `docker/Dockerfile.ci`
    2.5. For each changed commit hash, [look up upstream changes](./commands.md#look-up-upstream-changes) using the repo mapping
 3. **Categorize each PR** by changed file paths per [categorization rules](./categorization.md)
    3.1. Included (affect image): New Model, Performance, Docker/Environment, Benchmark Configs, Libraries
