@@ -9,7 +9,6 @@ import argparse
 import numpy as np
 import subprocess
 import re
-from PIL import Image
 
 from sglang.multimodal_gen import DiffGenerator
 
@@ -379,7 +378,7 @@ def run_cli(args):
         "output-path": args.output_directory,
     }
 
-    values = {key:value for key, value in values.items() if value != None}
+    values = {key:value for key, value in values.items() if value is not None}
 
     for key, value in values.items():
         cmd.extend([f"--{key}", str(value)])
