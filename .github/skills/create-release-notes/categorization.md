@@ -36,7 +36,7 @@ File patterns:
 
 ### Libraries / Dependencies
 File patterns:
-- Changes to version pins in `docker/Dockerfile.ci` (ARG lines for commits)
+- Changes to version pins in `docker/Dockerfile.ci`: `*_COMMIT` ARG lines, and `pip install` lines that pin a package to an explicit version (`package==version`)
 - Patch files under `patches/` that are referenced by `docker/Dockerfile.ci`
 
 Note: unrelated source tooling is excluded unless it changes the image build.
