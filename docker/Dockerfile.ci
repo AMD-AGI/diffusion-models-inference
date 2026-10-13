@@ -35,7 +35,6 @@ ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
 ARG XDIT_COMMIT="4865f4e48fffb5aca2f507647305e8b427b391dc"
-ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
 FROM ${BASE_IMAGE} AS base_os
@@ -103,7 +102,7 @@ FROM base_os AS base
 ARG PYTHON_VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Shared fetch/compiler tools. Native extensions in core (AITER, torchao)
+# Shared fetch/compiler tools. Native extensions in core (AITER)
 # and the torch/ffmpeg builders still need a host toolchain.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     build-essential \
@@ -453,7 +452,6 @@ ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
-ARG AO_COMMIT
 ARG ARBITER_COMMIT
 
 # setup
@@ -477,10 +475,7 @@ RUN git clone https://github.com/huggingface/diffusers.git && \
     rm scripts/convert_vq_diffusion_to_diffusers.py && \
     pip install --no-cache-dir "ftfy"
 # install torchao
-RUN git clone https://github.com/pytorch/ao.git && \
-    cd ao && \
-    git reset --hard ${AO_COMMIT} && \
-    pip install -e . --no-build-isolation
+RUN pip install --no-cache-dir "torchao==0.18.0"
 # install arbiter
 RUN git clone https://github.com/fal-ai/arbiter.git && \
     cd arbiter && \
