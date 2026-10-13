@@ -14,14 +14,6 @@ inputs:
   artifact_name:
     description: 'Full artifact name for upload'
     required: true
-  miopen_find_mode:
-    description: 'MIOpen find mode (integer)'
-    required: false
-    default: '1'
-  miopen_find_enforce:
-    description: 'MIOpen find enforce (integer)'
-    required: false
-    default: '3'
   force_retuning:
     description: 'Force full retuning (delete existing tuning databases before tuning)'
     required: false
@@ -35,8 +27,6 @@ runs:
       env:
         ARCH: ${{ inputs.arch }}
         FORCE_RETUNING: ${{ inputs.force_retuning }}
-        MIOPEN_FIND_MODE: ${{ inputs.miopen_find_mode }}
-        MIOPEN_FIND_ENFORCE: ${{ inputs.miopen_find_enforce }}
         DOCKER_IMAGE: ${{ inputs.image }}
       run: ${{ github.action_path }}/scripts/run-tuning.sh
     

@@ -27,16 +27,6 @@ on:
         required: false
         type: number
         default: 1440
-      miopen_find_mode:
-        description: 'MIOpen find mode (integer)'
-        required: false
-        type: string
-        default: '1'
-      miopen_find_enforce:
-        description: 'MIOpen find enforce (integer)'
-        required: false
-        type: string
-        default: '3'
       force_retuning:
         description: 'Force full retuning (delete existing tuning databases before tuning)'
         required: false
@@ -85,8 +75,6 @@ jobs:
           image: ${{ inputs.image }}
           arch: ${{ inputs.arch }}
           artifact_name: ${{ inputs.artifact_name }}
-          miopen_find_mode: ${{ inputs.miopen_find_mode }}
-          miopen_find_enforce: ${{ inputs.miopen_find_enforce }}
           force_retuning: ${{ inputs.force_retuning }}
 
       - name: Image cleanup

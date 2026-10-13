@@ -24,7 +24,6 @@ When presenting the command, highlight:
 ## 3. Validation rules
 
 - `gpu_runners` must contain at least one non-empty comma-separated runner label
-- `miopen_find_mode` and `miopen_find_enforce` must be integers
 - Boolean values must be `true` or `false`
 - `benchmark_flags` must not combine `--name` and `--tag`
 

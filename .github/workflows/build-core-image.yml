@@ -44,6 +44,10 @@ on:
         description: "Layer cache scope. Defaults to the branch name, so only builds of main touch the mainline cache; set it to isolate a test build launched from main."
         required: false
         default: ""
+      docker_build_args:
+        description: "Newline-separated Docker build arguments in KEY=VALUE form"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -74,6 +78,7 @@ jobs:
                 "runner": "${{ inputs.runner || 'build-only' }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
                 "force_trigger_tuning": "${{ inputs.force_trigger_tuning || 'false' }}",
+                "docker_build_args": "${{ inputs.docker_build_args }}",
                 "cache_scope": "${{ inputs.cache_scope || github.ref_name }}",
                 "cache_image_name": "${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}",
                 "short_sha": "${{ steps.short_sha.outputs.sha }}"
@@ -94,6 +99,7 @@ jobs:
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
+      docker_build_args: ${{ inputs.docker_build_args }}
       runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
