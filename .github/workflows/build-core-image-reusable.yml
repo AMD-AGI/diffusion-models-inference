@@ -145,7 +145,12 @@ jobs:
         run: |
           BUILD_ARGS=()
           while IFS= read -r build_arg; do
-            [[ -z "${build_arg}" ]] || BUILD_ARGS+=(--build-arg "${build_arg}")
+            [[ -z "${build_arg}" ]] && continue
+            if [[ ! "${build_arg}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]] || [[ "${build_arg}" == *$'\r'* ]]; then
+              echo "::error::Invalid Docker build argument syntax"
+              exit 1
+            fi
+            BUILD_ARGS+=(--build-arg "${build_arg}")
           done <<< "${DOCKER_BUILD_ARGS}"
 
           NO_CACHE_FLAG=""
@@ -217,7 +222,12 @@ jobs:
         run: |
           BUILD_ARGS=()
           while IFS= read -r build_arg; do
-            [[ -z "${build_arg}" ]] || BUILD_ARGS+=(--build-arg "${build_arg}")
+            [[ -z "${build_arg}" ]] && continue
+            if [[ ! "${build_arg}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]] || [[ "${build_arg}" == *$'\r'* ]]; then
+              echo "::error::Invalid Docker build argument syntax"
+              exit 1
+            fi
+            BUILD_ARGS+=(--build-arg "${build_arg}")
           done <<< "${DOCKER_BUILD_ARGS}"
 
           docker buildx build \

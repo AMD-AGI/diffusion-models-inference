@@ -15,7 +15,7 @@ env:
   XDIT_WORKFLOW: rocm-hardware-ci.yml
   HEAVY_WORKFLOW: xdit-hardware-compat.yml
   SELF_WORKFLOW: xdit-poller.yml
-  POLL_INTERVAL_SECONDS: '60'
+  POLL_INTERVAL_SECONDS: '300'
   LOITER_SECONDS: '169200'
   ALLOWED_ACTORS: ${{ vars.XDIT_CI_ALLOWED_ACTORS }}
 
