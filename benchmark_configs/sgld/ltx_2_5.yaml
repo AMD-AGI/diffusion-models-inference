@@ -24,7 +24,7 @@
     seed: 42
 
 - name: ltx_2_5.default.hopper.h200
-  tags: [lucid, hopper, h200]
+  tags: [hopper, h200]
   model: Lightricks/LTX-2.5-Diffusers
   runner: python
   entrypoint: /app/.ci/runner.py
@@ -45,7 +45,7 @@
     seed: 42
 
 - name: ltx_2_5.default.blackwell
-  tags: [lucid, blackwell, b200, b300]
+  tags: [blackwell, b200, b300]
   model: Lightricks/LTX-2.5-Diffusers
   runner: python
   entrypoint: /app/.ci/runner.py
