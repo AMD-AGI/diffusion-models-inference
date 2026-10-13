@@ -39,12 +39,16 @@ jobs:
       benchmark_flags: ${{ steps.benchmarks.outputs.benchmark_flags }}
       architectures: ${{ steps.architectures.outputs.architectures }}
     steps:
+      - name: Checkout AMD-AGI ref
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.amd_ref }}
+
       - name: Create image tag
         id: tag
         env:
           XDIT_SHA: ${{ inputs.xdit_sha }}
           XDIT_RUN_ID: ${{ inputs.xdit_run_id }}
-          STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
         run: |
           if [[ ! "$XDIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
             echo "::error::Invalid xDiT SHA: '${XDIT_SHA}'"
@@ -54,10 +58,11 @@ jobs:
             echo "::error::Invalid xDiT run ID: '${XDIT_RUN_ID}'"
             exit 1
           fi
-          image_tag="xdit-${XDIT_SHA:0:7}-${XDIT_RUN_ID}"
+          MAIN_SHA=$(git rev-parse --short=7 HEAD)
+          image_tag="${MAIN_SHA}-${XDIT_SHA:0:7}-${XDIT_RUN_ID}"
           {
             echo "image_tag=${image_tag}"
-            echo "image=${STAGING_IMAGE}:${image_tag}"
+            echo "image=amdsiloai/pytorch-xdit-edge:${image_tag}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate benchmark names
@@ -124,11 +129,9 @@ jobs:
     with:
       git_ref: ${{ inputs.amd_ref }}
       image_tag: ${{ needs.prepare.outputs.image_tag }}
-      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
-      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
-      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      core_image_name: amdsiloai/pytorch-xdit-edge
+      staging_image_name: amdsiloai/pytorch-xdit-edge
       cache_scope: 'xdit-external'
-      build_untuned_image: true
       docker_build_args: |
         XDIT_COMMIT=${{ inputs.xdit_sha }}
     secrets:
