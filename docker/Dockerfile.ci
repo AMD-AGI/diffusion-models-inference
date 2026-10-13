@@ -13,6 +13,7 @@
 ARG BASE_IMAGE="ubuntu:24.04"
 ARG PYTHON_VERSION="default"
 ARG THEROCK_COMMIT="ab56f1f7c5b54746bf9f7948fff3f306b2bef8b2"
+ARG ROCM_PACKAGE_REPOSITORY="legacy"
 ARG ROCM_RELEASE_ID="20260817-31980779979"
 ARG ROCM_DEB_SERIES="10.1"
 # ROCM_GFX_TARGETS selects architecture-specific nightly deb package shards.
@@ -21,9 +22,10 @@ ARG ROCM_GFX_TARGETS="gfx942;gfx950"
 # adds developer tools. --build-arg ROCM_PARENT=rocm_base builds the same
 # product stages without those archives or tools.
 ARG ROCM_PARENT=rocm_devel
-# PYTORCH_ROCM_ARCH is a ";" separated list of values, choices for LLVM targets can
-# be found at https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
-ARG PYTORCH_ROCM_ARCH="gfx942;gfx950"
+# PYTORCH_ROCM_ARCH defaults to the package targets but can be overridden.
+# Values are ";" separated; supported LLVM targets are documented at
+# https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
+ARG PYTORCH_ROCM_ARCH="${ROCM_GFX_TARGETS}"
 ARG TRITON_COMMIT="669b31acc1dd1b3fd93286afd5db67f65d9f7557"
 ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
 ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
@@ -181,14 +183,19 @@ RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 # delete has to be inside the install it applies to: a child cannot drop
 # files from a parent layer, and rocm_devel needs the archives this stage keeps.
 FROM base AS rocm_tree
+ARG ROCM_PACKAGE_REPOSITORY
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS
+COPY docker/configure_rocm_legacy_repo.sh /usr/local/bin/configure_rocm_legacy_repo
+COPY docker/configure_rocm_native_repo.sh /usr/local/bin/configure_rocm_native_repo
 COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
 COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
 COPY docker/setup_rocm_llvm_layout.sh /usr/local/bin/setup_rocm_llvm_layout
 COPY docker/setup_origami_cmake.sh /usr/local/bin/setup_origami_cmake
-RUN chmod +x /usr/local/bin/install_rocm_debs \
+RUN chmod +x /usr/local/bin/configure_rocm_legacy_repo \
+        /usr/local/bin/configure_rocm_native_repo \
+        /usr/local/bin/install_rocm_debs \
         /usr/local/bin/setup_amdsmi \
         /usr/local/bin/setup_rocm_llvm_layout \
         /usr/local/bin/setup_origami_cmake \
@@ -214,14 +221,19 @@ RUN setup_rocm_llvm_layout
 RUN setup_origami_cmake
 
 FROM base AS rocm_base
+ARG ROCM_PACKAGE_REPOSITORY
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS
+COPY docker/configure_rocm_legacy_repo.sh /usr/local/bin/configure_rocm_legacy_repo
+COPY docker/configure_rocm_native_repo.sh /usr/local/bin/configure_rocm_native_repo
 COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
 COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
 COPY docker/setup_rocm_llvm_layout.sh /usr/local/bin/setup_rocm_llvm_layout
 COPY docker/setup_origami_cmake.sh /usr/local/bin/setup_origami_cmake
-RUN chmod +x /usr/local/bin/install_rocm_debs \
+RUN chmod +x /usr/local/bin/configure_rocm_legacy_repo \
+        /usr/local/bin/configure_rocm_native_repo \
+        /usr/local/bin/install_rocm_debs \
         /usr/local/bin/setup_amdsmi \
         /usr/local/bin/setup_rocm_llvm_layout \
         /usr/local/bin/setup_origami_cmake \
@@ -237,6 +249,7 @@ RUN setup_rocm_llvm_layout
 RUN setup_origami_cmake
 
 FROM rocm_tree AS rocm_devel
+ARG ROCM_PACKAGE_REPOSITORY
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
 ARG ROCM_GFX_TARGETS

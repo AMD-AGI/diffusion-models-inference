@@ -11,12 +11,20 @@
 
 ### ROCm nightly packages
 
-`Dockerfile.ci` installs ROCm from a pinned TheRock nightly deb snapshot on the
-[legacy multi-arch native index](https://rocm.nightlies.amd.com/packages-multi-arch/deb/).
-Update `ROCM_RELEASE_ID` and `ROCM_DEB_SERIES` together when moving to a new
-snapshot or ROCm release series. `ROCM_GFX_TARGETS` controls which architecture-specific
-package shards are installed and is independent of `PYTORCH_ROCM_ARCH`, which
-controls the architectures built into PyTorch and related wheels.
+`Dockerfile.ci` supports two generations of TheRock nightly deb repositories:
+
+| `ROCM_PACKAGE_REPOSITORY` | Package index | `ROCM_DEB_SERIES` |
+| --- | --- | --- |
+| `legacy` (default) | [Legacy multi-arch index](https://rocm.nightlies.amd.com/packages-multi-arch/deb/) | Required and defaults to `10.1` |
+| `native` | [Ubuntu 24.04 native index](https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/) | Derived from the snapshot's `amdrocm-runtime-dev` metadata |
+
+The default `ROCM_RELEASE_ID` remains on the legacy index. Select the repository
+explicitly when overriding it; release IDs are not assumed to be portable
+between indexes. The scheduled nightly workflow selects `native`.
+`ROCM_GFX_TARGETS` controls which architecture-specific package shards are
+installed. `PYTORCH_ROCM_ARCH` controls the architectures built into PyTorch
+and related wheels; it defaults to `ROCM_GFX_TARGETS` but can be overridden
+independently.
 
 Leaf packages install under `/opt/rocm/core-<series>`. `rocm_tree` and `rocm_base`
 both register the unversioned `/opt/rocm/{bin,lib,include,...}` links that the
@@ -37,8 +45,14 @@ not depend on `amdrocm-core`. `core` is `FROM ${ROCM_PARENT}`, which defaults to
 is present.
 
 ```sh
-# developer tools included
+# pinned legacy snapshot, developer tools included
 docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
+
+# native Ubuntu 24.04 snapshot
+docker build -f docker/Dockerfile.ci --target final \
+    --build-arg ROCM_PACKAGE_REPOSITORY=native \
+    --build-arg ROCM_RELEASE_ID=20261013-38325106112 \
+    -t pytorch-xdit-native .
 
 # runtime + torch stack + AITER JIT, without developer tools
 docker build -f docker/Dockerfile.ci --target final \
