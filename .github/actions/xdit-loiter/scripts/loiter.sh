@@ -24,10 +24,12 @@ if [[ -z "$allowed" ]]; then
     exit 1
 fi
 
-if ! command -v unzip >/dev/null 2>&1; then
-    echo "::error::unzip is required on the xDiT poller runner."
-    exit 1
-fi
+for tool in gh jq unzip git; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "::error::${tool} is required on the xDiT poller runner."
+        exit 1
+    fi
+done
 
 # Let a heavy workflow dispatched by the previous poller become visible to the runs API.
 sleep 20
@@ -70,7 +72,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
         fi
 
         if ! printf '%s\n' "$allowed" | grep -Fxqi "$actor"; then
-            echo "xDiT run ${xrun}: actor '${actor}' not in allow-list, skipping"
+            echo "xDiT run ${xrun}: actor not in allow-list, skipping"
             continue
         fi
 
@@ -174,7 +176,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
             -f 'inputs[xdit_run_id]='"$original_run_id" \
             -f 'inputs[amd_ref]='"$amd_ref"
 
-        echo "dispatched hardware run for original xDiT run ${original_run_id} (sha ${sha}, actor ${actor})"
+        echo "dispatched hardware run for original xDiT run ${original_run_id} (sha ${sha})"
         relaunch
         exit 0
     done

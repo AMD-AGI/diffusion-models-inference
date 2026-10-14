@@ -170,8 +170,8 @@ on:
         required: true
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
+  actions: read
 
 env:
   CORE_IMAGE: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
@@ -564,6 +564,7 @@ jobs:
       needs.tune-and-benchmark.result == 'success'
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

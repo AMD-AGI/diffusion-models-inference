@@ -140,6 +140,9 @@ jobs:
 
   compat:
     needs: [prepare, build-image]
+    permissions:
+      contents: write
+      actions: read
     uses: ./.github/workflows/build-and-benchmark.yml
     with:
       git_branch: ${{ inputs.amd_ref }}
