@@ -281,7 +281,8 @@ RUN cd triton && \
     pip install -r python/requirements.txt && \
     pip wheel . --wheel-dir dist/ && \
     pip install dist/*.whl && \
-    mv dist/*.whl /install
+    mv dist/*.whl /install && \
+    rm -rf build python/build dist
 
 # License bundles sit beside the compiles, one stage per project, so a
 # collector change reruns the scan and leaves the wheel builds cached.
@@ -316,7 +317,8 @@ RUN cd pytorch && \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    mv dist/*.whl /install
+    mv dist/*.whl /install && \
+    rm -rf build dist
 
 FROM build_pytorch AS evidence_pytorch
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
@@ -334,7 +336,8 @@ RUN mkdir -p /wheel && \
     cd pytorch_vision && \
     FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
     python setup.py bdist_wheel && \
-    mv dist/*.whl /wheel
+    mv dist/*.whl /wheel && \
+    rm -rf build dist
 
 FROM build_vision AS evidence_vision
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
@@ -353,7 +356,8 @@ RUN mkdir -p /wheel && \
     cd pytorch_audio && \
     PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
     python setup.py bdist_wheel && \
-    mv dist/*.whl /wheel
+    mv dist/*.whl /wheel && \
+    rm -rf build dist
 
 FROM build_audio AS evidence_audio
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
@@ -376,7 +380,8 @@ RUN mkdir -p /wheel && \
     cd pytorch_codec && \
     PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
     python -m build --wheel -vvv --no-isolation -o dist && \
-    mv dist/*.whl /wheel
+    mv dist/*.whl /wheel && \
+    rm -rf build dist
 
 FROM build_codec AS evidence_codec
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
