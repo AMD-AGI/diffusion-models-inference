@@ -1,0 +1,52 @@
+diff --git a/xfuser/model_executor/models/runner_models/base_model.py b/xfuser/model_executor/models/runner_models/base_model.py
+index 99610d2..cae7be7 100644
+--- a/xfuser/model_executor/models/runner_models/base_model.py
++++ b/xfuser/model_executor/models/runner_models/base_model.py
+@@ -1,4 +1,6 @@
+ import abc
++import functools
++import gc
+ import torch
+ import copy
+ import json
+@@ -254,6 +256,24 @@ class DiffusionOutput:
+                 yield (video, single_pipe_args)
+ 
+ 
++def _disable_gc_during_call(method):
++    """Disable cyclic GC for one pipeline inference entry point.
++
++    Restores the previous enabled state so callers that already disabled GC,
++    and cleanup that relies on ``gc.collect()``, keep their own policy.
++    """
++    @functools.wraps(method)
++    def wrapper(self, *args, **kwargs):
++        gc_was_enabled = gc.isenabled()
++        gc.disable()
++        try:
++            return method(self, *args, **kwargs)
++        finally:
++            if gc_was_enabled:
++                gc.enable()
++    return wrapper
++
++
+ class xFuserModel(abc.ABC):
+     """ Base class for xFuser models """
+ 
+@@ -784,6 +804,7 @@ class xFuserModel(abc.ABC):
+         return determinism_failures, expected_output
+ 
+ 
++    @_disable_gc_during_call
+     def run(self, input_args: dict) -> Tuple[DiffusionOutput, list]:
+         """Run the model and optionally check repeated outputs for determinism.
+ 
+@@ -878,6 +899,7 @@ class xFuserModel(abc.ABC):
+                 self._run_timed_pipe(input_args)
+             log("Warmup complete.")
+ 
++    @_disable_gc_during_call
+     def profile(self, input_args: dict) -> Tuple[DiffusionOutput, list, torch.profiler.profiler.profile]:
+         """ Profile the model execution """
+         self._validate_args(input_args)
