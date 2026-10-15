@@ -192,8 +192,6 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
-    else:
-        cmd += ["--diffusion-compile-reorder-comm-overlap"]
     if args.use_fp4_gemms:
         transformer_quantization_config = {"method": "mxfp4"}
     elif args.use_fp8_gemms:
