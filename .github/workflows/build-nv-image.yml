@@ -67,8 +67,10 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
+            runner: ubuntu-24.04
             tag_suffix: -amd64
           - platform: linux/arm64
+            runner: ubuntu-24.04-arm
             tag_suffix: -arm64
     uses: ./.github/workflows/build-nv-image-reusable.yml
     with:
@@ -78,7 +80,7 @@ jobs:
       image_name: ${{ vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia' }}
       platform: ${{ matrix.platform }}
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
-      runner: ${{ inputs.runner || vars.BUILD_RUNNER_NV || 'build-only' }}
+      runner: ${{ inputs.runner || matrix.runner }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
