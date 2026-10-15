@@ -58,6 +58,7 @@ jobs:
       disable_docker_cache: true
       export_docker_cache: false
       cache_scope: 'nightly-rocm'
+      benchmark_flags: "--tag nightly"
       docker_build_args: |
         ROCM_PACKAGE_REPOSITORY=native
         ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
