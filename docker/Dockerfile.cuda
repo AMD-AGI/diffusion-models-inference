@@ -138,13 +138,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
 
 FROM deps AS final
 
-# install basic terminal utilities
-RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    less \
-    nano \
-    vim \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 # copy assets
 COPY assets/data /app/data
