@@ -65,4 +65,4 @@ jobs:
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
-      HF_TOKEN: ${{ secrets.XDIT_HF_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
