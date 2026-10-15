@@ -23,8 +23,9 @@ runs:
         release_id=$(
           curl --fail --silent --show-error --location "${ROCM_NIGHTLY_ROOT}/" |
             grep -oE '[0-9]{8}-[0-9]+/index\.html' |
-            tail -n 1 |
-            sed 's#/index\.html##'
+            sed 's#/index\.html##' |
+            sort -V |
+            tail -n 1
         )
         if [[ ! "$release_id" =~ ^[0-9]{8}-[0-9]+$ ]]; then
           echo "::error::Could not resolve a valid ROCm nightly release ID"
