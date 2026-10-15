@@ -157,8 +157,8 @@ COPY .ci/determinism_report.py /app/.ci/determinism_report.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 # apex causes rms_forward_affine crash in SD3.5
-# opencv-python is required by xDiT export_to_video
-RUN pip uninstall -y apex && pip install --no-cache-dir "opencv-python"
+# Headless OpenCV provides xDiT's video functionality without GUI/Qt payload.
+RUN pip uninstall -y apex && pip install --no-cache-dir "opencv-python-headless"
 # Temporary workaround for a PyTorch/Transformer Engine interaction where
 # int(fused_attention_backend) triggers TorchDynamo RecursionError under torch.compile.
 # Realizes with NVTE_FP8 attention backend
