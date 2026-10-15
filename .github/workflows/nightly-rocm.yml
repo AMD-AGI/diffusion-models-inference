@@ -55,6 +55,8 @@ jobs:
       run_benchmarks: true
       build_final: true
       create_miopen_db_branch: false
+      disable_docker_cache: true
+      export_docker_cache: false
       cache_scope: 'nightly-rocm'
       docker_build_args: |
         ROCM_PACKAGE_REPOSITORY=native
