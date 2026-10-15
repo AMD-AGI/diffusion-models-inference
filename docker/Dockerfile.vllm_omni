@@ -9,15 +9,15 @@
 #     .
 #
 
-ARG BASE_IMAGE="amdsiloai/pytorch-private:xdit-2.13-20260803"
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.10.1"
 
 FROM ${BASE_IMAGE}
 
 ARG VLLM_REPO=https://github.com/vllm-project/vllm.git
-ARG VLLM_COMMIT="2cf0a69" # v0.28.0 release
+ARG VLLM_COMMIT="db9527a" # v0.31.0 release
 
 ARG VLLM_OMNI_REPO=https://github.com/kTorp/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="a9739d74" # performance-v0.28.0_custom on v0.28.0
+ARG VLLM_OMNI_COMMIT="4b4a4b4" # v0.31.0 pre-release custom branch
 
 ARG FLASH_ATTENTION_REPO=https://github.com/Dao-AILab/flash-attention.git
 ARG FLASH_ATTENTION_COMMIT="0e60e394"
