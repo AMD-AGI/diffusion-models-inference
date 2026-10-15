@@ -25,6 +25,7 @@ ARG FLASHATTENTION_COMMIT
 ARG FLEX_BLOCK_ATTENTION_COMMIT
 ARG MSLK_COMMIT
 ARG SAGEATTENTION_COMMIT
+ENV PIP_NO_CACHE_DIR=1
 
 # For ImportError: libGL.so.1: cannot open shared object file on nvcr.io/nvidia/pytorch:25.06-py3
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -45,17 +46,21 @@ RUN pip uninstall -y flash_attn && \
     git clone https://github.com/Dao-AILab/flash-attention.git && \
     cd flash-attention && \
     git reset --hard ${FLASHATTENTION_COMMIT} && \
+    git submodule update --init csrc/cutlass csrc/composable_kernel && \
     if [ "$(uname -m)" = "aarch64" ]; then export MAX_JOBS=${FLASH_ATTN_MAX_JOBS_AARCH64}; fi && \
     python setup.py install && \
     (cd hopper && python setup.py install) && \
-    (cd flash_attn/cute && pip install -e .)
+    (cd flash_attn/cute && pip install -e .) && \
+    find . -mindepth 1 -maxdepth 1 ! -name flash_attn -exec rm -rf {} + && \
+    find flash_attn -mindepth 1 -maxdepth 1 ! -name cute -exec rm -rf {} +
 
 # install mslk from source (pip wheels are ABI-incompatible with NGC PyTorch)
 RUN pip install --no-cache-dir setuptools_git_versioning scikit-build patchelf && \
     git clone --recursive https://github.com/meta-pytorch/MSLK.git && \
     cd MSLK && \
     git reset --hard ${MSLK_COMMIT} && \
-    TORCH_CUDA_ARCH_LIST="9.0a 10.0" python3 setup.py install
+    TORCH_CUDA_ARCH_LIST="9.0a 10.0" python3 setup.py install && \
+    cd .. && rm -rf MSLK
 
 # install flex-block-attention
 # flex-block-attn (built on ThunderKittens) is Hopper-only: it hardcodes
@@ -76,14 +81,16 @@ RUN --mount=type=bind,source=patches/flex_block_attn_setup.patch,target=/patches
         git reset --hard ${FLEX_BLOCK_ATTENTION_COMMIT} && \
         git submodule update --init --recursive && \
         git apply /patches/flex_block_attn_setup.patch && \
-        python setup.py install; \
+        python setup.py install && \
+        cd .. && rm -rf flex-block-attn; \
     fi
 
 # install sageattention
 RUN git clone https://github.com/thu-ml/SageAttention.git && \
     cd SageAttention && \
     git reset --hard ${SAGEATTENTION_COMMIT} && \
-    TORCH_CUDA_ARCH_LIST="9.0" python3 setup.py install
+    TORCH_CUDA_ARCH_LIST="9.0" python3 setup.py install && \
+    cd .. && rm -rf SageAttention
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
@@ -98,7 +105,8 @@ WORKDIR /app/external
 RUN git clone https://github.com/feifeibear/long-context-attention.git && \
     cd long-context-attention && \
     git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
-    pip install -e .
+    pip install -e . && \
+    rm -rf .git
 # install transformers with [sentencepiece] extras that brings in protobuf, required for T5 tokenizers
 RUN pip install --no-cache-dir "transformers[sentencepiece]==5.16.1"
 # install diffusers
@@ -107,12 +115,14 @@ RUN git clone https://github.com/huggingface/diffusers.git && \
     cd diffusers && \
     git reset --hard ${DIFFUSERS_COMMIT} && \
     pip install -e ".[torch]" && \
-    pip install --no-cache-dir "ftfy"
+    pip install --no-cache-dir "ftfy" && \
+    rm -rf .git
 # install distvae
 RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
     git reset --hard ${DISTVAE_COMMIT} && \
-    pip install -e .
+    pip install -e . && \
+    rm -rf .git
 # install xfuser
 WORKDIR /app
 RUN --mount=type=bind,source=patches,target=/patches \
@@ -123,7 +133,8 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git apply /patches/xfuser_flux.patch && \
     git apply /patches/xfuser_sd3_joint_attn_kv_cache.patch && \
     pip freeze | grep numpy > constraints.txt && \
-    pip install -c constraints.txt -e .
+    pip install -c constraints.txt -e . && \
+    rm -rf .git
 
 FROM deps AS final
 
