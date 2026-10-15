@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: qwen_image.default
-  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  tags: [release, lucid, mad, instinct, gfx942, gfx950, nightly]
   model: Qwen/Qwen-Image-2512
   runner: xdit
   args:

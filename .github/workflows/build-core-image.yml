@@ -40,6 +40,11 @@ on:
         type: boolean
         required: false
         default: false
+      export_docker_cache:
+        description: "Export the core build cache to the registry"
+        type: boolean
+        required: false
+        default: true
       cache_scope:
         description: "Layer cache scope. Defaults to the branch name, so only builds of main touch the mainline cache; set it to isolate a test build launched from main."
         required: false
@@ -78,6 +83,7 @@ jobs:
                 "runner": "${{ inputs.runner || 'build-only' }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
                 "force_trigger_tuning": "${{ inputs.force_trigger_tuning || 'false' }}",
+                "export_docker_cache": "${{ inputs.export_docker_cache || github.event_name == 'push' }}",
                 "docker_build_args": "${{ inputs.docker_build_args }}",
                 "cache_scope": "${{ inputs.cache_scope || github.ref_name }}",
                 "cache_image_name": "${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}",
@@ -99,6 +105,7 @@ jobs:
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
       build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
+      export_docker_cache: ${{ inputs.export_docker_cache || github.event_name == 'push' }}
       docker_build_args: ${{ inputs.docker_build_args }}
       runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
     secrets:
@@ -209,4 +216,3 @@ jobs:
         with:
           branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
           run_number: ${{ github.run_number }}
-

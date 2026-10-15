@@ -1,0 +1,36 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Resolve ROCm Nightly
+description: Resolves the latest ROCm nightly release ID from the package index
+
+outputs:
+  release_id:
+    description: 'Latest ROCm nightly release ID'
+    value: ${{ steps.resolve.outputs.release_id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve latest ROCm nightly
+      id: resolve
+      shell: bash
+      env:
+        ROCM_NIGHTLY_ROOT: https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404
+      run: |
+        set -euo pipefail
+
+        release_id=$(
+          curl --fail --silent --show-error --location "${ROCM_NIGHTLY_ROOT}/" |
+            grep -oE '[0-9]{8}-[0-9]+/index\.html' |
+            sed 's#/index\.html##' |
+            sort -V |
+            tail -n 1
+        )
+        if [[ ! "$release_id" =~ ^[0-9]{8}-[0-9]+$ ]]; then
+          echo "::error::Could not resolve a valid ROCm nightly release ID"
+          exit 1
+        fi
+
+        echo "Resolved ROCm nightly release: ${release_id}"
+        echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"

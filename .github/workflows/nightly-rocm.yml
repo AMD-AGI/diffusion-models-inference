@@ -1,0 +1,68 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Nightly ROCm Build and Benchmark
+run-name: "Nightly ROCm ${{ github.event_name == 'schedule' && github.event.schedule || 'manual' }}"
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: nightly-rocm-build-and-benchmark
+  cancel-in-progress: false
+
+jobs:
+  resolve-rocm:
+    name: Resolve latest ROCm nightly
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.resolve.outputs.release_id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Resolve latest ROCm nightly
+        id: resolve
+        uses: ./.github/actions/resolve-rocm-nightly
+
+      - name: Write workflow summary
+        uses: ./.github/actions/write-workflow-summary
+        with:
+          title: 'Resolved ROCm Nightly'
+          tables: |
+            {
+              "ROCm package": {
+                "release_id": "${{ steps.resolve.outputs.release_id }}",
+                "image_tag": "nightly-${{ steps.resolve.outputs.release_id }}"
+              }
+            }
+
+  build-and-benchmark:
+    name: Build and benchmark latest ROCm nightly
+    needs: [resolve-rocm]
+    uses: ./.github/workflows/build-and-benchmark.yml
+    with:
+      git_branch: ${{ github.ref_name }}
+      image_tag: nightly-${{ needs.resolve-rocm.outputs.release_id }}
+      rebuild: true
+      run_miopen_tuning: true
+      run_benchmarks: true
+      build_final: true
+      create_miopen_db_branch: false
+      disable_docker_cache: true
+      export_docker_cache: false
+      cache_scope: 'nightly-rocm'
+      benchmark_flags: "--tag nightly"
+      docker_build_args: |
+        ROCM_PACKAGE_REPOSITORY=native
+        ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+      HF_TOKEN: ${{ secrets.XDIT_HF_TOKEN }}

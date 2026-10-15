@@ -54,6 +54,11 @@ on:
         required: false
         type: boolean
         default: false
+      export_docker_cache:
+        description: 'Export the core build cache to the registry'
+        required: false
+        type: boolean
+        default: true
       docker_build_args:
         description: 'Newline-separated Docker build arguments in KEY=VALUE form'
         required: false
@@ -130,7 +135,7 @@ jobs:
           ref: ${{ inputs.git_ref }}
           cache_scope: ${{ inputs.cache_scope }}
           extra_cache_from: ${{ steps.images.outputs.cache_source }}
-          export: 'true'
+          export: ${{ inputs.export_docker_cache }}
           disable_cache: ${{ inputs.disable_docker_cache }}
 
       - name: Build core image
@@ -178,7 +183,7 @@ jobs:
       # the image push, so a broken export is otherwise completely silent, and
       # the private cache repository means nobody notices by browsing it either.
       - name: Check cache export
-        if: ${{ steps.images.outputs.skip_core_build == 'false' }}
+        if: ${{ steps.images.outputs.skip_core_build == 'false' && inputs.export_docker_cache }}
         env:
           EXPORT_REF: ${{ steps.core_cache.outputs.export_ref }}
           DIGEST_BEFORE: ${{ steps.core_cache.outputs.export_ref_digest }}

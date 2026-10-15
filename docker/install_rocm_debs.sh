@@ -6,12 +6,9 @@ set -euo pipefail
 
 readonly layer="${1:?usage: install_rocm_debs base strip-archives|keep-archives | devel}"
 readonly archives="${2:-}"
-readonly release_id="${ROCM_RELEASE_ID:?ROCM_RELEASE_ID must be set}"
-readonly deb_series="${ROCM_DEB_SERIES:?ROCM_DEB_SERIES must be set}"
+readonly package_repository="${ROCM_PACKAGE_REPOSITORY:?ROCM_PACKAGE_REPOSITORY must be set}"
 readonly gfx_targets="${ROCM_GFX_TARGETS:?ROCM_GFX_TARGETS must be set}"
 readonly rocm_root="${ROCM_HOME:-/opt/rocm}"
-readonly prefix="/opt/rocm/core-${deb_series}"
-readonly repo_url="https://rocm.nightlies.amd.com/packages-multi-arch/deb/${release_id}"
 
 case "${layer}" in
     base)
@@ -35,8 +32,20 @@ case "${layer}" in
         ;;
 esac
 
-echo "deb [trusted=yes] ${repo_url} stable main" \
-    > /etc/apt/sources.list.d/rocm-nightly.list
+case "${package_repository}" in
+    legacy)
+        deb_series="$(configure_rocm_legacy_repo)"
+        ;;
+    native)
+        deb_series="$(configure_rocm_native_repo)"
+        ;;
+    *)
+        echo "Unknown ROCm package repository '${package_repository}'; expected legacy or native" >&2
+        exit 2
+        ;;
+esac
+readonly deb_series
+readonly prefix="/opt/rocm/core-${deb_series}"
 
 IFS=';' read -r -a targets <<< "${gfx_targets}"
 if [[ "${#targets[@]}" -eq 0 ]]; then
@@ -103,7 +112,6 @@ if [[ "${#packages[@]}" -eq 0 ]]; then
     exit 2
 fi
 
-apt-get update -qq
 apt-get install -y --no-install-recommends "${packages[@]}"
 rm -rf /var/lib/apt/lists/*
 

@@ -187,7 +187,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm_quantattn.gfx942
-  tags: [release, instinct, gfx942]
+  tags: [release, instinct, gfx942, nightly]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -208,7 +208,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux2.quantgemm_quantattn.gfx950
-  tags: [release, instinct, gfx950]
+  tags: [release, instinct, gfx950, nightly]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -230,7 +230,7 @@
 
 # TI2V 2K
 - name: flux2.ti2i_2k
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, nightly]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
@@ -465,7 +465,7 @@
 
 # TmultiI2V 1K
 - name: flux2.t-multi-i2i_1k
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, mad, lucid, instinct, gfx942, gfx950, nightly]
   model: black-forest-labs/FLUX.2-dev
   runner: xdit
   args:
