@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: wan2_2.default.gfx942
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, nightly]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -21,7 +21,7 @@
     memory_efficient_replicated_load: true
 
 - name: wan2_2.default.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
+  tags: [release, mad, lucid, instinct, gfx950, nightly]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -190,7 +190,7 @@
     memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.gfx942
-  tags: [release, mad, lucid, instinct, gfx942]
+  tags: [release, mad, lucid, instinct, gfx942, nightly]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
@@ -209,7 +209,7 @@
     memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_quantattn.gfx950
-  tags: [release, mad, lucid, instinct, gfx950]
+  tags: [release, mad, lucid, instinct, gfx950, nightly]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
