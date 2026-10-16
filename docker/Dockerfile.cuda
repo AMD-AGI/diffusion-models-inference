@@ -49,7 +49,11 @@ RUN pip uninstall -y flash_attn && \
     git submodule update --init csrc/cutlass csrc/composable_kernel && \
     if [ "$(uname -m)" = "aarch64" ]; then export MAX_JOBS=${FLASH_ATTN_MAX_JOBS_AARCH64}; fi && \
     FLASH_ATTN_CUDA_ARCHS="90;100" python setup.py install && \
-    (cd hopper && python setup.py install) && \
+    if [ "$(uname -m)" = "aarch64" ]; then \
+        echo "Skipping FlashAttention-3 install on aarch64 (no Blackwell kernels)"; \
+    else \
+        (cd hopper && FLASH_ATTENTION_DISABLE_SM80=TRUE python setup.py install); \
+    fi && \
     (cd flash_attn/cute && pip install -e .) && \
     find . -mindepth 1 -maxdepth 1 ! -name flash_attn -exec rm -rf {} + && \
     find flash_attn -mindepth 1 -maxdepth 1 ! -name cute -exec rm -rf {} +
