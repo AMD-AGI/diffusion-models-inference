@@ -256,14 +256,13 @@ ARG ROCM_GFX_TARGETS
 RUN install_rocm_debs devel
 ENV PATH="/opt/rocm/libexec/rocprofiler-compute:$PATH"
 
-FROM rocm_tree AS build_torch_stack
+# Shared checkout tooling for the torch stack. Each project is fetched and
+# built in its own stage so a downstream pin does not recompile Triton or
+# PyTorch. Vision, audio, and torchcodec depend on the PyTorch wheel and not
+# on each other, so BuildKit runs those three stages in parallel. core still
+# installs /install/*.whl from build_torch_stack.
+FROM rocm_tree AS torch_build_base
 ARG THEROCK_COMMIT
-ARG TRITON_COMMIT
-ARG PYTORCH_COMMIT
-ARG PYTORCH_VISION_COMMIT
-ARG PYTORCH_AUDIO_COMMIT
-ARG PYTORCH_CODEC_COMMIT
-ARG PYTORCH_ROCM_ARCH
 ARG DEBIAN_FRONTEND=noninteractive
 
 # CPU BLAS headers for the PyTorch wheel. Runtime libs are installed in core.
@@ -284,25 +283,38 @@ RUN git init TheRock && \
 RUN git config --global user.name "TheRock Builder" && \
     git config --global user.email "builder@rocm.ai"
 
-# fetch sources
 WORKDIR /app/TheRock/external-builds/pytorch
 RUN pip install -r /app/TheRock/requirements.txt && \
-    python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1 && \
-    python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1 && \
-    python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/ROCm/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1 && \
-    python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/ROCm/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
-# fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
-RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
-    cd pytorch_codec && \
-    git reset --hard ${PYTORCH_CODEC_COMMIT}
-RUN mkdir /install
-# install triton
+    mkdir -p /install
+
+FROM torch_build_base AS build_triton
+ARG TRITON_COMMIT
+RUN python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1
 RUN cd triton && \
     pip install -r python/requirements.txt && \
     pip wheel . --wheel-dir dist/ && \
     pip install dist/*.whl && \
-    mv dist/*.whl /install
-# install pytorch
+    mv dist/*.whl /install && \
+    rm -rf build python/build dist
+
+# License bundles sit beside the compiles, one stage per project, so a
+# collector change reruns the scan and leaves the wheel builds cached.
+# --required-git-depth 0 requires the project repository itself. Nested
+# submodules are recorded, and a missing submodule license stays a warning,
+# matching the previous scan of the parent directory at depth 1.
+FROM build_triton AS evidence_triton
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /evidence/triton \
+    --scan-root triton=/app/TheRock/external-builds/pytorch/triton \
+    --git-root /app/TheRock/external-builds/pytorch/triton \
+    --fail-on-missing-git-license \
+    --required-git-depth 0
+
+FROM build_triton AS build_pytorch
+ARG PYTORCH_COMMIT
+ARG PYTORCH_ROCM_ARCH
+RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1
 RUN cd pytorch && \
     UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
     PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
@@ -318,33 +330,56 @@ RUN cd pytorch && \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
     python setup.py bdist_wheel && \
     pip install dist/*.whl && \
-    mv dist/*.whl /install
-# install vision
-RUN cd pytorch_vision && \
-    FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
-    python setup.py bdist_wheel && \
-    pip install dist/*.whl && \
-    mv dist/*.whl /install
-# install audio
-RUN cd pytorch_audio && \
-    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
-    python setup.py bdist_wheel && \
-    pip install dist/*.whl && \
-    mv dist/*.whl /install
-# install torchcodec
-RUN pip install --no-cache-dir pybind11 pybind11[global] && \
-    cd pytorch_codec && \
-    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 BUILD_AGAINST_ALL_FFMPEG_FROM_S3=1 \
-    python -m build --wheel -vvv --no-isolation -o dist && \
-    pip install dist/*.whl && \
-    mv dist/*.whl /install
+    mv dist/*.whl /install && \
+    rm -rf build dist
+
+FROM build_pytorch AS evidence_pytorch
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /install/license-evidence \
-    --scan-root torch-stack=/app/TheRock/external-builds/pytorch \
-    --git-root /app/TheRock/external-builds/pytorch \
+    --output /evidence/pytorch \
+    --scan-root pytorch=/app/TheRock/external-builds/pytorch/pytorch \
+    --git-root /app/TheRock/external-builds/pytorch/pytorch \
     --fail-on-missing-git-license \
-    --required-git-depth 1
+    --required-git-depth 0
+
+FROM build_pytorch AS build_vision
+ARG PYTORCH_VISION_COMMIT
+RUN python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/ROCm/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1
+RUN mkdir -p /wheel && \
+    cd pytorch_vision && \
+    FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
+    python setup.py bdist_wheel && \
+    mv dist/*.whl /wheel && \
+    rm -rf build dist
+
+FROM build_vision AS evidence_vision
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /evidence/vision \
+    --scan-root vision=/app/TheRock/external-builds/pytorch/pytorch_vision \
+    --git-root /app/TheRock/external-builds/pytorch/pytorch_vision \
+    --fail-on-missing-git-license \
+    --required-git-depth 0
+
+FROM build_pytorch AS build_audio
+ARG PYTORCH_AUDIO_COMMIT
+ARG PYTORCH_ROCM_ARCH
+RUN python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/ROCm/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
+RUN mkdir -p /wheel && \
+    cd pytorch_audio && \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
+    python setup.py bdist_wheel && \
+    mv dist/*.whl /wheel && \
+    rm -rf build dist
+
+FROM build_audio AS evidence_audio
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /evidence/audio \
+    --scan-root audio=/app/TheRock/external-builds/pytorch/pytorch_audio \
+    --git-root /app/TheRock/external-builds/pytorch/pytorch_audio \
+    --fail-on-missing-git-license \
+    --required-git-depth 0
 
 FROM base AS ffmpeg_builder
 # Reference: https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
@@ -410,6 +445,63 @@ COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
+
+# fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
+FROM build_pytorch AS build_codec
+ARG PYTORCH_CODEC_COMMIT
+ARG PYTORCH_ROCM_ARCH
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y --no-install-recommends pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
+    cd pytorch_codec && \
+    git reset --hard ${PYTORCH_CODEC_COMMIT}
+# I_CONFIRM_THIS_IS_NOT_A_LICENSE_VIOLATION to link against ffmpeg built
+# without --enable-gpl or --enable-nonfree.
+COPY --from=ffmpeg_builder /ffmpeg/build /ffmpeg/build
+RUN mkdir -p /wheel && \
+    pip install --no-cache-dir pybind11 pybind11[global] && \
+    cd pytorch_codec && \
+    PKG_CONFIG_PATH=/ffmpeg/build/lib/pkgconfig \
+    I_CONFIRM_THIS_IS_NOT_A_LICENSE_VIOLATION=1 \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 \
+    python -m build --wheel -vvv --no-isolation -o dist && \
+    mv dist/*.whl /wheel && \
+    rm -rf build dist
+
+FROM build_codec AS evidence_codec
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /evidence/codec \
+    --scan-root codec=/app/TheRock/external-builds/pytorch/pytorch_codec \
+    --git-root /app/TheRock/external-builds/pytorch/pytorch_codec \
+    --fail-on-missing-git-license \
+    --required-git-depth 0
+
+# Triton and PyTorch wheels are already in /install. The three wheels below
+# come from stages BuildKit schedules together. Each evidence stage scanned
+# only its own checkout; this stage imports those bundles.
+FROM build_pytorch AS build_torch_stack
+COPY --from=build_vision /wheel/ /install/
+COPY --from=build_audio /wheel/ /install/
+COPY --from=build_codec /wheel/ /install/
+COPY --from=evidence_triton /evidence/triton/ /evidence/triton/
+COPY --from=evidence_pytorch /evidence/pytorch/ /evidence/pytorch/
+COPY --from=evidence_vision /evidence/vision/ /evidence/vision/
+COPY --from=evidence_audio /evidence/audio/ /evidence/audio/
+COPY --from=evidence_codec /evidence/codec/ /evidence/codec/
+RUN pip install --no-cache-dir \
+    /install/torchvision-*.whl \
+    /install/torchaudio-*.whl \
+    /install/torchcodec-*.whl
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /install/license-evidence \
+    --evidence-root triton=/evidence/triton \
+    --evidence-root pytorch=/evidence/pytorch \
+    --evidence-root vision=/evidence/vision \
+    --evidence-root audio=/evidence/audio \
+    --evidence-root codec=/evidence/codec
 
 FROM ${ROCM_PARENT} AS core
 ARG AITER_COMMIT

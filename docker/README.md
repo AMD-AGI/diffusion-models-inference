@@ -34,13 +34,16 @@ install step, and `rocm_tree` keeps them so `rocm_devel` can inherit the files.
 
 | Target | Packages | Use |
 | --- | --- | --- |
-| `rocm_tree` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers. LLVM static archives kept | Parent of `build_torch_stack` and `rocm_devel` |
+| `rocm_tree` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers. LLVM static archives kept | Parent of `torch_build_base` and `rocm_devel` |
 | `rocm_base` | Same packages. LLVM static archives outside `lib/clang` removed | Lean runtime target |
 | `rocm_devel` | `rocm_tree` plus developer-tools, RDC, OpenCL, blas/rccl tests | Default parent of `core` / `deps` / `final` |
 
 `amdrocm-developer-tools` pulls the profiler, emulator, and debugger. It does
 not depend on `amdrocm-core`. `core` is `FROM ${ROCM_PARENT}`, which defaults to
-`rocm_devel`. Both parents install the wheels built by `build_torch_stack`.
+`rocm_devel`. `torch_build_base` fetches TheRock. `build_triton` and
+`build_pytorch` compile in series, then `build_vision`, `build_audio`, and
+`build_codec` compile in parallel. `build_torch_stack` gathers those wheels.
+Both parents install the wheels built by `build_torch_stack`.
 `deps` installs rocprofiler-compute's Python requirements only when that tree
 is present.
 
