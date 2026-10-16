@@ -82,6 +82,7 @@
     attention_backend: aiter_flydsl_fp8
     use_torch_compile: true
     cache_method: dbcache
+    use_parallel_vae: true
     enable_tiling: true
     enable_slicing: true
     vae_tile_size_height: 704

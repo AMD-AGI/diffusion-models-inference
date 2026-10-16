@@ -8,15 +8,17 @@ for tune and finalise.
 export STATE_DIR="${HOME}/rdna4-finalise"
 export HF_CACHE="${HOME}/huggingface"
 CANDIDATE=diffusion-models-inference:rdna4-candidate
-FINAL=amdsiloai/pytorch-xdit-custom:rdna4-rocm10.0.0-ubuntu24.04-py3.12-torch2.13.0-xdit-b714b35-YYYYMMDD
+FINAL=amdsiloai/pytorch-xdit-custom:rdna4-rocm10.0.0-ubuntu24.04-py3.12-torch2.13.0-xdit-ecf0f58-YYYYMMDD
 ```
 
-Tune needs four gfx1201 GPUs on one NUMA node, Docker access to `/dev/kfd` and
-the render nodes, and a Hugging Face cache (plus `HF_TOKEN` if the models are
-gated). GPU device nodes default to
-`/dev/dri/renderD130 /dev/dri/renderD132 /dev/dri/renderD131 /dev/dri/renderD133`
-with `HIP_DEVICE_ORDER=0,2,1,3`. Override `GPU_DEVICES` / `HIP_DEVICE_ORDER` if
-this machine differs. Full tune knobs: `scripts/rdna4/tune.sh --help`.
+Tune needs four gfx1201 GPUs, Docker access to `/dev/kfd` and the render nodes,
+and a Hugging Face cache (plus `HF_TOKEN` if the models are gated). AMD GPU
+render nodes are auto-detected and may span NUMA nodes.
+`HIP_DEVICE_ORDER` defaults to `0,1,2,3`; override `GPU_DEVICES` /
+`HIP_DEVICE_ORDER` if a machine needs a different selection or rank order.
+Full tune knobs: `scripts/rdna4/tune.sh --help`.
+Set `XDIT_LOG_PIPEFUSION_CACHE_DECISIONS=1` only when diagnosing per-patch
+DBCache decisions; it produces verbose per-step logs.
 
 ## 1. Build the candidate
 
@@ -42,7 +44,7 @@ Writes into `${STATE_DIR}`:
 |---|---|
 | `tunableop/` | Per-rank PyTorch TunableOp CSVs (bf16/fp32 GEMM) |
 | `miopen-db/` | MIOpen user find-db (convolutions, mainly VAE) |
-| `outputs/` | Per-workload logs, timings, sample images |
+| `outputs/` | Per-workload logs, `timings.json`, `wall_clock.json` (end-to-end seconds), `memory.json` (peak per-GPU VRAM and peak host anonymous memory), sample images |
 | `aiter-tune/` | Present for the mount; currently unused on gfx1201 |
 
 FP8 GEMM tuning is not collected here. gfx1201 `gemm_a8w8_blockscale` runs

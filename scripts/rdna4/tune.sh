@@ -20,20 +20,31 @@ Environment overrides:
   WORKLOAD_NAMES            Optional comma-separated workload names to run
   STATE_DIR                 Persistent host output/cache directory (default: $HOME/rdna4-finalise)
   HF_CACHE                  Hugging Face cache directory (default: $HOME/huggingface)
+  INDUCTOR_CACHE            Versioned torch.compile cache (default: STATE_DIR/inductor-cache)
+  AITER_JIT_CACHE           Optional shared AITER JIT directory (default: STATE_DIR/aiter-jit)
+  AITER_TUNE_CACHE          Optional shared AITER tuning directory (default: STATE_DIR/aiter-tune)
+  AITER_ONLINE_TUNE         Enable AITER runtime GEMM tuning (default: 1)
+  PYTORCH_TUNABLEOP_ENABLED Enable PyTorch TunableOp (default: 1)
+  PYTORCH_TUNABLEOP_TUNING  Enable PyTorch TunableOp runtime tuning (default: 1)
+  SHARE_TUNABLEOP_RESULTS   Seed every identical GPU from merged prior results (default: 1)
+  XDIT_PIPELINE_TIMEOUT_MINUTES  PipeFusion subgroup timeout (default: xDiT default)
   XDIT_SRC                  Optional host xDiT tree bind-mounted at /app/xDiT
-  GPU_DEVICES               Four space-separated render nodes (default: /dev/dri/renderD130 /dev/dri/renderD132 /dev/dri/renderD131 /dev/dri/renderD133)
-  HIP_DEVICE_ORDER          Logical ROCm device order (default: 0,2,1,3)
-  CPUSET_CPUS               Host CPU list for the container (default: all physical cores on GPU NUMA node)
+  GPU_DEVICES               Four space-separated render nodes (default: auto-detect AMD render nodes)
+  HIP_DEVICE_ORDER          Logical ROCm device order (default: 0,1,2,3)
+  CPUSET_CPUS               Host CPU list for the container (default: all physical cores local to the GPUs)
   MEMORY_NODES              NUMA nodes allowed for container memory (default: all host NUMA nodes)
   NUMA_PREFERRED            Soft NUMA memory preference inside the container (default: auto).
                             Auto picks the allowed node with the most RAM, or the GPU node when
                             memory is within 10%. Empty string disables the preference.
                             Allocations spill to the other allowed nodes, so 512g jobs still fit.
+                            If vm.zone_reclaim_mode is 0, a cache-full preferred node spills even
+                            when the workload fits. For a sweep, set vm.zone_reclaim_mode=1 and
+                            drop the page cache; restore mode 0 afterwards.
   CONTAINER_MEMORY          Container memory limit and swap limit (default: 512g)
   OMP_NUM_THREADS           OpenMP threads per process (default: 32)
   AITER_BUILD_JOBS          Maximum parallel jobs for AITER extension builds (default: 32)
   MIN_FREE_DISK_GB          Warn when / or STATE_DIR has less free space (default: 50)
-  WORKLOAD_TIMEOUT_SECONDS  Per-workload timeout for each tuning pass (default: 7200)
+  WORKLOAD_TIMEOUT_SECONDS  Per-workload timeout for each tuning pass (default: 10800)
   NOFILE_LIMIT              Container open-file limit (default: 65536; required by ROCm expandable segments)
   RCCL_ALGO                 Optional RCCL collective algorithm override (for example: Tree)
   RCCL_PROTO                Optional RCCL protocol override (for example: Simple)
@@ -68,6 +79,17 @@ require_exists() {
     [[ -e "${path}" ]] || die "${message}"
 }
 
+discover_gpu_devices() {
+    local device_path sysfs_path
+    for device_path in /dev/dri/renderD*; do
+        [[ -e ${device_path} ]] || continue
+        sysfs_path=/sys/class/drm/$(basename "${device_path}")/device
+        [[ -r ${sysfs_path}/vendor ]] || continue
+        [[ $(<"${sysfs_path}/vendor") == 0x1002 ]] || continue
+        printf '%s\n' "${device_path}"
+    done
+}
+
 gpu_count_from_name() {
     local name=$1
     if [[ ${name} =~ (^|[._])([1-4])gpu([._]|$) ]]; then
@@ -92,6 +114,13 @@ physical_cpus_on_node() {
 comma_join() {
     local IFS=,
     printf '%s\n' "$*"
+}
+
+# Bounded so a wedged GPU process cannot stall the rest of the matrix.
+remove_container() {
+    local name=$1
+    [[ -n ${name} ]] || return 0
+    timeout 300 docker rm -f "${name}" >/dev/null 2>&1 || true
 }
 
 node_memtotal_kb() {
@@ -126,7 +155,8 @@ select_preferred_memory_node() {
     fi
 }
 
-# Print "file<TAB>name" for each experiment tagged rdna4.
+# Print "file<TAB>name" for each experiment tagged rdna4. Callers sort by name
+# so the run order is stable regardless of which YAML declares a workload.
 list_rdna4_workloads() {
     awk '
         function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
@@ -200,17 +230,28 @@ CONFIG=${CONFIG:-/app/.ci/benchmark_configs}
 WORKLOAD_NAMES=${WORKLOAD_NAMES:-}
 STATE_DIR=${STATE_DIR:-${HOME}/rdna4-finalise}
 HF_CACHE=${HF_CACHE:-${HOME}/huggingface}
-GPU_DEVICES=${GPU_DEVICES:-"/dev/dri/renderD130 /dev/dri/renderD132 /dev/dri/renderD131 /dev/dri/renderD133"}
-HIP_DEVICE_ORDER=${HIP_DEVICE_ORDER:-0,2,1,3}
+INDUCTOR_CACHE=${INDUCTOR_CACHE:-${STATE_DIR}/inductor-cache}
+AITER_JIT_CACHE=${AITER_JIT_CACHE:-${STATE_DIR}/aiter-jit}
+AITER_TUNE_CACHE=${AITER_TUNE_CACHE:-${STATE_DIR}/aiter-tune}
+AITER_ONLINE_TUNE=${AITER_ONLINE_TUNE:-1}
+PYTORCH_TUNABLEOP_ENABLED=${PYTORCH_TUNABLEOP_ENABLED:-1}
+PYTORCH_TUNABLEOP_TUNING=${PYTORCH_TUNABLEOP_TUNING:-1}
+SHARE_TUNABLEOP_RESULTS=${SHARE_TUNABLEOP_RESULTS:-1}
+if [[ -n ${GPU_DEVICES:-} ]]; then
+    read -r -a devices <<< "${GPU_DEVICES}"
+else
+    mapfile -t devices < <(discover_gpu_devices)
+fi
+HIP_DEVICE_ORDER=${HIP_DEVICE_ORDER:-0,1,2,3}
 OMP_NUM_THREADS=${OMP_NUM_THREADS:-32}
 AITER_BUILD_JOBS=${AITER_BUILD_JOBS:-32}
 CONTAINER_MEMORY=${CONTAINER_MEMORY:-512g}
 MIN_FREE_DISK_GB=${MIN_FREE_DISK_GB:-50}
-WORKLOAD_TIMEOUT_SECONDS=${WORKLOAD_TIMEOUT_SECONDS:-7200}
+WORKLOAD_TIMEOUT_SECONDS=${WORKLOAD_TIMEOUT_SECONDS:-10800}
 NOFILE_LIMIT=${NOFILE_LIMIT:-65536}
 
-read -r -a devices <<< "${GPU_DEVICES}"
-(( ${#devices[@]} == 4 )) || die "GPU_DEVICES must contain exactly four render nodes"
+(( ${#devices[@]} == 4 )) \
+    || die "Expected exactly four AMD render nodes, got ${#devices[@]}. Set GPU_DEVICES explicitly."
 
 IFS=, read -r -a hip_devices <<< "${HIP_DEVICE_ORDER}"
 (( ${#hip_devices[@]} == ${#devices[@]} )) || {
@@ -221,22 +262,28 @@ require_command docker
 require_command timeout
 require_exists /dev/kfd "ROCm device /dev/kfd is required"
 
-numa_node=
+gpu_numa_nodes=()
+declare -A seen_gpu_numa_nodes=()
 for device in "${devices[@]}"; do
     require_exists "${device}" "ROCm device ${device} is required"
     device_numa=$(<"/sys/class/drm/$(basename "${device}")/device/numa_node")
     [[ ${device_numa} != -1 ]] || die "Cannot determine NUMA node for ${device}"
-    if [[ -n ${numa_node} && ${device_numa} != "${numa_node}" ]]; then
-        die "All GPU_DEVICES must be on one NUMA node; ${device} is on node ${device_numa}, expected ${numa_node}"
+    if [[ -z ${seen_gpu_numa_nodes[${device_numa}]+x} ]]; then
+        gpu_numa_nodes+=("${device_numa}")
+        seen_gpu_numa_nodes["${device_numa}"]=1
     fi
-    numa_node=${device_numa}
 done
+gpu_numa_list=$(comma_join "${gpu_numa_nodes[@]}")
 
 if [[ -n ${CPUSET_CPUS:-} ]]; then
     cpu_list=${CPUSET_CPUS}
 else
-    mapfile -t physical_cpus < <(physical_cpus_on_node "${numa_node}")
-    (( ${#physical_cpus[@]} > 0 )) || die "Could not find physical cores on NUMA node ${numa_node}"
+    physical_cpus=()
+    for node in "${gpu_numa_nodes[@]}"; do
+        mapfile -t node_cpus < <(physical_cpus_on_node "${node}")
+        physical_cpus+=("${node_cpus[@]}")
+    done
+    (( ${#physical_cpus[@]} > 0 )) || die "Could not find physical cores on GPU NUMA nodes ${gpu_numa_list}"
     cpu_list=$(comma_join "${physical_cpus[@]}")
 fi
 
@@ -249,10 +296,10 @@ MEMORY_NODES=${MEMORY_NODES:-${memory_nodes_default}}
 if [[ ${NUMA_PREFERRED+x} ]]; then
     numa_preferred=${NUMA_PREFERRED}
 else
-    numa_preferred=$(select_preferred_memory_node "${numa_node}" "${MEMORY_NODES}")
+    numa_preferred=$(select_preferred_memory_node "${gpu_numa_nodes[0]}" "${MEMORY_NODES}")
 fi
 
-echo "Using GPUs: ${devices[*]} (NUMA node ${numa_node}, CPUs ${cpu_list})"
+echo "Using GPUs: ${devices[*]} (NUMA nodes ${gpu_numa_list}, CPUs ${cpu_list})"
 echo "Allowing container memory on NUMA nodes: ${MEMORY_NODES}"
 if [[ -n ${numa_preferred} ]]; then
     echo "Preferring host allocations on NUMA node ${numa_preferred} (spills to other allowed nodes)"
@@ -266,8 +313,46 @@ done
 if [[ -r /proc/sys/kernel/numa_balancing ]] && [[ $(< /proc/sys/kernel/numa_balancing) != 0 ]]; then
     echo "Warning: automatic NUMA balancing is enabled and may reduce multi-GPU performance. Run sysctl -w kernel.numa_balancing=0" >&2
 fi
+zone_reclaim_mode=unknown
+if [[ -r /proc/sys/vm/zone_reclaim_mode ]]; then
+    zone_reclaim_mode=$(< /proc/sys/vm/zone_reclaim_mode)
+fi
+if [[ -n ${numa_preferred} && ${MEMORY_NODES} == *,* && ${zone_reclaim_mode} == 0 ]]; then
+    echo "Warning: vm.zone_reclaim_mode=0. A cache-full preferred node will allocate on another node instead of reclaiming local page cache. CPU-offload workloads can still spill after local memory is exhausted. For this sweep, run:" >&2
+    echo "  sudo sysctl -w vm.zone_reclaim_mode=1" >&2
+    echo "  sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'" >&2
+    echo "Restore afterwards with: sudo sysctl -w vm.zone_reclaim_mode=0" >&2
+fi
 
-mkdir -p "${STATE_DIR}"/{home,outputs,miopen-db/cache,aiter-jit,aiter-tune,inductor-cache/triton,tunableop} "${HF_CACHE}"
+mkdir -p "${STATE_DIR}"/{home,outputs,miopen-db/cache,tunableop} \
+    "${HF_CACHE}" "${INDUCTOR_CACHE}/triton" "${AITER_JIT_CACHE}" "${AITER_TUNE_CACHE}"
+topology_file="${STATE_DIR}/topology.txt"
+topology=$(
+    printf 'gpu_devices=%s\n' "${devices[*]}"
+    printf 'gpu_numa_nodes=%s\n' "${gpu_numa_list}"
+    printf 'hip_device_order=%s\n' "${HIP_DEVICE_ORDER}"
+    printf 'cpuset_cpus=%s\n' "${cpu_list}"
+    printf 'memory_nodes=%s\n' "${MEMORY_NODES}"
+    printf 'numa_preferred=%s\n' "${numa_preferred}"
+    printf 'zone_reclaim_mode=%s\n' "${zone_reclaim_mode}"
+    printf 'omp_num_threads=%s\n' "${OMP_NUM_THREADS}"
+    printf 'rccl_algo=%s\n' "${RCCL_ALGO:-}"
+    printf 'rccl_proto=%s\n' "${RCCL_PROTO:-}"
+)
+if [[ -f ${topology_file} ]]; then
+    # zone_reclaim_mode is a transient sysctl that resets on reboot, so it is
+    # recorded for provenance but never blocks a resume.
+    stored_topology=$(grep -v '^zone_reclaim_mode=' "${topology_file}" || true)
+    current_topology=$(printf '%s\n' "${topology}" | grep -v '^zone_reclaim_mode=' || true)
+    if [[ ${stored_topology} != "${current_topology}" ]]; then
+        die "GPU/NUMA execution topology changed for ${STATE_DIR}. Use a new STATE_DIR or remove its stale benchmark state."
+    fi
+    stored_reclaim=$(awk -F= '$1 == "zone_reclaim_mode" { print $2 }' "${topology_file}")
+    if [[ -n ${stored_reclaim} && ${stored_reclaim} != "${zone_reclaim_mode}" ]]; then
+        echo "Warning: vm.zone_reclaim_mode is ${zone_reclaim_mode} but this STATE_DIR was created with ${stored_reclaim}; timings may not be comparable." >&2
+    fi
+fi
+printf '%s\n' "${topology}" > "${topology_file}"
 for path in / "${STATE_DIR}"; do
     free_kb=$(df --output=avail "${path}" | tail -n 1)
     if (( free_kb < MIN_FREE_DISK_GB * 1024 * 1024 )); then
@@ -315,7 +400,7 @@ while IFS=$'\t' read -r file name; do
     workloads+=("${name}")
     workload_gpu_counts+=("${gpu_count}")
     selected_names["${name}"]=1
-done < <(list_rdna4_workloads "${config_files[@]}")
+done < <(list_rdna4_workloads "${config_files[@]}" | LC_ALL=C sort -t$'\t' -k2,2)
 
 if (( ${#requested_names[@]} > 0 )); then
     missing_names=()
@@ -339,6 +424,7 @@ docker_args=(
     --memory-swap="${CONTAINER_MEMORY}"
     --ulimit "nofile=${NOFILE_LIMIT}:${NOFILE_LIMIT}"
     --ulimit "memlock=-1:-1"
+    --ulimit "core=0:0"
     --ipc=host
     --security-opt=seccomp=unconfined
 )
@@ -364,27 +450,30 @@ docker_args+=(
     -e MIOPEN_FIND_MODE=NORMAL
     -e MIOPEN_FIND_ENFORCE=SEARCH
     -e AITER_JIT_DIR=/aiter-jit
-    -e AITER_ONLINE_TUNE=1
+    -e "AITER_ONLINE_TUNE=${AITER_ONLINE_TUNE}"
     -e AITER_TUNE_DIR=/aiter-tune
     -e TORCHINDUCTOR_CACHE_DIR=/inductor-cache
     -e TRITON_CACHE_DIR=/inductor-cache/triton
     -e TORCHINDUCTOR_FX_GRAPH_CACHE=1
     -e TORCHINDUCTOR_AUTOGRAD_CACHE=1
-    -e PYTORCH_TUNABLEOP_ENABLED=1
-    -e PYTORCH_TUNABLEOP_TUNING=1
+    -e "PYTORCH_TUNABLEOP_ENABLED=${PYTORCH_TUNABLEOP_ENABLED}"
+    -e "PYTORCH_TUNABLEOP_TUNING=${PYTORCH_TUNABLEOP_TUNING}"
     -e PYTORCH_TUNABLEOP_FILENAME=/tunableop/tunableop_results.csv
     -v "${STATE_DIR}/home:/tmp/rdna4-home"
     -v "${HF_CACHE}:/hf-cache"
     -v "${STATE_DIR}/outputs:/outputs"
     -v "${STATE_DIR}/miopen-db:/miopen-db"
-    -v "${STATE_DIR}/aiter-jit:/aiter-jit"
-    -v "${STATE_DIR}/aiter-tune:/aiter-tune"
-    -v "${STATE_DIR}/inductor-cache:/inductor-cache"
+    -v "${AITER_JIT_CACHE}:/aiter-jit"
+    -v "${AITER_TUNE_CACHE}:/aiter-tune"
+    -v "${INDUCTOR_CACHE}:/inductor-cache"
     -v "${STATE_DIR}/tunableop:/tunableop"
     -v "${ROOT}/scripts/rdna4/numa_preferred_exec.py:/tmp/numa_preferred_exec.py:ro"
 )
 if [[ -n ${XDIT_SRC:-} ]]; then
-    docker_args+=(-v "${XDIT_SRC}:/app/xDiT")
+    docker_args+=(
+        -v "${XDIT_SRC}:/app/xDiT"
+        -e PYTHONPATH=/app/xDiT
+    )
     echo "Bind-mounting xDiT from ${XDIT_SRC}"
 fi
 if [[ -n ${numa_preferred} ]]; then
@@ -393,16 +482,40 @@ fi
 
 [[ -n ${RCCL_ALGO:-} ]] && docker_args+=(-e "NCCL_ALGO=${RCCL_ALGO}")
 [[ -n ${RCCL_PROTO:-} ]] && docker_args+=(-e "NCCL_PROTO=${RCCL_PROTO}")
+[[ -n ${XDIT_PIPELINE_TIMEOUT_MINUTES:-} ]] && \
+    docker_args+=(-e "XDIT_PIPELINE_TIMEOUT_MINUTES=${XDIT_PIPELINE_TIMEOUT_MINUTES}")
+[[ -n ${XDIT_LOG_PIPEFUSION_CACHE_DECISIONS:-} ]] \
+    && docker_args+=(-e "XDIT_LOG_PIPEFUSION_CACHE_DECISIONS=${XDIT_LOG_PIPEFUSION_CACHE_DECISIONS}")
 
 docker run "${docker_args[@]}" "${BASE_IMAGE}" python3 /tmp/numa_preferred_exec.py python3 -c \
     "import torch; n=torch.cuda.device_count(); arches={torch.cuda.get_device_properties(i).gcnArchName.split(':')[0] for i in range(n)}; print(f'GPUs: {n}, arches: {sorted(arches)}'); assert n >= 4, 'the RDNA4 matrix requires at least four GPUs'; assert arches == {'gfx1201'}, f'expected only gfx1201 GPUs, got {arches}'"
+
+if [[ ${SHARE_TUNABLEOP_RESULTS} == 1 ]]; then
+    shopt -s nullglob
+    tunable_files=( "${STATE_DIR}/tunableop/"*.csv )
+    shopt -u nullglob
+    if (( ${#tunable_files[@]} > 0 )); then
+        runtime_merge_dir=${STATE_DIR}/merged-runtime
+        python3 "${ROOT}/scripts/rdna4/merge_rdna4_tuning.py" \
+            --tunable-dir "${STATE_DIR}/tunableop" \
+            --aiter-dir "${AITER_TUNE_CACHE}" \
+            --output-dir "${runtime_merge_dir}"
+        merged_tunable=${runtime_merge_dir}/tunableop_results_merged.csv
+        if [[ -s ${merged_tunable} ]]; then
+            for ordinal in "${!devices[@]}"; do
+                cp "${merged_tunable}" "${STATE_DIR}/tunableop/tunableop_results${ordinal}.csv"
+            done
+            echo "Seeded ${#devices[@]} TunableOp rank files from merged identical-GPU results"
+        fi
+    fi
+fi
 
 # Ctrl-C (or SIGTERM) stops the whole matrix, not just the running workload.
 # The container is daemon-managed and outlives its docker CLI, so kill it by name.
 current_container=
 stop_matrix() {
     local status=$1
-    trap - INT TERM
+    trap - INT TERM HUP
     if [[ -n ${current_container} ]]; then
         echo >&2
         echo "Interrupted; killing container ${current_container}" >&2
@@ -412,6 +525,8 @@ stop_matrix() {
 }
 trap 'stop_matrix 130' INT
 trap 'stop_matrix 143' TERM
+# A dropped terminal must not leave a container holding every GPU.
+trap 'stop_matrix 129' HUP
 
 failed_workloads=()
 for i in "${!workloads[@]}"; do
@@ -428,12 +543,18 @@ for i in "${!workloads[@]}"; do
     fi
 
     mkdir -p "${workload_output_dir}"
-    write_runtime_yaml "${source_yaml}" "${workload}" "${workload_gpu_count}" "${workload_output_dir}/config.yaml" \
-        || die "failed to extract ${workload} from ${source_yaml}"
+    if ! write_runtime_yaml "${source_yaml}" "${workload}" "${workload_gpu_count}" "${workload_output_dir}/config.yaml"; then
+        failed_workloads+=("${workload}")
+        echo "Failed to extract ${workload} from ${source_yaml}; continuing with the next workload" >&2
+        continue
+    fi
 
     echo
     echo "Running workload $((i + 1))/${#workloads[@]} on HIP devices ${workload_hip_devices} in a fresh container: ${workload}"
     current_container=rdna4-tune-${workload}
+    # A container left behind by an earlier interrupted run would make
+    # docker run fail with a name conflict.
+    remove_container "${current_container}"
     # --foreground keeps timeout in this process group so terminal signals reach it;
     # waiting on a background job lets bash run the signal traps immediately.
     timeout --foreground --signal=TERM --kill-after=15 "${WORKLOAD_TIMEOUT_SECONDS}" \
@@ -445,10 +566,22 @@ for i in "${!workloads[@]}"; do
         --name "${workload}" \
         --results-directory /outputs --csv-output-path /outputs/results.csv \
         --print-timing-summary \
+        --collect-memory-stats \
         "/outputs/${workload}/config.yaml" &
     status=0
     wait $! || status=$?
+    # timeout(1) terminates the foreground docker CLI, but the daemon-managed
+    # named container can survive it and retain all GPU memory. Always remove
+    # a surviving workload container before starting the next supposedly
+    # fresh cell.
+    remove_container "${current_container}"
     current_container=
+    if (( status != 0 )) \
+        && [[ "${workload_output_dir}/profile_trace_rank_0.json.gz" \
+            -nt "${workload_output_dir}/config.yaml" ]]; then
+        echo "Profiler trace completed for ${workload}; no timings.json is expected in profile mode."
+        status=0
+    fi
 
     case ${status} in
         0)
