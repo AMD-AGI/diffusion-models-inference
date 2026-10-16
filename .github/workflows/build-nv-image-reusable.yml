@@ -86,19 +86,6 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@v4
       
-      # The docker/Dockerfile.cuda flash-attention RUN step caps MAX_JOBS at
-      # FLASH_ATTN_MAX_JOBS_AARCH64 (default 32) on aarch64 to protect
-      # memory-constrained native aarch64 hosts like GB300 / Grace-Blackwell
-      # from OOM. Match the cap to the native ARM runner's available cores.
-      - name: Detect build host parallelism
-        if: ${{ inputs.platform == 'linux/arm64' }}
-        id: cores
-        shell: bash
-        run: |
-          NPROC=$(nproc)
-          echo "Detected ${NPROC} cores on build host"
-          echo "nproc=${NPROC}" >> $GITHUB_OUTPUT
-      
       - name: Build NV image
         env:
           BUILDX_BUILDER: ${{ steps.buildx.outputs.name }}
@@ -108,7 +95,7 @@ jobs:
           IMAGE_NAME: ${{ inputs.image_name }}
           IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
           TAG_SUFFIX: ${{ inputs.image_tag_suffix }}
-          FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
+          FLASH_ATTN_MAX_JOBS_AARCH64: '1'
         run: |
           NO_CACHE_FLAG=""
           if [ "${DISABLE_CACHE}" = "true" ]; then
@@ -116,8 +103,8 @@ jobs:
           fi
           
           EXTRA_BUILD_ARGS=""
-          if [ "${PLATFORM}" = "linux/arm64" ] && [ -n "${FLASH_ATTN_NPROC}" ]; then
-            EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}"
+          if [ "${PLATFORM}" = "linux/arm64" ]; then
+            EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_MAX_JOBS_AARCH64}"
           fi
           
           # IMAGE_TAG carries the commit SHA, so it never exists before a build
