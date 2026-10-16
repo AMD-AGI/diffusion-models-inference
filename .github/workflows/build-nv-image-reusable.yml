@@ -81,15 +81,15 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
           password: ${{ secrets.DOCKERHUB_OAT }}
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v4
       
       # The docker/Dockerfile.cuda flash-attention RUN step caps MAX_JOBS at
       # FLASH_ATTN_MAX_JOBS_AARCH64 (default 32) on aarch64 to protect
       # memory-constrained native aarch64 hosts like GB300 / Grace-Blackwell
-      # from OOM. Match the cap to the native ARM runner's available cores.
+      # from OOM. Under QEMU on a build-only x86 runner the host has plenty
+      # of RAM but the emulation is slow, so we raise the cap to the build
+      # host's full core count to recover parallelism. This step records the
+      # host's nproc; the value is injected as a --build-arg only for the
+      # arm64 (QEMU) build below.
       - name: Detect build host parallelism
         if: ${{ inputs.platform == 'linux/arm64' }}
         id: cores
@@ -99,9 +99,20 @@ jobs:
           echo "Detected ${NPROC} cores on build host"
           echo "nproc=${NPROC}" >> $GITHUB_OUTPUT
       
+      - name: Verify QEMU binfmt support for arm64
+        if: ${{ inputs.platform == 'linux/arm64' }}
+        run: |
+          if [ ! -f /host-binfmt_misc/qemu-aarch64 ]; then
+            echo "::error::QEMU binfmt handler for aarch64 is not registered on this host. " \
+                 "The host kernel must have qemu-user-static binfmt handlers pre-registered " \
+                 "for cross-platform builds to work in restricted DinD environments."
+            exit 1
+          fi
+          echo "QEMU aarch64 binfmt handler is available:"
+          cat /host-binfmt_misc/qemu-aarch64
+      
       - name: Build NV image
         env:
-          BUILDX_BUILDER: ${{ steps.buildx.outputs.name }}
           BUILDKIT_PROGRESS: plain
           PLATFORM: ${{ inputs.platform }}
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
