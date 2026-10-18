@@ -1,0 +1,77 @@
+{
+  "caption": {
+    "comprehensive_description": {
+      "scene_content_description": "A russet fox walks along a packed snow trail through a stand of tall pine trees at first light. Fresh powder clings to its fur and to the lower branches. The trail is narrow, with blue-shadowed drifts on either side and a pale gold sky visible between the trunks. The fox moves toward the camera with a steady, unhurried gait, pausing once to sniff the air before continuing.",
+      "camera_movement_description": "The camera tracks beside the fox at roughly waist height, holding a medium-wide framing. A slow dolly keeps pace with the animal so it stays centered. Depth of field is moderate: the fox remains sharp while distant trunks fall slightly out of focus."
+    },
+    "camera_info": {
+      "color": "Cool",
+      "frame_size": "Medium Wide",
+      "shot_type_angle": "Eye level",
+      "lens_size": "Medium",
+      "composition": "Center",
+      "lighting": "Soft light",
+      "lighting_type": "Dawn"
+    },
+    "world_knowledge": [],
+    "prominent_elements": [
+      {
+        "name": "russet fox",
+        "description": "An adult red fox with thick winter coat, black socks, and a white-tipped tail.",
+        "actions": [
+          {
+            "timestamp": "[0.0s - 1.0s]",
+            "action": "steps onto the packed trail, paws compacting the snow"
+          },
+          {
+            "timestamp": "[1.0s - 2.2s]",
+            "action": "walks toward the camera, ears forward, tail level"
+          },
+          {
+            "timestamp": "[2.2s - 2.8s]",
+            "action": "stops and lifts its muzzle to scent the air"
+          },
+          {
+            "timestamp": "[2.8s - 3.4s]",
+            "action": "resumes walking along the trail"
+          }
+        ],
+        "location": "center of the frame on the snow trail",
+        "relative_size": "dominant",
+        "shape_and_color": "lean canine silhouette; russet, cream, and black",
+        "texture": "dense winter fur with frost on the guard hairs",
+        "appearance_details": "amber eyes, black lower legs, white chest and tail tip",
+        "relationship": "the main subject moving through the forest",
+        "orientation": "upright, approaching the camera slightly off-axis",
+        "pose": "walking with a pause to scent",
+        "expression": "alert and calm",
+        "clothing": "",
+        "gender": "",
+        "skin_tone_and_texture": ""
+      },
+      {
+        "name": "pine trees",
+        "description": "Tall evergreens lining both sides of the trail, needles dusted with snow.",
+        "actions": [
+          {
+            "timestamp": "[0.0s - 3.4s]",
+            "action": "stand still while a light breeze shifts loose snow from the branches"
+          }
+        ],
+        "location": "left and right of the trail, receding into the background",
+        "relative_size": "large",
+        "shape_and_color": "vertical trunks, deep green needles, white snow caps",
+        "texture": "rough bark and clustered needles",
+        "appearance_details": "snow on the windward side of the trunks",
+        "relationship": "forms the forest corridor around the fox",
+        "orientation": "vertical",
+        "pose": "",
+        "expression": "",
+        "clothing": "",
+        "gender": "",
+        "skin_tone_and_texture": ""
+      }
+    ]
+  },
+  "duration": 3.4
+}
