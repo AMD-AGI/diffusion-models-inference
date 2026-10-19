@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import traceback
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -441,7 +441,7 @@ class BulkBench:
             self._runPatchCommand(patch_set["name"], patch_data, dry_run=False)
 
     @contextmanager
-    def _appliedPatchSet(self, patch_set: PatchSet) -> Iterator[None]:
+    def _appliedPatchSet(self, patch_set: PatchSet) -> Generator[None, None, None]:
         self._dryRunPatches(patch_set)
         backups = self._snapshotTargets(patch_set)
         try:
