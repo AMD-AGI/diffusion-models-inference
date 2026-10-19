@@ -19,7 +19,7 @@ MIOPEN_DEBUG_CONV_DIRECT=${MIOPEN_DEBUG_CONV_DIRECT:-0}
 ARCH=${ARCH:-unknown}
 FORCE_RETUNING=${FORCE_RETUNING:-false}
 
-DB_PREFIX=$($ROOTDIR/data/miopen/resolve_prefix.sh)
+DB_PREFIX=$("$ROOTDIR/data/miopen/resolve_prefix.sh")
 if [ -n "$DB_PREFIX" ]; then
     echo "Detected MIOpen DB prefix: $DB_PREFIX"
     echo "$DB_PREFIX" > "$ROOTDIR/.miopen_db_prefix"
@@ -37,17 +37,17 @@ fi
 
 # glob, concatenate and retain unique MIOpen driver commands
 echo "Extracting workload MIOpenDriver calls"
-sed -s '$a\\' $ROOTDIR/data/miopen/workloads/*.txt | uniq -u | sort -u > $ROOTDIR/drivercmd.txt
+sed -s "\$a\\" "$ROOTDIR"/data/miopen/workloads/*.txt | uniq -u | sort -u > "$ROOTDIR/drivercmd.txt"
 
 # filter out already-tuned commands
 echo "Filtering already-tuned commands"
-python $ROOTDIR/src/miopen_convolution/filter_tuned_commands.py \
-    $ROOTDIR/drivercmd.txt \
-    $ROOTDIR/drivercmd_filtered.txt \
-    --db-path $MIOPEN_USER_DB_PATH \
+python "$ROOTDIR/src/miopen_convolution/filter_tuned_commands.py" \
+    "$ROOTDIR/drivercmd.txt" \
+    "$ROOTDIR/drivercmd_filtered.txt" \
+    --db-path "$MIOPEN_USER_DB_PATH" \
     --db-prefix "$DB_PREFIX"
 
-echo "$(wc -l < $ROOTDIR/drivercmd_filtered.txt) commands need tuning"
+echo "$(wc -l < "$ROOTDIR/drivercmd_filtered.txt") commands need tuning"
 
 # find MIOpenDriver executable
 echo "Searching for MIOpenDriver executable"
@@ -64,19 +64,17 @@ ln -s "$miopendriver_path" /bin/MIOpenDriver
 
 # run MIOpen tuning
 echo "Executing MIOpen tuning"
-cd $ROOTDIR/src/distrituner
-python miopen_tuner.py $ROOTDIR/drivercmd_filtered.txt \
-    --tuning-output-path $WORKDIR/tuning --log-dir $WORKDIR/logs \
-    --miopen-find-mode $MIOPEN_FIND_MODE --miopen-find-enforce $MIOPEN_FIND_ENFORCE \
-    --miopen-debug-conv-direct $MIOPEN_DEBUG_CONV_DIRECT
-
-if [ $? -ne 0 ]; then
+cd "$ROOTDIR/src/distrituner" || exit 1
+if ! python miopen_tuner.py "$ROOTDIR/drivercmd_filtered.txt" \
+    --tuning-output-path "$WORKDIR/tuning" --log-dir "$WORKDIR/logs" \
+    --miopen-find-mode "$MIOPEN_FIND_MODE" --miopen-find-enforce "$MIOPEN_FIND_ENFORCE" \
+    --miopen-debug-conv-direct "$MIOPEN_DEBUG_CONV_DIRECT"; then
     echo "MIOpen tuning failed"
     exit 1
 fi
 
 # concatenate results
-tuningdirs=($WORKDIR/tuning/device*/)
+tuningdirs=("$WORKDIR"/tuning/device*/)
 
 if [ ! -d "${tuningdirs[0]}" ]; then
   echo "Tuning directories not found"
@@ -87,10 +85,10 @@ filename=$(basename "$(find "${tuningdirs[0]}" -type f -name "*.udb.txt" | head 
 filename="${filename%.*.*}"
 
 echo "Concatenating results with existing databases $filename"
-cat $WORKDIR/tuning/device*/$filename.udb.txt >> $MIOPEN_USER_DB_PATH/$filename.udb.txt
-sort -u $MIOPEN_USER_DB_PATH/$filename.udb.txt -o $MIOPEN_USER_DB_PATH/$filename.udb.txt
-cat $WORKDIR/tuning/device*/$filename.ufdb.txt >> $MIOPEN_USER_DB_PATH/$filename.ufdb.txt
-sort -u $MIOPEN_USER_DB_PATH/$filename.ufdb.txt -o $MIOPEN_USER_DB_PATH/$filename.ufdb.txt
+cat "$WORKDIR"/tuning/device*/"$filename".udb.txt >> "$MIOPEN_USER_DB_PATH/$filename.udb.txt"
+sort -u "$MIOPEN_USER_DB_PATH/$filename.udb.txt" -o "$MIOPEN_USER_DB_PATH/$filename.udb.txt"
+cat "$WORKDIR"/tuning/device*/"$filename".ufdb.txt >> "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt"
+sort -u "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt" -o "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt"
 
 # signal success to the host
-touch $ROOTDIR/.tuning_successful
+touch "$ROOTDIR/.tuning_successful"

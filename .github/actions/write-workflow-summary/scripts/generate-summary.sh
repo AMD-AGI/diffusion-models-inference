@@ -12,8 +12,10 @@ echo "" >> "$GITHUB_STEP_SUMMARY"
 
 # Process text content
 if [ -n "${INPUT_TEXT}" ]; then
-  echo "${INPUT_TEXT}" >> "$GITHUB_STEP_SUMMARY"
-  echo "" >> "$GITHUB_STEP_SUMMARY"
+  {
+    echo "${INPUT_TEXT}"
+    echo ""
+  } >> "$GITHUB_STEP_SUMMARY"
 fi
 
 # Process table sections
@@ -21,11 +23,13 @@ echo "${INPUT_TABLES}" | jq -c 'to_entries[]' | while IFS= read -r section; do
   TITLE=$(echo "$section" | jq -r '.key')
   DATA=$(echo "$section" | jq -c '.value')
 
-  echo "### $TITLE" >> "$GITHUB_STEP_SUMMARY"
-  echo "| Key | Value |" >> "$GITHUB_STEP_SUMMARY"
-  echo "|-----|-------|" >> "$GITHUB_STEP_SUMMARY"
-  echo "$DATA" | jq -r 'to_entries | .[] | "| \(.key) | \(if .value then "`\(.value | tostring)`" else "" end) |"' >> "$GITHUB_STEP_SUMMARY"
-  echo "" >> "$GITHUB_STEP_SUMMARY"
+  {
+    echo "### $TITLE"
+    echo "| Key | Value |"
+    echo "|-----|-------|"
+    echo "$DATA" | jq -r 'to_entries | .[] | "| \(.key) | \(if .value then "`\(.value | tostring)`" else "" end) |"'
+    echo ""
+  } >> "$GITHUB_STEP_SUMMARY"
 done
 
 # Process code sections
@@ -33,9 +37,11 @@ echo "${INPUT_CODE}" | jq -c 'to_entries[]' | while IFS= read -r section; do
   TITLE=$(echo "$section" | jq -r '.key')
   DATA=$(echo "$section" | jq -c '.value')
 
-  echo "### $TITLE" >> "$GITHUB_STEP_SUMMARY"
-  echo '```json' >> "$GITHUB_STEP_SUMMARY"
-  echo "$DATA" | jq . >> "$GITHUB_STEP_SUMMARY"
-  echo '```' >> "$GITHUB_STEP_SUMMARY"
-  echo "" >> "$GITHUB_STEP_SUMMARY"
+  {
+    echo "### $TITLE"
+    echo '```json'
+    echo "$DATA" | jq .
+    echo '```'
+    echo ""
+  } >> "$GITHUB_STEP_SUMMARY"
 done
