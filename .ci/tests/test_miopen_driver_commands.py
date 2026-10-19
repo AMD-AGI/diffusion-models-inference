@@ -39,9 +39,7 @@ class TestMIOpenDriverCommandCollector(unittest.TestCase):
         return json.loads(path.read_text())
 
     def test_collects_sorted_unique_commands_without_log_prefix(self):
-        collector = MIOpenDriverCommandCollector(
-            self.results_directory, ["wan2_2.default"]
-        )
+        collector = MIOpenDriverCommandCollector(self.results_directory, ["wan2_2.default"])
         stderr_path = self.results_directory / "stderr.txt"
         stderr_path.write_text(
             "unrelated output\n"
@@ -53,9 +51,7 @@ class TestMIOpenDriverCommandCollector(unittest.TestCase):
         collector.collect("wan2_2.default", stderr_path, process_succeeded=True)
         collector.mark_succeeded("wan2_2.default")
 
-        output_path = (
-            self.results_directory / "miopen_workloads" / "wan2_2.default.txt"
-        )
+        output_path = self.results_directory / "miopen_workloads" / "wan2_2.default.txt"
         self.assertEqual(
             output_path.read_text(),
             "MIOpenDriver convfp16 -n 1\nMIOpenDriver convfp16 -n 2\n",
@@ -74,35 +70,27 @@ class TestMIOpenDriverCommandCollector(unittest.TestCase):
         )
 
     def test_marks_nonzero_process_output_as_partial(self):
-        collector = MIOpenDriverCommandCollector(
-            self.results_directory, ["flux.default"]
-        )
+        collector = MIOpenDriverCommandCollector(self.results_directory, ["flux.default"])
         stderr_path = self.results_directory / "stderr.txt"
         stderr_path.write_text("MIOpenDriver conv -n 1\n")
 
         collector.collect("flux.default", stderr_path, process_succeeded=False)
 
-        output_path = (
-            self.results_directory / "miopen_workloads" / "flux.default.partial.txt"
-        )
+        output_path = self.results_directory / "miopen_workloads" / "flux.default.partial.txt"
         self.assertEqual(output_path.read_text(), "MIOpenDriver conv -n 1\n")
         entry = self._manifest()["workloads"][0]
         self.assertEqual(entry["benchmark_status"], "process_failed")
         self.assertEqual(entry["file"], "flux.default.partial.txt")
 
     def test_omits_empty_file_and_keeps_not_run_workloads(self):
-        collector = MIOpenDriverCommandCollector(
-            self.results_directory, ["empty.default", "not_run.default"]
-        )
+        collector = MIOpenDriverCommandCollector(self.results_directory, ["empty.default", "not_run.default"])
         stderr_path = self.results_directory / "stderr.txt"
         stderr_path.write_text("no MIOpen calls\n")
 
         collector.collect("empty.default", stderr_path, process_succeeded=True)
         collector.mark_metrics_failed("empty.default")
 
-        self.assertFalse(
-            (self.results_directory / "miopen_workloads" / "empty.default.txt").exists()
-        )
+        self.assertFalse((self.results_directory / "miopen_workloads" / "empty.default.txt").exists())
         entries = self._manifest()["workloads"]
         self.assertEqual(entries[0]["benchmark_status"], "metrics_failed")
         self.assertEqual(entries[0]["collection_status"], "no_commands")
@@ -110,9 +98,7 @@ class TestMIOpenDriverCommandCollector(unittest.TestCase):
         self.assertEqual(entries[1]["collection_status"], "not_started")
 
     def test_records_collection_error_without_raising(self):
-        collector = MIOpenDriverCommandCollector(
-            self.results_directory, ["missing.default"]
-        )
+        collector = MIOpenDriverCommandCollector(self.results_directory, ["missing.default"])
 
         with self.assertLogs("miopen_driver_commands", level="WARNING"):
             collector.collect(

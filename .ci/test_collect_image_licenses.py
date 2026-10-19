@@ -17,9 +17,7 @@ COLLECTOR_PATH = Path(__file__).with_name("collect_image_licenses.py")
 
 
 def load_collector():
-    specification = importlib.util.spec_from_file_location(
-        "collect_image_licenses", COLLECTOR_PATH
-    )
+    specification = importlib.util.spec_from_file_location("collect_image_licenses", COLLECTOR_PATH)
     assert specification is not None
     assert specification.loader is not None
     module = importlib.util.module_from_spec(specification)
@@ -155,9 +153,7 @@ class CollectImageLicensesTest(unittest.TestCase):
         self.create_repository("project", "LICENSE")
         evidence_root = self.root / "builder-evidence"
         (evidence_root / "files/source").mkdir(parents=True)
-        (evidence_root / "files/source/LICENSE").write_text(
-            "builder license\n", encoding="utf-8"
-        )
+        (evidence_root / "files/source/LICENSE").write_text("builder license\n", encoding="utf-8")
         (evidence_root / "MANIFEST.json").write_text(
             '{"git_repositories": [{"revision": "abc123"}]}\n', encoding="utf-8"
         )

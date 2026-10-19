@@ -32,16 +32,10 @@ def create_miopen_worker_environment(
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO, format="[%(levelname)s] %(asctime)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s %(message)s")
 
-    argparser = argparse.ArgumentParser(
-        description="Distribute MIOpen tuning work across multiple GPUs in parallel"
-    )
-    argparser.add_argument(
-        "task_file", type=str, help="File with MIOpen driver commands to use for tuning"
-    )
+    argparser = argparse.ArgumentParser(description="Distribute MIOpen tuning work across multiple GPUs in parallel")
+    argparser.add_argument("task_file", type=str, help="File with MIOpen driver commands to use for tuning")
     argparser.add_argument(
         "--tuning-output-path",
         type=str,
@@ -81,9 +75,7 @@ def main():
 
     log_dir = Path(args.log_dir).expanduser().resolve()
     if log_dir.is_file():
-        logging.error(
-            f"Error: --log-dir {args.log_dir} is a file. Please provide a directory path."
-        )
+        logging.error(f"Error: --log-dir {args.log_dir} is a file. Please provide a directory path.")
         sys.exit(1)
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -111,9 +103,7 @@ def main():
 
     if "HIP_VISIBLE_DEVICES" not in os.environ:
         # TODO: infer number of GPUs available on system and use all by default
-        logging.error(
-            "Please set HIP_VISIBLE_DEVICES to indicate which devices should be used for tuning. Exiting."
-        )
+        logging.error("Please set HIP_VISIBLE_DEVICES to indicate which devices should be used for tuning. Exiting.")
         sys.exit(1)
 
     # Create environments for each of the workers

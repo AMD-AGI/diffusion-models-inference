@@ -34,9 +34,10 @@ class Result:
     stderr: str
     duration_ms: float
 
+
 def do_work(task: Task) -> Result:
     """Execute a task in a subprocess, capturing and printing its output.
-    
+
     Returns:
         A Result object containing the task command, exit code, stdout, stderr, and duration.
     """
@@ -61,12 +62,10 @@ def do_work(task: Task) -> Result:
     )
 
     if task.log_file is not None:
-        logging.debug(
-            f"Worker [PID={os.getpid()}] - saving output to {task.log_file}"
-        )
+        logging.debug(f"Worker [PID={os.getpid()}] - saving output to {task.log_file}")
         with open(task.log_file, "w") as f:
             json.dump(asdict(result), f)
-    
+
     return result
 
 
@@ -131,9 +130,7 @@ def distritune(
                 future_to_task[future] = task
                 future_to_index[future] = idx
             results: list[Result | None] = [None] * len(tasks)
-            for future in tqdm(
-                as_completed(future_to_task), total=len(tasks), desc="DistriTune"
-            ):
+            for future in tqdm(as_completed(future_to_task), total=len(tasks), desc="DistriTune"):
                 task = future_to_task[future]
                 try:
                     result = future.result()

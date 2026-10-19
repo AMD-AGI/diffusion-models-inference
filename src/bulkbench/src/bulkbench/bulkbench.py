@@ -218,7 +218,11 @@ class BulkBench:
                 self.Con
             )
             if readable_bytes is None:
-                readable_bytes = lambda x: f"{x} bytes"
+
+                def readable_bytes_fallback(value: Any) -> str:
+                    return f"{value} bytes"
+
+                readable_bytes = readable_bytes_fallback
 
         self.regenerate_results = _get_arg("regenerate_results", False)
         assert isinstance(self.regenerate_results, bool), "regenerate_results must be a boolean"

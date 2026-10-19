@@ -144,9 +144,7 @@ def compare(
     print("=== Per-file stats ===")
     for label, r in ("A", a), ("B", b):
         dup_note = (
-            f", duplicate keys (same key on another line): {r.duplicate_key_lines}"
-            if r.duplicate_key_lines
-            else ""
+            f", duplicate keys (same key on another line): {r.duplicate_key_lines}" if r.duplicate_key_lines else ""
         )
         bad_note = ""
         if r.lines_without_equals:
@@ -174,26 +172,14 @@ def compare(
         b_label = "B primary solver" if first_solver_only else "B value"
         for k in sorted(common):
             va, vb = a.value_for.get(k, ""), b.value_for.get(k, "")
-            ca, cb = (
-                (_primary_solver(va), _primary_solver(vb))
-                if first_solver_only
-                else (va, vb)
-            )
+            ca, cb = (_primary_solver(va), _primary_solver(vb)) if first_solver_only else (va, vb)
             if ca != cb:
                 sa, sb = _format_value_pair(ca, cb, full_values)
                 val_mismatch.append(f"{k}\n    {a_label}: {sa}\n    {b_label}: {sb}")
         same_val = len(common) - len(val_mismatch)
-        scope = (
-            "primary solver (text before first ';')"
-            if first_solver_only
-            else "full value (after first '=')"
-        )
+        scope = "primary solver (text before first ';')" if first_solver_only else "full value (after first '=')"
         print(f"\n  {scope.capitalize()}: identical for {same_val}, different for {len(val_mismatch)}")
-        title = (
-            "Primary solver mismatches (before first ';')"
-            if first_solver_only
-            else "Value mismatches"
-        )
+        title = "Primary solver mismatches (before first ';')" if first_solver_only else "Value mismatches"
         if val_mismatch:
             _print_list(title, val_mismatch, max_list)
 
@@ -238,11 +224,7 @@ def compare(
     if compare_values and common:
         for k in common:
             va, vb = a.value_for.get(k, ""), b.value_for.get(k, "")
-            ca, cb = (
-                (_primary_solver(va), _primary_solver(vb))
-                if first_solver_only
-                else (va, vb)
-            )
+            ca, cb = (_primary_solver(va), _primary_solver(vb)) if first_solver_only else (va, vb)
             if ca != cb:
                 identical = False
                 break
@@ -252,9 +234,7 @@ def compare(
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Compare two MIOpen .udb.txt user database exports (key=value lines per record)."
-        )
+        description=("Compare two MIOpen .udb.txt user database exports (key=value lines per record).")
     )
     parser.add_argument("file_a", type=Path, help="First .udb.txt file")
     parser.add_argument("file_b", type=Path, help="Second .udb.txt file")
