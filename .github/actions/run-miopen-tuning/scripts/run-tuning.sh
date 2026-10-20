@@ -12,7 +12,7 @@ RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
 [[ "$GITHUB_WORKSPACE" == "$RUNNER_WORK_ROOT/"* ]] ||
   { echo "GITHUB_WORKSPACE is outside $RUNNER_WORK_ROOT" >&2; exit 1; }
 
-docker run \
+brr run -- docker run \
   --security-opt seccomp=unconfined \
   --device=/dev/kfd \
   --device=/dev/dri \
