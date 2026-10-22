@@ -32,6 +32,11 @@ on:
         required: false
         type: boolean
         default: false
+      use_brr_if_available:
+        description: 'Use brr for GPU resource allocation when available'
+        required: false
+        type: boolean
+        default: false
       artifact_name:
         description: 'Artifact name for the tuned MIOpen databases'
         required: true
@@ -76,6 +81,7 @@ jobs:
           arch: ${{ inputs.arch }}
           artifact_name: ${{ inputs.artifact_name }}
           force_retuning: ${{ inputs.force_retuning }}
+          use_brr_if_available: ${{ inputs.use_brr_if_available }}
 
       - name: Image cleanup
         if: always()

@@ -62,6 +62,11 @@ on:
         type: boolean
         required: false
         default: false
+      use_brr_if_available:
+        description: 'Use brr for GPU resource allocation when available'
+        type: boolean
+        required: false
+        default: false
       disable_docker_cache:
         description: 'Disable Docker cache on core build'
         type: boolean
@@ -138,6 +143,11 @@ on:
         default: ''
       collect_hipblaslt_logs:
         description: 'Collect hipBLASLt logs per benchmark'
+        required: false
+        type: boolean
+        default: false
+      use_brr_if_available:
+        description: 'Use brr for GPU resource allocation when available'
         required: false
         type: boolean
         default: false
@@ -419,6 +429,7 @@ jobs:
           arch: ${{ matrix.arch }}
           artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
           force_retuning: ${{ inputs.force_retuning }}
+          use_brr_if_available: ${{ inputs.use_brr_if_available }}
       
       - name: Run benchmarks
         if: ${{ inputs.run_benchmarks }}
@@ -430,6 +441,7 @@ jobs:
           benchmark_only: ${{ !inputs.run_miopen_tuning }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
           force_determinism_check: ${{ inputs.force_determinism_check }}
+          use_brr_if_available: ${{ inputs.use_brr_if_available }}
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
           artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}

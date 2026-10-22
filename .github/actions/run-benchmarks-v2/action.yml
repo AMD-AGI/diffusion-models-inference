@@ -26,6 +26,10 @@ inputs:
     description: 'Collect hipBLASLt GEMM logs per benchmark'
     required: false
     default: 'false'
+  use_brr_if_available:
+    description: 'Use brr for resource allocation when the brr client is available'
+    required: false
+    default: 'false'
   output_dir:
     description: 'Output directory name for benchmark results (e.g., benchmarks, benchmarks-baseline)'
     required: false
@@ -151,7 +155,10 @@ runs:
         JOB_TIMEOUT_MINUTES: ${{ inputs.job_timeout_minutes }}
         DATABRICKS_HOST: ${{ inputs.databricks_host }}
         DATABRICKS_TOKEN: ${{ inputs.databricks_token }}
-      run: bash ${{ github.action_path }}/run-inference-testing.sh
+        USE_BRR_IF_AVAILABLE: ${{ inputs.use_brr_if_available }}
+        WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
+      run: |
+        "$WITH_BRR" "$GITHUB_ACTION_PATH/run-inference-testing.sh"
 
     - name: Verify benchmark results
       if: ${{ steps.convert.outputs.config_count != '0' }}

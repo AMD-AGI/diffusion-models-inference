@@ -5,14 +5,18 @@
 set -euo pipefail
 
 # Run MIOpen kernel tuning in a Docker container.
-# Expects env vars: ARCH, FORCE_RETUNING, DOCKER_IMAGE
+# Expects env vars: ARCH, FORCE_RETUNING, DOCKER_IMAGE,
+#   USE_BRR_IF_AVAILABLE, WITH_BRR
 
 rm -f .tuning_successful
 RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
 [[ "$GITHUB_WORKSPACE" == "$RUNNER_WORK_ROOT/"* ]] ||
   { echo "GITHUB_WORKSPACE is outside $RUNNER_WORK_ROOT" >&2; exit 1; }
 
-brr run -- docker run \
+# The bash -c body below is deliberately single-quoted: it is expanded by the
+# shell inside the container, using the variables passed in with -e.
+# shellcheck disable=SC2016
+"$WITH_BRR" docker run \
   --security-opt seccomp=unconfined \
   --device=/dev/kfd \
   --device=/dev/dri \
