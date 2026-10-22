@@ -24,9 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         pip install "setuptools>=61.0" "setuptools-scm>=8.0" wheel && \
         pip freeze | grep -iE '^(torch|torchvision|torchaudio|torchcodec|torch[-_]memory[-_]saver|flashinfer[-_]python|sglang-kernel|sgl-deep-ep|sgl-deep-gemm)==' \
             > /tmp/keep-base-stack.txt && \
-        cat /tmp/keep-base-stack.txt && \
-        pip install --no-build-isolation -c /tmp/keep-base-stack.txt -e "python[diffusion]" && \
-        python -c "import torch; print('torch after install:', torch.__version__)"; \
+        pip install --no-build-isolation -c /tmp/keep-base-stack.txt -e "python[diffusion]"; \
     fi
 
 # Envs
