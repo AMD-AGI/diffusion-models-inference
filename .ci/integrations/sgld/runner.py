@@ -14,10 +14,14 @@ from PIL import Image
 from sglang.multimodal_gen import DiffGenerator
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args() -> tuple[argparse.Namespace, list[str]]:
 
     parser = argparse.ArgumentParser(
         description="Run SGLang-Diffusion",
+        # Without this, an unknown flag that happens to be a prefix of a known one
+        # (--enable_t) would be swallowed as an abbreviation (--enable_tiling)
+        # instead of being forwarded to sglang.
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--model",
@@ -142,7 +146,25 @@ def parse_args() -> argparse.Namespace:
         "--attention_backend",
         type=str,
         required=False,
-        help="NOT IN USE",
+        default=None,
+        help="Attention backend to use for the self-attention layers",
+    )
+    parser.add_argument(
+        "--cross_attention_backend",
+        type=str,
+        required=False,
+        default=None,
+        help="Attention backend to use for the cross-attention layers",
+    )
+    parser.add_argument(
+        "--attention_backend_config",
+        type=str,
+        required=False,
+        default=None,
+        help=(
+            "Extra configuration for the attention backend, forwarded verbatim as "
+            "--attention-backend-config (e.g. format=aiter_fp8)"
+        ),
     )
     parser.add_argument(
         "--batch_size",
@@ -232,7 +254,10 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Layer name patterns to keep unquantized (e.g. blocks.0 blocks.1)"
     )
-    return parser.parse_args()
+    # Anything not declared above is assumed to be an sglang generate option and
+    # is forwarded as-is by run_cli, so new sglang flags can be used from the
+    # benchmark YAMLs without touching this parser.
+    return parser.parse_known_args()
 
 def run_sgld(generator, sampling_params):
     output = generator.generate(
@@ -280,7 +305,27 @@ def _write_config_file(config_json: str, output_directory: str) -> str:
     return config_path
 
 
-def run_cli(args):
+def _passthrough_args(extra: list[str]) -> list[str]:
+    """
+    Translate argv the parser did not recognise into sglang generate flags.
+
+    Only the flag names are rewritten, from the underscore spelling the benchmark
+    YAMLs use to the dashes sglang expects (--enable_foo -> --enable-foo); values
+    are left untouched. Bare switches (--enable-x), separate values (--asd fgh),
+    inline values (--asd=fgh) and multi-value flags all survive the round trip.
+    """
+    forwarded = []
+    for token in extra:
+        if token.startswith("--"):
+            flag, separator, value = token.partition("=")
+            forwarded.append(flag.replace("_", "-") + separator + value)
+        else:
+            # A value, or a negative number such as the -1 in `--shift -1`.
+            forwarded.append(token)
+    return forwarded
+
+
+def run_cli(args, extra):
     cmd = ["sglang", "generate"]
 
 
@@ -349,6 +394,15 @@ def run_cli(args):
         hybrid_cmd_value = f"{args.hybrid_attn_high_precision_backend}:{args.hybrid_attn_low_precision_backend}:{num_high_start_steps}:{num_high_end_steps}"
         cmd.extend(["--hybrid-attention-schedule", hybrid_cmd_value])
 
+    if args.attention_backend is not None:
+        cmd.extend(["--attention-backend", args.attention_backend])
+
+    if args.cross_attention_backend is not None:
+        cmd.extend(["--cross-attention-backend", args.cross_attention_backend])
+
+    if args.attention_backend_config is not None:
+        cmd.extend(["--attention-backend-config", args.attention_backend_config])
+
     if args.use_fp8_gemms:
         cmd.extend(["--quantization", "fp8"])
 
@@ -360,6 +414,10 @@ def run_cli(args):
 
     if args.config is not None:
         cmd.extend(["--config", _write_config_file(args.config, args.output_directory)])
+
+    # Appended last on purpose: argparse keeps the last occurrence of a repeated
+    # flag, so a forwarded flag overrides the defaults hard-coded above.
+    cmd.extend(_passthrough_args(extra))
 
     print(f"Running command: {' '.join(cmd)}")
 
@@ -462,11 +520,18 @@ def run_api(args):
 
 
 def main():
-    args = parse_args()
+    args, extra = parse_args()
 
     if args.run_type == "cli":
-        run_cli(args)
+        run_cli(args, extra)
     elif args.run_type == "api":
+        if extra:
+            # Silently dropping them would benchmark a different configuration
+            # than the one the config asked for.
+            raise ValueError(
+                f"Unrecognized arguments {extra} can only be forwarded with "
+                "--run_type cli, not --run_type api"
+            )
         run_api(args)
     else:
         raise ValueError(f"Invalid run type: {args.run_type}")

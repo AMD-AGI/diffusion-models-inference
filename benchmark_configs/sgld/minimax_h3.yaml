@@ -11,7 +11,7 @@
     prompt: A cat flying through the universe on a broom, playing rap music from his boombox
     num_inference_steps: 50
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: false
     num_iterations: 1
     warmup_steps: 50
     attention_backend: aiter
@@ -32,7 +32,7 @@
     prompt: A cat flying through the universe on a broom, playing rap music from his boombox
     num_inference_steps: 50
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: false
     num_iterations: 1
     warmup_steps: 50
     config:
@@ -52,7 +52,7 @@
     prompt: A cat flying through the universe on a broom, playing rap music from his boombox
     num_inference_steps: 50
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: false
     num_iterations: 1
     warmup_steps: 50
     config:

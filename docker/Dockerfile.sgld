@@ -1,15 +1,15 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.8"
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.10"
 FROM ${BASE_IMAGE}
 
-ARG VLLM_COMMIT="ad7125a" # v0.21.0
+ARG VLLM_COMMIT="v0.28.0" # v0.28.0
 #ARG SGL_COMMIT="2948168" # v0.5.17
 #ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
 
 # Necessary PRs manually merged
-ARG SGL_COMMIT="feature/combined_perf_1008"
+ARG SGL_COMMIT="perf_branch_1410"
 ARG SGL_REPO="https://github.com/avjves/sglang.git"
 ARG AMDGPU_TARGET="gfx950"
 
@@ -33,6 +33,7 @@ RUN git clone ${SGL_REPO} sglang && \
     AMDGPU_TARGET=${AMDGPU_TARGET} python setup_rocm.py install && \
     cd ../../../../ && \
     mv python/pyproject_other.toml python/pyproject.toml && \
+    sed -i 's/compressed-tensors==0\.15\.0/compressed-tensors==0.17.0/' python/pyproject.toml && \
     sed -i '/numpy/d' python/pyproject.toml && \
     sed -i '/torch/d' python/pyproject.toml && \
     sed -i '/torchvision/d' python/pyproject.toml && \
@@ -47,14 +48,13 @@ RUN pip3 install remote_pdb imageio && \
     pip3 uninstall torch_c_dlpack_ext -y
 
 RUN pip3 install "transformers==5.12.1" --upgrade
-    #pip3 install "flydsl==0.2.4" --upgrade
 
 # Runtime envs
 ENV SGLANG_TORCH_COMPILE_MODE="default"
 ENV SGLANG_USE_ROCM_VAE=0
-# Requires SGL PR #33855
+ENV SGLANG_USE_AITER=1
+ENV SGLANG_USE_ROCM_FLYDSL=1
 ENV SGLANG_DIFFUSION_DISABLE_SP_PAD_MASK=1
-ENV MIOPEN_DEBUG_CONV_DIRECT=0
 
 WORKDIR /app
 # Include CI
@@ -65,3 +65,6 @@ COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY .ci/determinism_report.py /app/.ci/determinism_report.py
 COPY .ci/integrations/sgld/runner.py /app/.ci/runner.py
 COPY benchmark_configs/sgld/ /app/.ci/benchmark_configs/
+
+
+RUN wget -O /app/data/flux_cat.png https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
