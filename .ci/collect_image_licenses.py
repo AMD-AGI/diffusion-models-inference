@@ -137,8 +137,7 @@ def walk_files(root: Path) -> Iterable[Path]:
         directory_names[:] = sorted(
             name
             for name in directory_names
-            if name not in IGNORED_DIRECTORIES
-            and not (Path(directory) / name).is_symlink()
+            if name not in IGNORED_DIRECTORIES and not (Path(directory) / name).is_symlink()
         )
         for file_name in sorted(file_names):
             path = Path(directory) / file_name
@@ -184,9 +183,7 @@ def copy_file(
     return destination_path
 
 
-def collect_scan_roots(
-    roots: list[tuple[str, Path]], output: Path, files: list[dict[str, str]]
-) -> None:
+def collect_scan_roots(roots: list[tuple[str, Path]], output: Path, files: list[dict[str, str]]) -> None:
     for label, root in roots:
         for source in walk_files(root):
             if is_legal_document(source, root):
@@ -242,8 +239,7 @@ def discover_git_repositories(root: Path) -> list[Path]:
         directory_names[:] = sorted(
             name
             for name in directory_names
-            if name not in IGNORED_DIRECTORIES
-            and not (directory_path / name).is_symlink()
+            if name not in IGNORED_DIRECTORIES and not (directory_path / name).is_symlink()
         )
     return repositories
 
@@ -273,12 +269,9 @@ def is_repository_legal_file(source: Path, repository: Path) -> bool:
     return len(relative.parts) <= 2 or relative.parts[0].lower() in LEGAL_DIRECTORIES
 
 
-def repository_is_required(
-    repository: Path, git_roots: list[Path], required_depth: int
-) -> bool:
+def repository_is_required(repository: Path, git_roots: list[Path], required_depth: int) -> bool:
     return any(
-        repository.is_relative_to(root)
-        and len(repository.relative_to(root).parts) <= required_depth
+        repository.is_relative_to(root) and len(repository.relative_to(root).parts) <= required_depth
         for root in git_roots
     )
 
@@ -288,12 +281,8 @@ def collect_git_repositories(
     files: list[dict[str, str]],
     required_depth: int,
 ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-    repositories = sorted(
-        {repository for root in git_roots for repository in discover_git_repositories(root)}
-    )
-    owned_files: dict[Path, list[dict[str, str]]] = {
-        repository: [] for repository in repositories
-    }
+    repositories = sorted({repository for root in git_roots for repository in discover_git_repositories(root)})
+    owned_files: dict[Path, list[dict[str, str]]] = {repository: [] for repository in repositories}
     for file_record in files:
         source = Path(file_record["source"])
         owner = owning_repository(source, repositories)
@@ -306,9 +295,7 @@ def collect_git_repositories(
     for repository in repositories:
         _, revision = run_command(["git", "rev-parse", "HEAD"], repository)
         _, origin = run_command(["git", "remote", "get-url", "origin"], repository)
-        status_code, status = run_command(
-            ["git", "status", "--porcelain", "--untracked-files=no"], repository
-        )
+        status_code, status = run_command(["git", "status", "--porcelain", "--untracked-files=no"], repository)
         legal_files = sorted(
             file_record["destination"]
             for file_record in owned_files[repository]
@@ -381,9 +368,7 @@ def collect_python_packages(
     return packages, warnings
 
 
-def collect_debian_packages(
-    output: Path, files: list[dict[str, str]]
-) -> tuple[list[dict[str, str]], list[str]]:
+def collect_debian_packages(output: Path, files: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[str]]:
     warnings: list[str] = []
     copyright_destinations: dict[str, str] = {}
     documentation_root = Path("/usr/share/doc")
@@ -475,15 +460,11 @@ def main() -> int:
             "files": files,
             "git_repositories": repositories,
             "python_packages": python_packages,
-            "scan_roots": [
-                {"label": label, "path": path.as_posix()} for label, path in scan_roots
-            ],
+            "scan_roots": [{"label": label, "path": path.as_posix()} for label, path in scan_roots],
             "schema_version": 1,
             "warnings": sorted(git_warnings + python_warnings + debian_warnings),
         }
-        (output / "MANIFEST.json").write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
+        (output / "MANIFEST.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     except (OSError, ValueError) as error:
         print(f"license collection failed: {error}", file=sys.stderr)
         return 2

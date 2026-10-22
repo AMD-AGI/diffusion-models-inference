@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import traceback
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -218,7 +218,11 @@ class BulkBench:
                 self.Con
             )
             if readable_bytes is None:
-                readable_bytes = lambda x: f"{x} bytes"
+
+                def readable_bytes_fallback(value: Any) -> str:
+                    return f"{value} bytes"
+
+                readable_bytes = readable_bytes_fallback
 
         self.regenerate_results = _get_arg("regenerate_results", False)
         assert isinstance(self.regenerate_results, bool), "regenerate_results must be a boolean"
@@ -437,7 +441,7 @@ class BulkBench:
             self._runPatchCommand(patch_set["name"], patch_data, dry_run=False)
 
     @contextmanager
-    def _appliedPatchSet(self, patch_set: PatchSet) -> Iterator[None]:
+    def _appliedPatchSet(self, patch_set: PatchSet) -> Generator[None, None, None]:
         self._dryRunPatches(patch_set)
         backups = self._snapshotTargets(patch_set)
         try:

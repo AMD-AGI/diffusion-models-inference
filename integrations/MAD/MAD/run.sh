@@ -28,9 +28,7 @@
 #
 #################################################################################
 
-OPTIONS=$(getopt -o w:v --long workload:,verbose -- "$@")
-
-if [ $? -ne 0 ]; then
+if ! OPTIONS=$(getopt -o w:v --long workload:,verbose -- "$@"); then
   echo "Failed to parse options." >&2
   exit 1
 fi
@@ -62,10 +60,11 @@ done
 SCRIPT="/app/.ci/run.py"
 BENCHMARK_CONFIGS="/app/.ci/benchmark_configs"
 ARCH=$(amd-smi static | grep TARGET_GRAPHICS_VERSION | head -1 | cut -d ':' -f 2 | xargs)
+VERBOSE=${VERBOSE:-false}
 
 CSV_OUTPUT_PATH="/outputs/results.csv"
 
-if [ ! -e $SCRIPT ]; then
+if [ ! -e "$SCRIPT" ]; then
     echo "'$SCRIPT' not found" >&2
     exit 1
 fi
@@ -81,12 +80,14 @@ export HF_TOKEN=$MAD_SECRETS_HFTOKEN
 # temporary fix to handle host ROCm version <6.4.2
 export HSA_NO_SCRATCH_RECLAIM=1
 
+if [ "$VERBOSE" = true ]; then
+  set -x
+fi
+
 # run workload
 echo "Run configurations:"
-python3 $SCRIPT --tag mad --tag ${ARCH} --dry-run ${BENCHMARK_CONFIGS}/${WORKLOAD}.yaml
-python3 $SCRIPT --tag mad --tag ${ARCH} --csv-output-path ${CSV_OUTPUT_PATH} ${BENCHMARK_CONFIGS}/${WORKLOAD}.yaml
-
-if [ $? -ne 0 ]; then
+python3 "$SCRIPT" --tag mad --tag "$ARCH" --dry-run "$BENCHMARK_CONFIGS/${WORKLOAD}.yaml"
+if ! python3 "$SCRIPT" --tag mad --tag "$ARCH" --csv-output-path "$CSV_OUTPUT_PATH" "$BENCHMARK_CONFIGS/${WORKLOAD}.yaml"; then
   echo "Failed to run workload" >&2
   exit 1
 fi
@@ -95,4 +96,4 @@ fi
 awk -F, 'BEGIN{OFS=","} NR==1{print;next} {sub(/\.gfx(942|950)$/, "", $1); print}' \
   "${CSV_OUTPUT_PATH}" > "${CSV_OUTPUT_PATH}.tmp" && mv "${CSV_OUTPUT_PATH}.tmp" "${CSV_OUTPUT_PATH}"
 
-cp ${CSV_OUTPUT_PATH} ../results.csv
+cp "$CSV_OUTPUT_PATH" ../results.csv

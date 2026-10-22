@@ -22,7 +22,7 @@ class TestDistritune(unittest.TestCase):
             {"WORKER_ID": "0"},
             {"WORKER_ID": "1"},
         ]
-        
+
         # Should not raise any exception
         distritune(tasks, worker_envs)
 
@@ -37,18 +37,18 @@ class TestDistritune(unittest.TestCase):
             {"WORKER_ID": "0"},
             {"WORKER_ID": "1"},
         ]
-        
+
         # Should raise RuntimeError due to non-zero exit code
         with self.assertRaises(RuntimeError) as context:
             distritune(tasks, worker_envs)
-        
+
         self.assertIn("failed with exit code", str(context.exception))
 
     def test_task_fails_early_cancels_remaining(self):
         """Test that when one task fails, remaining tasks are cancelled."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
-            
+
             # Create tasks where first fails quickly, others would take long time
             tasks = [
                 Task(command="exit 1", log_file=output_dir / "task0.json"),
@@ -59,11 +59,11 @@ class TestDistritune(unittest.TestCase):
                 {"WORKER_ID": "0"},
                 {"WORKER_ID": "1"},
             ]
-            
+
             # Should raise RuntimeError quickly (not wait 5 seconds)
             with self.assertRaises(RuntimeError):
                 distritune(tasks, worker_envs)
-            
+
             # Only the first task should have completed and written output
             self.assertTrue((output_dir / "task0.json").exists())
             # The other tasks should not have completed (or been cancelled before writing)
@@ -72,10 +72,10 @@ class TestDistritune(unittest.TestCase):
     def test_successful_tasks_with_output_logging(self):
         """Test that successful tasks write their output logs correctly."""
         import json
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
-            
+
             tasks = [
                 Task(command="echo 'hello world'", log_file=output_dir / "task0.json"),
                 Task(command="echo 'test output'", log_file=output_dir / "task1.json"),
@@ -84,13 +84,13 @@ class TestDistritune(unittest.TestCase):
                 {"WORKER_ID": "0"},
                 {"WORKER_ID": "1"},
             ]
-            
+
             distritune(tasks, worker_envs)
-            
+
             # Check that both output files exist
             self.assertTrue((output_dir / "task0.json").exists())
             self.assertTrue((output_dir / "task1.json").exists())
-            
+
             # Verify the content of one output file
             with open(output_dir / "task0.json") as f:
                 data = json.load(f)
@@ -102,10 +102,10 @@ class TestDistritune(unittest.TestCase):
     def test_task_fails_continue_on_failure(self):
         """Test that when stop_on_failure=False, all tasks run despite failures."""
         import json
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
-            
+
             tasks = [
                 Task(command="exit 1", log_file=output_dir / "task0.json"),
                 Task(command="exit 0", log_file=output_dir / "task1.json"),
@@ -115,19 +115,19 @@ class TestDistritune(unittest.TestCase):
                 {"WORKER_ID": "0"},
                 {"WORKER_ID": "1"},
             ]
-            
+
             # Should raise RuntimeError at the end with summary of failures
             with self.assertRaises(RuntimeError) as context:
                 distritune(tasks, worker_envs, stop_on_failure=False)
-            
+
             # Should mention that tasks failed
             self.assertIn("tasks failed", str(context.exception))
-            
+
             # All tasks should have completed
             self.assertTrue((output_dir / "task0.json").exists())
             self.assertTrue((output_dir / "task1.json").exists())
             self.assertTrue((output_dir / "task2.json").exists())
-            
+
             # Verify the return codes
             with open(output_dir / "task0.json") as f:
                 self.assertEqual(json.load(f)["returncode"], 1)
@@ -155,10 +155,10 @@ class TestDistritune(unittest.TestCase):
     def test_stderr_logging(self):
         """Test that both stdout and stderr are captured in the log file."""
         import json
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
-            
+
             # Create tasks that write to both stdout and stderr
             tasks = [
                 Task(
@@ -174,13 +174,13 @@ class TestDistritune(unittest.TestCase):
                 {"WORKER_ID": "0"},
                 {"WORKER_ID": "1"},
             ]
-            
+
             distritune(tasks, worker_envs)
-            
+
             # Check that log files exist
             self.assertTrue((output_dir / "task0.json").exists())
             self.assertTrue((output_dir / "task1.json").exists())
-            
+
             # Verify task0 has both stdout and stderr
             with open(output_dir / "task0.json") as f:
                 data = json.load(f)
@@ -188,7 +188,7 @@ class TestDistritune(unittest.TestCase):
                 self.assertIn("stdout message", data["stdout"])
                 self.assertIn("stderr message", data["stderr"])
                 self.assertNotIn("stderr message", data["stdout"])
-            
+
             # Verify task1 has only stdout
             with open(output_dir / "task1.json") as f:
                 data = json.load(f)

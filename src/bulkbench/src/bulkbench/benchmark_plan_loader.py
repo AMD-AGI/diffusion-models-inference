@@ -69,9 +69,7 @@ class _UniqueKeySafeLoader(yaml.SafeLoader):
         return super().construct_mapping(node, deep=deep)
 
 
-def benchmarkConfigPath(
-    benchmark_configs_dir: Path, config_name: str, config_context: str
-) -> Path:
+def benchmarkConfigPath(benchmark_configs_dir: Path, config_name: str, config_context: str) -> Path:
     """Builds a benchmark YAML path from a validated config name."""
     stem = config_name.partition(".")[0]
     if not stem or stem in (".", "..") or _VALID_NAME_RE.fullmatch(stem) is None:

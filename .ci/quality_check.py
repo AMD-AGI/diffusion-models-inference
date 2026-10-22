@@ -22,9 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def run_arbiter_measurements(
-    metrics: list[str], ref_file: Path, gen_file: Path, output_file: Path
-) -> None:
+def run_arbiter_measurements(metrics: list[str], ref_file: Path, gen_file: Path, output_file: Path) -> None:
     """Run arbiter measurements using the Python API and save results to JSON."""
     try:
         from arbiter import Measurement
@@ -78,16 +76,10 @@ def check_workload_subdirectory(
 
     if len(files_png) == 1:
         generated_image_file = files_png[0]
-        reference_image_file = (
-            reference_path_root / workload_path.name / "reference.png"
-        )
-        logger.info(
-            f"Checking generated image file {generated_image_file} with reference {reference_image_file}"
-        )
+        reference_image_file = reference_path_root / workload_path.name / "reference.png"
+        logger.info(f"Checking generated image file {generated_image_file} with reference {reference_image_file}")
         if not reference_image_file.exists():
-            logger.info(
-                f"Reference image file {reference_image_file} does not exist, skipping."
-            )
+            logger.info(f"Reference image file {reference_image_file} does not exist, skipping.")
             return
         arbiter_output_file = str(Path(generated_image_file).parent / "arbiter.json")
         logger.info(f"arbiter output file: {arbiter_output_file}")
@@ -99,16 +91,10 @@ def check_workload_subdirectory(
         )
     elif len(files_mp4) == 1:
         generated_video_file = files_mp4[0]
-        reference_video_file = (
-            reference_path_root / workload_path.name / "reference.mp4"
-        )
-        logger.info(
-            f"Checking generated video file {generated_video_file} with reference {reference_video_file}"
-        )
+        reference_video_file = reference_path_root / workload_path.name / "reference.mp4"
+        logger.info(f"Checking generated video file {generated_video_file} with reference {reference_video_file}")
         if not reference_video_file.exists():
-            logger.info(
-                f"Reference video file {reference_video_file} does not exist, skipping."
-            )
+            logger.info(f"Reference video file {reference_video_file} does not exist, skipping.")
             return
 
         arbiter_output_file = str(Path(generated_video_file).parent / "arbiter.json")
@@ -148,9 +134,7 @@ def get_platform_abbreviated_name() -> str | None:
             logger.error("Could not determine platform name from amd-smi")
             return None
 
-        platform_full_name = (
-            lines[1].split(",")[4] if len(lines[1].split(",")) > 4 else ""
-        )
+        platform_full_name = lines[1].split(",")[4] if len(lines[1].split(",")) > 4 else ""
 
     except Exception as e:
         logger.error(f"Failed to query AMD GPU information: {e}")
@@ -163,9 +147,7 @@ def get_platform_abbreviated_name() -> str | None:
     # Extract MI### pattern (e.g., MI300, MI355)
     match = re.search(r"MI\d{3}", platform_full_name, re.IGNORECASE)
     if not match:
-        logger.error(
-            f"Could not extract platform architecture from {platform_full_name}"
-        )
+        logger.error(f"Could not extract platform architecture from {platform_full_name}")
         return None
 
     platform_abbreviated_name = match.group(0).lower()  # e.g., "mi300"
@@ -175,9 +157,7 @@ def get_platform_abbreviated_name() -> str | None:
 def main() -> None:
     """Main function to run quality checks."""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description="Run quality checks on diffusion model outputs"
-    )
+    parser = argparse.ArgumentParser(description="Run quality checks on diffusion model outputs")
     parser.add_argument(
         "--reference-path",
         type=str,
@@ -204,13 +184,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Check if arbiter is available
-    try:
-        from arbiter import Measurement
-    except ImportError:
-        logger.warning("`arbiter` package not available, skipping quality checks.")
-        sys.exit(0)
-
     platform_abbreviated_name = get_platform_abbreviated_name()
     if platform_abbreviated_name is None:
         logger.error("Failed to get platform name, skipping quality checks.")
@@ -225,9 +198,7 @@ def main() -> None:
     # Check benchmark output directory
     benchmark_output_dir = Path(args.benchmark_output_path)
     if not benchmark_output_dir.exists():
-        logger.info(
-            f"Benchmark output directory {benchmark_output_dir} does not exist, nothing to check"
-        )
+        logger.info(f"Benchmark output directory {benchmark_output_dir} does not exist, nothing to check")
         sys.exit(0)
 
     # Iterate through workload subdirectories

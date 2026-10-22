@@ -36,9 +36,7 @@ done
 
 for script in "${scripts[@]}"; do
     echo "Running '${script}'"
-    bash $script
-
-    if [ $? -ne 0 ]; then
+    if ! bash "$script"; then
         echo "Failed to run '${script}'." >&2
         exit 1
     fi

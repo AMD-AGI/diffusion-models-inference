@@ -14,7 +14,6 @@ from sglang.multimodal_gen import DiffGenerator
 
 
 def parse_args() -> argparse.Namespace:
-
     parser = argparse.ArgumentParser(
         description="Run SGLang-Diffusion",
     )
@@ -30,7 +29,7 @@ def parse_args() -> argparse.Namespace:
         required=False,
         default=None,
         help="Explicit SGL-D pipeline class (e.g. LTX2Pipeline). Unset -> "
-             "auto-detect, which is non-deterministic for multi-pipeline models.",
+        "auto-detect, which is non-deterministic for multi-pipeline models.",
     )
     parser.add_argument(
         "--prompt",
@@ -125,7 +124,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         choices=["true", "false"],
         help="Explicitly enable/disable VAE parallel decode (the only way to "
-             "express OFF, since run.py drops a YAML bool false).",
+        "express OFF, since run.py drops a YAML bool false).",
     )
     # Optional diffusion VAE decoder (off by default, matching upstream).
     # Decode-side support: sglang sgl-project/sglang#40755 (SP self-attn mask) +
@@ -135,8 +134,8 @@ def parse_args() -> argparse.Namespace:
         required=False,
         action="store_true",
         help="Enable the diffusion VAE decoder (--use-diffusion-decoder on the "
-             "CLI path; load_diffusion_decoder + the use_diffusion_decoder "
-             "sampling param on the API path).",
+        "CLI path; load_diffusion_decoder + the use_diffusion_decoder "
+        "sampling param on the API path).",
     )
     # Model variant; unset -> upstream default (distilled).
     parser.add_argument(
@@ -145,7 +144,7 @@ def parse_args() -> argparse.Namespace:
         required=False,
         default=None,
         help="Model variant, e.g. 'full' -> LTX-2.5 full DiT (transformer_full). "
-             "Unset -> upstream default (distilled).",
+        "Unset -> upstream default (distilled).",
     )
     parser.add_argument(
         "--output-directory",
@@ -231,34 +230,25 @@ def parse_args() -> argparse.Namespace:
         help="Whether to run through CLI or API",
     )
     parser.add_argument(
-        "--use_hybrid_attn_schedule",
-        required=False,
-        action="store_true",
-        help="Whether to use hybrid attention or not"
+        "--use_hybrid_attn_schedule", required=False, action="store_true", help="Whether to use hybrid attention or not"
     )
     parser.add_argument(
         "--hybrid_attn_high_precision_backend",
         required=False,
         default=None,
-        help="High precision backend to be used in hybrid attention"
+        help="High precision backend to be used in hybrid attention",
     )
     parser.add_argument(
         "--hybrid_attn_low_precision_backend",
         required=False,
         default=None,
-        help="Low precision backend to be used in hybrid attention"
+        help="Low precision backend to be used in hybrid attention",
     )
     parser.add_argument(
-        "--use_fp8_gemms",
-        required=False,
-        action="store_true",
-        help="Whether to use FP8 quantized GEMMs"
+        "--use_fp8_gemms", required=False, action="store_true", help="Whether to use FP8 quantized GEMMs"
     )
     parser.add_argument(
-        "--use_fp4_gemms",
-        required=False,
-        action="store_true",
-        help="Whether to use MXFP4 quantized GEMMs"
+        "--use_fp4_gemms", required=False, action="store_true", help="Whether to use MXFP4 quantized GEMMs"
     )
     parser.add_argument(
         "--config",
@@ -275,15 +265,17 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         required=False,
         default=None,
-        help="Layer name patterns to keep unquantized (e.g. blocks.0 blocks.1)"
+        help="Layer name patterns to keep unquantized (e.g. blocks.0 blocks.1)",
     )
     return parser.parse_args()
+
 
 def run_sgld(generator, sampling_params):
     output = generator.generate(
         sampling_params_kwargs=sampling_params,
     )
     return output
+
 
 def save_output(output, elapsed_times, args):
     with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
@@ -345,13 +337,9 @@ def _write_config_file(config_json: str, output_directory: str) -> str:
 def run_cli(args):
     cmd = ["sglang", "generate"]
 
+    num_gpus = _parallel_degree(args.ulysses_degree, args.ring_degree, args.use_cfg_parallel)
 
-    num_gpus = _parallel_degree(
-        args.ulysses_degree, args.ring_degree, args.use_cfg_parallel
-    )
-
-    reason = (f"--model-variant {args.model_variant}" if args.model_variant is not None
-              else "--use_diffusion_decoder")
+    reason = f"--model-variant {args.model_variant}" if args.model_variant is not None else "--use_diffusion_decoder"
     model_path_value = _maybe_local_snapshot(
         args.model, args.model_variant is not None or args.use_diffusion_decoder, reason
     )
@@ -378,7 +366,7 @@ def run_cli(args):
         "output-path": args.output_directory,
     }
 
-    values = {key:value for key, value in values.items() if value is not None}
+    values = {key: value for key, value in values.items() if value is not None}
 
     for key, value in values.items():
         cmd.extend([f"--{key}", str(value)])
@@ -436,7 +424,7 @@ def run_cli(args):
         cmd.append("--vae-tiling")
 
     if args.use_hybrid_attn_schedule:
-        num_high_start_steps, num_high_end_steps = 5, 5 # TODO: configurable
+        num_high_start_steps, num_high_end_steps = 5, 5  # TODO: configurable
         hybrid_cmd_value = f"{args.hybrid_attn_high_precision_backend}:{args.hybrid_attn_low_precision_backend}:{num_high_start_steps}:{num_high_end_steps}"
         cmd.extend(["--hybrid-attention-schedule", hybrid_cmd_value])
 
@@ -454,21 +442,16 @@ def run_cli(args):
 
     print(f"Running command: {' '.join(cmd)}")
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        check=True
-    )
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
     command_output = result.stdout + result.stderr
     print(f"Command output: {command_output}")
 
-    ansi_escape = r'\x1b\[[0-9;]*m'
+    ansi_escape = r"\x1b\[[0-9;]*m"
     timings = [
         float(m)
         for m in re.findall(
-            rf'Warmed-up request processed in {ansi_escape}?([\d.]+){ansi_escape}? seconds',
+            rf"Warmed-up request processed in {ansi_escape}?([\d.]+){ansi_escape}? seconds",
             command_output,
         )
     ]
@@ -479,8 +462,8 @@ def run_cli(args):
     with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
         json.dump(timings, f)
 
-def run_api(args):
 
+def run_api(args):
     num_gpus = args.ulysses_degree * args.ring_degree
 
     model_path_value = _maybe_local_snapshot(
@@ -514,9 +497,7 @@ def run_api(args):
     if vae_use_parallel_decode is None and args.use_parallel_vae:
         vae_use_parallel_decode = "true"
     if vae_use_parallel_decode is not None:
-        from_pretrained_kwargs["vae_config.use_parallel_decode"] = (
-            vae_use_parallel_decode == "true"
-        )
+        from_pretrained_kwargs["vae_config.use_parallel_decode"] = vae_use_parallel_decode == "true"
     if args.vae_parallel_decode_mode is not None:
         from_pretrained_kwargs["vae_config.parallel_decode_mode"] = args.vae_parallel_decode_mode
 
@@ -552,7 +533,6 @@ def run_api(args):
     if args.use_diffusion_decoder:
         sampling_args["use_diffusion_decoder"] = True
 
-
     # Warmup / compile
     print(" ======================== Warming up / compiling... ========================")
     if args.use_torch_compile:
@@ -565,7 +545,6 @@ def run_api(args):
         print(f" ======================== Warmup call {i} complete ========================")
     print(" ======================== Warmup / compilation complete ========================")
 
-
     elapsed_times = []
     print(" ======================== Running inference... ========================")
     for i in range(args.num_iterations):
@@ -575,13 +554,13 @@ def run_api(args):
         output = run_sgld(generator, sampling_args)
         end.record()
         torch.cuda.synchronize()
-        elapsed_time = start.elapsed_time(end) /1000
+        elapsed_time = start.elapsed_time(end) / 1000
         elapsed_times.append(elapsed_time)
         print(f"Iteration {i} time taken: {elapsed_time:.2f}s")
     print(" ======================== Inference complete ========================")
     print(f"Average time taken: {np.mean(elapsed_times):.2f}s")
 
-    save_output(output, elapsed_times,args)
+    save_output(output, elapsed_times, args)
 
 
 def main():

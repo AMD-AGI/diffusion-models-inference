@@ -25,7 +25,7 @@ def load_csv(path):
             if not matches:
                 continue
             try:
-                base = row["model"][:matches[0].start()]
+                base = row["model"][: matches[0].start()]
                 stype = matches[0].group(1)
                 sval = int(matches[0].group(2))
                 for m in matches[1:]:
@@ -45,7 +45,7 @@ def merge_hw_bases(bases):
             if shorter == base:
                 canonical[base] = base
                 break
-            if base.startswith(shorter + ".") and not SUFFIX_RE.match(base[len(shorter):]):
+            if base.startswith(shorter + ".") and not SUFFIX_RE.match(base[len(shorter) :]):
                 canonical[base] = shorter
                 break
         else:
@@ -127,7 +127,7 @@ def main():
                 if (base, stype, hw) not in groups:
                     continue
                 vals, lats = zip(*groups[(base, stype, hw)])
-                thrs = [throughput_numerator(base, stype, v) / l for v, l in zip(vals, lats)]
+                thrs = [throughput_numerator(base, stype, v) / latency for v, latency in zip(vals, lats)]
                 label = f"{hw} ({', '.join(parts)})"
                 ax_lat.plot(vals, lats, label=label, color=hw_colors[hw], **style)
                 ax_thr.plot(vals, thrs, label=label, color=hw_colors[hw], **style)
@@ -137,8 +137,7 @@ def main():
 
         if has_diff:
             hw_a, hw_b = hw_present
-            fbox = dict(boxstyle="round,pad=0.3", facecolor="white",
-                        edgecolor="gray", alpha=0.95)
+            fbox = dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.95)
             plotted = False
             for stype in stypes:
                 if (base, stype, hw_a) not in groups or (base, stype, hw_b) not in groups:
@@ -152,21 +151,26 @@ def main():
                     continue
                 pct_lat = [(a[v] - b[v]) / b[v] * 100 for v in common]
                 bs = [throughput_numerator(base, stype, v) for v in common]
-                pct_thr = [(bv/a[v] - bv/b[v]) / (bv/b[v]) * 100
-                           for v, bv in zip(common, bs)]
+                pct_thr = [(bv / a[v] - bv / b[v]) / (bv / b[v]) * 100 for v, bv in zip(common, bs)]
                 label = slabel if len(stypes) > 1 else None
                 axes[1, 0].plot(common, pct_lat, label=label, color="gray", **style)
                 axes[1, 1].plot(common, pct_thr, label=label, color="gray", **style)
                 plotted = True
 
             if plotted:
-                for ax, dtitle in [(axes[1, 0], "Latency difference"),
-                                   (axes[1, 1], "Throughput difference")]:
+                for ax, dtitle in [(axes[1, 0], "Latency difference"), (axes[1, 1], "Throughput difference")]:
                     style_ax(ax, dtitle, xlabel, "Difference (%)")
                     ax.axhline(0, color="gray", linestyle=":")
-                    ax.text(0.01, 0.99, f"A={hw_a}, B={hw_b}\n{FORMULA}",
-                            transform=ax.transAxes, fontsize=9, va="top",
-                            ha="left", bbox=fbox)
+                    ax.text(
+                        0.01,
+                        0.99,
+                        f"A={hw_a}, B={hw_b}\n{FORMULA}",
+                        transform=ax.transAxes,
+                        fontsize=9,
+                        va="top",
+                        ha="left",
+                        bbox=fbox,
+                    )
 
         out_path = out_dir / f"{title.replace('.', '_')}.png"
         fig.savefig(out_path, dpi=150, bbox_inches="tight")

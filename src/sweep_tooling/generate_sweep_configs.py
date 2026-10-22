@@ -28,9 +28,7 @@ def load_configs(path):
 
 def expand(base, param, values, overrides):
     short = PARAM_SHORT[param]
-    override_suffix = "".join(
-        f".{PARAM_SHORT[k]}{v}" for k, v in overrides.items() if k in PARAM_SHORT
-    )
+    override_suffix = "".join(f".{PARAM_SHORT[k]}{v}" for k, v in overrides.items() if k in PARAM_SHORT)
     out = []
     for val in values:
         exp = copy.deepcopy(base)
@@ -46,15 +44,16 @@ def expand(base, param, values, overrides):
 
 def main():
     p = argparse.ArgumentParser(description="Generate sweep configs from benchmark configs.")
-    p.add_argument("--sweep", action="append", nargs="+", metavar="ARG",
-                   help="NAME PARAM {[list] | MIN MAX STEP} [JSON_OVERRIDES]")
+    p.add_argument(
+        "--sweep", action="append", nargs="+", metavar="ARG", help="NAME PARAM {[list] | MIN MAX STEP} [JSON_OVERRIDES]"
+    )
     p.add_argument("--output", default="/outputs/sweep_config.yaml")
     p.add_argument("configs", nargs="?", default="/app/.ci/benchmark_configs")
     cli = p.parse_args()
 
     configs = load_configs(cli.configs)
     experiments = []
-    for parts in (cli.sweep or []):
+    for parts in cli.sweep or []:
         if len(parts) < 3:
             p.error(f"--sweep requires NAME PARAM and values, got: {' '.join(parts)}")
         name, param = parts[0], parts[1]

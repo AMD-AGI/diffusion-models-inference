@@ -81,9 +81,7 @@ def failing_entries(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         The subset of `report`'s ``experiments`` that count as a failure.
     """
     return [
-        e
-        for e in report.get("experiments", [])
-        if e.get("status") in (STATUS_FAILED, STATUS_ERROR, STATUS_UNAVAILABLE)
+        e for e in report.get("experiments", []) if e.get("status") in (STATUS_FAILED, STATUS_ERROR, STATUS_UNAVAILABLE)
     ]
 
 
@@ -195,4 +193,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

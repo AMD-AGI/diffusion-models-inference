@@ -40,9 +40,7 @@ class MIOpenDriverCommandCollector:
     def collect(self, workload_name: str, stderr_path: Path, process_succeeded: bool) -> None:
         """Extract commands emitted by one completed benchmark process."""
         entry = self._workloads[workload_name]
-        entry["benchmark_status"] = (
-            "process_succeeded" if process_succeeded else "process_failed"
-        )
+        entry["benchmark_status"] = "process_succeeded" if process_succeeded else "process_failed"
 
         successful_path = self.output_directory / f"{workload_name}.txt"
         partial_path = self.output_directory / f"{workload_name}.partial.txt"
