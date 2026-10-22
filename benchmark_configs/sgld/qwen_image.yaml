@@ -15,7 +15,7 @@
     guidance_scale: 0.0
     num_iterations: 25
     ulysses_degree: 8
-    use_torch_compile: True
+    use_torch_compile: false
     attention_backend: aiter
 
 - name: qwen_image.default.hopper
@@ -32,8 +32,7 @@
     guidance_scale: 0.0
     num_iterations: 25
     ulysses_degree: 8
-    use_torch_compile: True
-    attention_backend: cudnn
+    use_torch_compile: false
 
 - name: qwen_image.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -49,5 +48,4 @@
     guidance_scale: 0.0
     num_iterations: 25
     ulysses_degree: 8
-    use_torch_compile: True
-    attention_backend: cudnn
+    use_torch_compile: false
