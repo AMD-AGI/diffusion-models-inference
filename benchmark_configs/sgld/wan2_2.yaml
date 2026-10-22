@@ -84,7 +84,7 @@
     input_images: /app/data/wan_input.jpg
     use_torch_compile: false
 
-- name: wan2_2.quantgemm_fp8attn.gfx942
+- name: wan2_2.quantgemm_quantattn.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: python
@@ -106,7 +106,7 @@
     attention_backend: aiter_quant
     attention_backend_config: format=fp8
 
-- name: wan2_2.quantgemm_fp8attn.gfx950
+- name: wan2_2.quantgemm_quantattn.gfx950
   tags: [release, mad, lucid, instinct, gfx950]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: python
