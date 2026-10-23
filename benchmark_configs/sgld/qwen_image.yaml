@@ -19,7 +19,7 @@
     attention_backend: aiter
 
 - name: qwen_image.default.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [lucid, hopper, h200]
   model: Qwen/Qwen-Image-2512
   runner: python
   entrypoint: /app/.ci/runner.py
