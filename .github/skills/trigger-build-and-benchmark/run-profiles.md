@@ -16,6 +16,12 @@ Every profile is expressed as `base_image` + the five step checkboxes
 - `base_image`: set, `rebuild`: true
 - Builds from source using `base_image` as a Docker layer cache, then tunes and benchmarks
 
+## Latest core image from main
+
+- `use_latest_main_core`: true
+- Replaces `base_image` with the untuned (`-temp`) image from the latest successful push-triggered core build on `main`
+- With `rebuild: false`, uses that image directly; with `rebuild: true`, rebuilds using it as the prebuilt image
+
 ## Prebuilt image, no rebuild
 
 - `base_image`: set, `rebuild`: false
@@ -41,4 +47,3 @@ Tunes then benchmarks, without building the final image.
 
 All profiles require a non-empty `gpu_runners` value. The workflow default is
 `gfx942,gfx950`.
-

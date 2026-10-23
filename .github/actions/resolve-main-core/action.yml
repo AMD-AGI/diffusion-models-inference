@@ -1,0 +1,40 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Resolve Main Core'
+description: 'Sets BASE_IMAGE to the untuned image from the latest successful main core build'
+inputs:
+  staging_image:
+    description: 'Staging image repository'
+    required: true
+  github_token:
+    description: 'GitHub token used to query workflow runs'
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve latest successful main untuned image
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        STAGING_IMAGE: ${{ inputs.staging_image }}
+      run: |
+        RUN=$(gh api \
+          --method GET \
+          "repos/${GITHUB_REPOSITORY}/actions/workflows/build-core-image.yml/runs" \
+          -f branch=main \
+          -f event=push \
+          -f status=success \
+          -f per_page=1)
+
+        HEAD_SHA=$(jq -r '.workflow_runs[0].head_sha // empty' <<< "$RUN")
+        RUN_URL=$(jq -r '.workflow_runs[0].html_url // empty' <<< "$RUN")
+        if [ -z "$HEAD_SHA" ]; then
+          echo "::error::No successful push-triggered build-core-image.yml run was found on main."
+          exit 1
+        fi
+
+        IMAGE="${STAGING_IMAGE}:${HEAD_SHA:0:7}-temp"
+        echo "BASE_IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+        echo "Using ${IMAGE} from ${RUN_URL}"
