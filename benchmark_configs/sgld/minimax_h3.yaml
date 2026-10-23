@@ -22,7 +22,7 @@
         aspect_ratio: "16:9"
         duration_seconds: 5.0
 
-- name: minimax_h3.hopper
+- name: minimax_h3.default.hopper
   tags: [lucid, hopper, h200]
   model: MiniMaxAI/MiniMax-H3
   runner: python
@@ -42,7 +42,7 @@
         aspect_ratio: "16:9"
         duration_seconds: 5.0
 
-- name: minimax_h3.blackwell
+- name: minimax_h3.default.blackwell
   tags: [lucid, blackwell, b200, b300]
   model: MiniMaxAI/MiniMax-H3
   runner: python
