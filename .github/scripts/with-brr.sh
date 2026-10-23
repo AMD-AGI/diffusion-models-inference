@@ -11,8 +11,8 @@ fi
 
 if [ "${USE_BRR_IF_AVAILABLE:-false}" = "true" ]; then
   if command -v brr >/dev/null 2>&1; then
-    echo "brr is available; requesting resources before running the workload" >&2
-    exec brr run -- "$@"
+    echo "brr is available; requesting resources (full node, exclusive use) before running the workload" >&2
+    exec brr run --gpus 8 --node --grace 0 -- "$@"
   fi
   echo "brr was requested but is not available; running the workload directly" >&2
 fi
