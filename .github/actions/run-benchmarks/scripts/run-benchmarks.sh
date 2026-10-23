@@ -7,7 +7,8 @@ set -euo pipefail
 # Run xDiT benchmarks in a Docker container.
 # Expects env vars: BENCHMARK_ONLY, RUN_PY_FLAGS, INPUT_BENCHMARK_FLAGS,
 #   OUTPUT_DIR, ARCH, HF_CACHE_ARGS, HF_TOKEN, DOCKER_IMAGE,
-#   COLLECT_HIPBLASLT_LOGS, FORCE_DETERMINISM_CHECK
+#   COLLECT_HIPBLASLT_LOGS, FORCE_DETERMINISM_CHECK,
+#   USE_BRR_IF_AVAILABLE, WITH_BRR
 
 MIOPEN_USER_DB_PATH_ARGS=()
 if [ "$BENCHMARK_ONLY" != "true" ]; then
@@ -35,7 +36,10 @@ RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
 [[ "$GITHUB_WORKSPACE" == "$RUNNER_WORK_ROOT/"* ]] ||
   { echo "GITHUB_WORKSPACE is outside $RUNNER_WORK_ROOT" >&2; exit 1; }
 
-docker run \
+# The bash -c body below is deliberately single-quoted: it is expanded by the
+# shell inside the container, using the variables passed in with -e.
+# shellcheck disable=SC2016
+"$WITH_BRR" docker run \
   --security-opt seccomp=unconfined \
   --device=/dev/kfd \
   --device=/dev/dri \
