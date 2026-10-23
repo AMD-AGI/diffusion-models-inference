@@ -14,6 +14,11 @@ on:
         description: 'Image tag or full Docker Hub path'
         required: false
         default: ''
+      use_latest_main_core:
+        description: 'Use the latest core from main'
+        type: boolean
+        required: false
+        default: false
       image_tag:
         description: 'Image tag override; defaults to the checked-out repository short SHA'
         required: false
@@ -96,6 +101,11 @@ on:
         required: false
         type: string
         default: ''
+      use_latest_main_core:
+        description: 'Use the latest core from main'
+        required: false
+        type: boolean
+        default: false
       image_tag:
         description: 'Image tag override; defaults to the checked-out repository short SHA'
         required: false
@@ -204,6 +214,17 @@ jobs:
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
 
+      - name: Set base image
+        env:
+          BASE_IMAGE_INPUT: ${{ inputs.base_image }}
+        run: echo "BASE_IMAGE=${BASE_IMAGE_INPUT}" >> "$GITHUB_ENV"
+
+      - name: Use latest successful main untuned image
+        if: ${{ inputs.use_latest_main_core }}
+        uses: ./.github/actions/resolve-main-core
+        with:
+          staging_image: ${{ env.STAGING_IMAGE }}
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
@@ -238,7 +259,7 @@ jobs:
         id: resolve_base
         uses: ./.github/actions/resolve-benchmark-image
         with:
-          benchmark_image: ${{ inputs.base_image }}
+          benchmark_image: ${{ env.BASE_IMAGE }}
           staging_image: ${{ env.STAGING_IMAGE }}
           # Empty means "build from source" here, unlike the benchmark-only workflow.
           require_image: 'false'
@@ -254,7 +275,7 @@ jobs:
           else
             echo "should_rebuild=false" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Validate base image exists
         if: ${{ steps.rebuild.outputs.should_rebuild == 'false' }}
         uses: ./.github/actions/validate-image-exists
@@ -284,7 +305,7 @@ jobs:
           staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
           should_rebuild: ${{ steps.rebuild.outputs.should_rebuild }}
           working_image: ${{ steps.working_image.outputs.image }}
-          base_image: ${{ inputs.base_image }}
+          base_image: ${{ env.BASE_IMAGE }}
           git_branch: ${{ inputs.git_branch }}
           run_number: ${{ github.run_number }}
           
@@ -295,7 +316,8 @@ jobs:
           tables: |
             {
               "Workflow Inputs": {
-                "base_image": "${{ inputs.base_image }}",
+                "base_image": "${{ env.BASE_IMAGE }}",
+                "use_latest_main_core": "${{ inputs.use_latest_main_core }}",
                 "rebuild": "${{ inputs.rebuild }}",
                 "run_miopen_tuning": "${{ inputs.run_miopen_tuning }}",
                 "run_benchmarks": "${{ inputs.run_benchmarks }}",

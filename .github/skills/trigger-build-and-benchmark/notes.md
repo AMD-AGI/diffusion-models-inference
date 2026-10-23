@@ -6,17 +6,20 @@
 base_image empty                → rebuild forced on, full build from source
 base_image set, rebuild=false   → use base_image directly, no build
 base_image set, rebuild=true    → build from source using base_image as cache
+latest main core enabled        → replace base_image with that build's untuned image
 ```
 
 `base_image` accepts a bare tag (resolved to `amdsiloai/pytorch-xdit-staging:<tag>`)
 or a full Docker Hub path when used directly (`rebuild=false`). When used as a
 build cache source (`rebuild=true`), it must be a bare tag against the core image.
+`use_latest_main_core` replaces any supplied `base_image`.
 
 ## 2. Confirmation checklist
 
 When presenting the command, highlight:
 - Selected run profile and dispatch ref
 - `base_image` and effective rebuild behavior
+- Whether `use_latest_main_core` will resolve the core image automatically
 - Comma-separated GPU runner labels
 - Any non-default step checkboxes or overrides
 - Whether `create_miopen_db_branch` will push a `miopen/<run_number>-<run_attempt>` branch and link a prefilled pull request form in the run summary
@@ -32,6 +35,9 @@ When presenting the command, highlight:
 - Each step checkbox (`rebuild`, `run_miopen_tuning`, `run_benchmarks`, `build_final`,
   `create_miopen_db_branch`) is independent; there is no implicit run-mode coupling.
 - `base_image` empty forces `rebuild` on regardless of the checkbox value.
+- `use_latest_main_core=true` resolves the latest successful push-triggered
+  `build-core-image.yml` run on `main`, verifies its untuned (`-temp`) image, and
+  stores that image as `base_image` in the build metadata artifact.
 - `create_miopen_db_branch` pushes the branch and links the pull request form only if tuning produced database changes.
 
 ## 5. Runner label overlap
