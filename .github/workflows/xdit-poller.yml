@@ -16,7 +16,9 @@ env:
   HEAVY_WORKFLOW: xdit-hardware-compat.yml
   SELF_WORKFLOW: xdit-poller.yml
   POLL_INTERVAL_SECONDS: '300'
-  LOITER_SECONDS: '169200'
+  # GITHUB_TOKEN is an installation token that cannot be refreshed beyond 24 hours,
+  # so the watch has to hand over to a fresh poller before its credentials expire.
+  LOITER_SECONDS: '82800'
   ALLOWED_ACTORS: ${{ vars.XDIT_CI_ALLOWED_ACTORS }}
 
 permissions:
@@ -26,7 +28,7 @@ permissions:
 jobs:
   loiter:
     runs-on: xdit-poller
-    timeout-minutes: 2880
+    timeout-minutes: 1440
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
