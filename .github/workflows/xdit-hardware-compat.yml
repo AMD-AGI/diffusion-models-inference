@@ -12,7 +12,7 @@ on:
         description: 'xDiT commit SHA under test'
         required: true
       benchmarks:
-        description: 'Comma-separated benchmark names requested by xDiT'
+        description: 'Benchmark names, or --name/--tag filters, requested by xDiT'
         required: true
       architectures:
         description: 'Comma-separated GPU architectures requested by xDiT'
@@ -65,29 +65,6 @@ jobs:
             echo "image=amdsiloai/pytorch-xdit-edge:${image_tag}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Validate benchmark names
-        id: benchmarks
-        env:
-          REQUESTED_BENCHMARKS: ${{ inputs.benchmarks }}
-        run: |
-          set -euo pipefail
-          benchmark_flags=()
-          IFS=',' read -r -a requested <<< "$REQUESTED_BENCHMARKS"
-          for name in "${requested[@]}"; do
-            name=${name#"${name%%[![:space:]]*}"}
-            name=${name%"${name##*[![:space:]]}"}
-            if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
-              echo "::error::Invalid benchmark name: '${name}'"
-              exit 1
-            fi
-            benchmark_flags+=(--name "$name")
-          done
-          if [ "${#benchmark_flags[@]}" -eq 0 ]; then
-            echo "::error::At least one benchmark name is required"
-            exit 1
-          fi
-          echo "benchmark_flags=${benchmark_flags[*]}" >> "$GITHUB_OUTPUT"
-
       - name: Validate architectures
         id: architectures
         env:
@@ -111,6 +88,20 @@ jobs:
           fi
           sanitized_architectures=$(IFS=,; echo "${architectures[*]}")
           echo "architectures=${sanitized_architectures}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate benchmark selection
+        id: benchmarks
+        env:
+          REQUESTED_BENCHMARKS: ${{ inputs.benchmarks }}
+          REQUESTED_ARCHITECTURES: ${{ steps.architectures.outputs.architectures }}
+        run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/.github/scripts/benchmark-selection.sh"
+          # An empty result is valid: it selects every config for the
+          # architecture under test, which the runner filters on by itself.
+          benchmark_flags=$(normalize_benchmark_selection \
+            "$REQUESTED_BENCHMARKS" "$REQUESTED_ARCHITECTURES")
+          echo "benchmark_flags=${benchmark_flags}" >> "$GITHUB_OUTPUT"
 
       - name: Validate AMD ref
         env:
