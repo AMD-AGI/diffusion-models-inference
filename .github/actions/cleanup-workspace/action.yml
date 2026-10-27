@@ -9,7 +9,7 @@ inputs:
     required: false
     default: ''
   containers:
-    description: 'Space-separated list of Docker containers to remove'
+    description: 'Space-separated list of Docker container base names to remove, e.g. "xdit-bench". GPU workloads run under an owner-prefixed name (e.g. "jdoe-xdit-bench"), which is resolved from the base.'
     required: false
     default: ''
   skip_workspace_cleanup:

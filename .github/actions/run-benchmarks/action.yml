@@ -28,7 +28,7 @@ inputs:
     required: false
     default: 'false'
   use_brr_if_available:
-    description: 'Use brr for resource allocation when the brr client is available'
+    description: 'Use brr when available.'
     required: false
     default: 'false'
   output_dir:

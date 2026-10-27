@@ -165,6 +165,15 @@ def _parse_args():
         help="Export the filtered experiment configurations to a YAML file",
     )
     parser.add_argument(
+        "--list-experiments",
+        action="store_true",
+        help=(
+            "Print the resolved experiment plan as JSON on stdout and exit without "
+            "downloading models or running anything. Used by CI to run each experiment "
+            "as a separately scheduled job."
+        ),
+    )
+    parser.add_argument(
         "--override-runner",
         type=str,
         required=False,
@@ -572,6 +581,43 @@ def _merge_hipblaslt_logs(directory: Path) -> None:
     )
 
 
+# xDiT experiments declare parallelism as degrees in `args` rather than as a GPU
+# count, so the world size is the product of the declared degrees. CFG parallelism
+# is a boolean that splits the batch across two groups, so it contributes a factor
+# of two. An experiment that declares nothing runs on a single GPU, which is the
+# same thing `ulysses_degree: 1` says.
+#
+# Only degrees that add ranks belong here. Args that redistribute work across
+# ranks that already exist do not: `fully_shard_degree` and `text_encoder_tp_*`
+# shard within the world rather than widening it, and counting them would claim
+# GPUs the experiment never uses.
+_PARALLEL_DEGREE_ARGS = (
+    "data_parallel_degree",
+    "ulysses_degree",
+    "ring_degree",
+    "pipefusion_parallel_degree",
+)
+
+
+def required_gpus(e: Experiment) -> int:
+    """Return the number of GPUs an experiment needs."""
+    if e.num_gpus is not None:
+        return e.num_gpus
+
+    world_size = 1
+    for key in _PARALLEL_DEGREE_ARGS:
+        degree = e.args.get(key)
+        # bool is a subclass of int; a boolean here is a config error, not a degree.
+        if isinstance(degree, bool) or not isinstance(degree, int) or degree < 1:
+            continue
+        world_size *= degree
+
+    if e.args.get("use_cfg_parallel") is True:
+        world_size *= 2
+
+    return world_size
+
+
 def command(
     e: Experiment, override_args: dict, override_runner: Optional[str] = None, override_entrypoint: Optional[str] = None
 ) -> List[str]:
@@ -636,9 +682,61 @@ def command(
     return cmd
 
 
+def _group_by_model(experiments: List[Experiment]) -> Dict[str, List[Experiment]]:
+    """Group experiments by model, preserving first-appearance order.
+
+    Experiments for the same model run back to back so the model is downloaded
+    once and can be evicted from the cache as soon as the group finishes.
+    """
+    grouped: Dict[str, List[Experiment]] = defaultdict(list)
+    for exp in experiments:
+        grouped[exp.model].append(exp)
+    return grouped
+
+
+def _list_experiments(experiments: List[Experiment]) -> None:
+    """Print the resolved experiment plan as JSON on stdout.
+
+    CI uses this to run each experiment as its own scheduled job, so a GPU
+    allocation is held for one experiment at a time instead of for a whole
+    sweep. The plan is emitted in the same order `main` would run the
+    experiments in, and each entry carries everything the orchestrator needs:
+
+    - ``num_gpus``: how many GPUs the experiment needs, derived from the
+      parallel degrees it declares.
+    - ``clear_model_cache``: true on the last experiment of a model whose cache
+      this run is responsible for cleaning up. The orchestrator turns this into
+      ``--clear-model-cache`` on that one invocation, which reproduces the
+      cleanup `main` would have done at the end of the model group.
+
+    Nothing is downloaded and no experiment is run.
+    """
+    preserve_original_state = not args.clear_model_cache and not args.no_clear_model_cache
+
+    plan: List[Dict[str, Any]] = []
+    for exps in _group_by_model(experiments).values():
+        # Matches `main`: one revision and one cache decision per model group.
+        model = exps[0].model
+        revision = exps[0].revision
+        cached_before = _model_in_cache(model, revision)
+        clear_after_group = args.clear_model_cache or (preserve_original_state and not cached_before)
+        for index, exp in enumerate(exps, 1):
+            plan.append(
+                {
+                    "name": exp.name,
+                    "model": model,
+                    "num_gpus": required_gpus(exp),
+                    "clear_model_cache": clear_after_group and index == len(exps),
+                }
+            )
+
+    json.dump(plan, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+
+
 def main():
     experiments: List[Experiment] = []
-    experiments_per_model: Dict[str, List[Experiment]] = defaultdict(list)
     errors: List[str] = []
 
     # Load Experiments from given config files
@@ -659,6 +757,13 @@ def main():
         logger.warning("No experiments matched the given filters.")
         return
 
+    # Resolve-only mode: report the plan and leave. Must come before anything
+    # with a side effect, so the orchestrator can resolve without touching the
+    # results directory or the model cache.
+    if args.list_experiments:
+        _list_experiments(experiments)
+        return
+
     collect_memory_stats = args.collect_memory_stats or env_enabled(os.environ.get("CI_RUN_PY_COLLECT_MEMORY", "0"))
     collect_miopen_driver_commands = env_enabled(os.environ.get("CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS", "0"))
     miopen_command_collector = None
@@ -674,8 +779,7 @@ def main():
     if args.export_config_path:
         _export_config(experiments, args.export_config_path)
 
-    for exp in experiments:
-        experiments_per_model[exp.model].append(exp)
+    experiments_per_model = _group_by_model(experiments)
 
     # Download models and run Experiments
     preserve_original_state = not args.clear_model_cache and not args.no_clear_model_cache
