@@ -8,7 +8,7 @@ set -euo pipefail
 # Expects env vars: BENCHMARK_ONLY, RUN_PY_FLAGS, INPUT_BENCHMARK_FLAGS,
 #   OUTPUT_DIR, ARCH, HF_CACHE_ARGS, HF_TOKEN, DOCKER_IMAGE,
 #   COLLECT_HIPBLASLT_LOGS, FORCE_DETERMINISM_CHECK,
-#   USE_BRR_IF_AVAILABLE, WITH_BRR
+#   DISABLE_BRR, WITH_BRR
 #
 # With brr the sweep is split into one container per experiment, run back to
 # back, so a GPU allocation is held for a single experiment instead of for the
@@ -95,7 +95,6 @@ RUN_BENCHMARKS='
       --results-directory "$BENCHMARK_OUTPUT_DIR" \
       --csv-output-path "$BENCHMARK_OUTPUT_DIR/results.csv" \
       /app/.ci/benchmark_configs/*.yaml;
-    (amd-smi || rocm-smi || true);
     source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
 '
 
@@ -105,7 +104,7 @@ LIST_EXPERIMENTS='
 '
 
 brr_is_usable() {
-  [ "${USE_BRR_IF_AVAILABLE:-false}" = "true" ] && command -v brr >/dev/null 2>&1
+  [ "${DISABLE_BRR:-false}" != "true" ] && command -v brr >/dev/null 2>&1
 }
 
 if ! brr_is_usable; then

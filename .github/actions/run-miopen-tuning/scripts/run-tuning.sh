@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Run MIOpen kernel tuning in a Docker container.
 # Expects env vars: ARCH, FORCE_RETUNING, DOCKER_IMAGE,
-#   USE_BRR_IF_AVAILABLE, WITH_BRR
+#   DISABLE_BRR, WITH_BRR
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # The helper path is resolved relative to this action at runtime.
@@ -46,7 +46,6 @@ echo "Running MIOpen tuning as container '$CONTAINER_NAME'." >&2
   "$DOCKER_IMAGE" \
   bash -c '
     bash "$ROOTDIR/data/miopen/tune.sh";
-    (amd-smi || rocm-smi || true);
     source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
   '
 

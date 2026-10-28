@@ -26,8 +26,8 @@ on:
         description: 'Driver-side timeout for the whole benchmark job'
         required: false
         default: '720'
-      use_brr_if_available:
-        description: 'Use brr for GPU resource allocation when available'
+      disable_brr:
+        description: 'Disable brr'
         type: boolean
         required: false
         default: false
@@ -87,7 +87,7 @@ jobs:
                 "gpu_runners": "${{ inputs.gpu_runners }}",
                 "benchmark_flags": "${{ inputs.benchmark_flags }}",
                 "job_timeout_minutes": "${{ inputs.job_timeout_minutes }}",
-                "use_brr_if_available": "${{ inputs.use_brr_if_available }}"
+                "disable_brr": "${{ inputs.disable_brr }}"
               }
             }
           code: |
@@ -143,7 +143,7 @@ jobs:
           hf_token: ${{ secrets.HF_TOKEN }}
           artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
           job_timeout_minutes: ${{ inputs.job_timeout_minutes }}
-          use_brr_if_available: ${{ inputs.use_brr_if_available }}
+          disable_brr: ${{ inputs.disable_brr }}
           databricks_host: ${{ secrets.DATABRICKS_HOST }}
           databricks_token: ${{ secrets.DATABRICKS_TOKEN }}
           mlflow_experiment_prefix: ${{ inputs.mlflow_experiment_prefix }}
