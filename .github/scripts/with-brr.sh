@@ -25,7 +25,7 @@ if [ "${USE_BRR_IF_AVAILABLE:-false}" = "true" ]; then
   if command -v brr >/dev/null 2>&1; then
     if [ -n "${BRR_GPU_REQUEST:-}" ]; then
       echo "brr is available; requesting $BRR_GPU_REQUEST GPU(s), exclusive use, before running the workload" >&2
-      exec brr run --gpus "$BRR_GPU_REQUEST" --exclusive --grace 0 -- "$@"
+      exec brr run --gpus "$BRR_GPU_REQUEST" --node --grace 0 -- "$@"
     fi
     echo "brr is available; requesting resources (full node, exclusive use) before running the workload" >&2
     exec brr run --node --grace 0 -- "$@"
