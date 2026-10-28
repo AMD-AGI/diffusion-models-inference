@@ -27,8 +27,8 @@ inputs:
     description: 'Force xFuser determinism checks for every benchmark and emit determinism_report.json (adds runtime overhead).'
     required: false
     default: 'false'
-  use_brr_if_available:
-    description: 'Use brr for resource allocation when the brr client is available'
+  disable_brr:
+    description: 'Disable brr'
     required: false
     default: 'false'
   output_dir:
@@ -81,7 +81,7 @@ runs:
         DOCKER_IMAGE: ${{ inputs.image }}
         COLLECT_HIPBLASLT_LOGS: ${{ inputs.collect_hipblaslt_logs }}
         FORCE_DETERMINISM_CHECK: ${{ inputs.force_determinism_check }}
-        USE_BRR_IF_AVAILABLE: ${{ inputs.use_brr_if_available }}
+        DISABLE_BRR: ${{ inputs.disable_brr }}
         WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
       run: ${{ github.action_path }}/scripts/run-benchmarks.sh
     
