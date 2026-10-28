@@ -1,0 +1,40 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: cosmos3_nano.default
+  tags: [release, instinct, gfx942, gfx950]
+  model: nvidia/Cosmos3-Nano
+  runner: xdit
+  args:
+    ulysses_degree: 4
+    use_cfg_parallel: true
+    use_torch_compile: true
+    use_parallel_vae: true
+    enable_tiling: true
+    use_fp8_gemms: true
+    prompt: /app/data/cosmos3_t2v_prompt.json
+    negative_prompt: /app/data/cosmos3_negative_prompt.json
+    num_frames: 121
+    height: 720
+    width: 1280
+    num_iterations: 1
+    attention_backend: aiter
+
+- name: cosmos3_super.default
+  tags: [release, instinct, gfx942, gfx950]
+  model: nvidia/Cosmos3-Super
+  runner: xdit
+  args:
+    ulysses_degree: 4
+    use_cfg_parallel: true
+    use_torch_compile: true
+    use_parallel_vae: true
+    enable_tiling: true
+    use_fp8_gemms: true
+    prompt: /app/data/cosmos3_t2v_prompt.json
+    negative_prompt: /app/data/cosmos3_negative_prompt.json
+    num_frames: 121
+    height: 720
+    width: 1280
+    num_iterations: 1
+    attention_backend: aiter

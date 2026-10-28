@@ -1,0 +1,18 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: ideogram4.default
+  tags: [release, instinct, gfx942, gfx950]
+  model: ideogram-ai/ideogram-4-fp8
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A polished summer solstice festival poster
+    height: 2048
+    width: 2048
+    num_inference_steps: 48
+    ulysses_degree: 2
+    use_cfg_parallel: true
+    use_torch_compile: true
+    num_iterations: 1
+    attention_backend: aiter
