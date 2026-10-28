@@ -26,29 +26,24 @@ installed. `PYTORCH_ROCM_ARCH` controls the architectures built into PyTorch
 and related wheels; it defaults to `ROCM_GFX_TARGETS` but can be overridden
 independently.
 
-Leaf packages install under `/opt/rocm/core-<series>`. `rocm_tree` and `rocm_base`
-both register the unversioned `/opt/rocm/{bin,lib,include,...}` links that the
-`amdrocm-core` postinst would have created. They are separate installs from
-`base`: `rocm_base` drops LLVM static archives outside `lib/clang` in that same
-install step, and `rocm_tree` keeps them so `rocm_devel` can inherit the files.
+Leaf packages install under `/opt/rocm/core-<series>`. `rocm_devel` registers
+the unversioned `/opt/rocm/{bin,lib,include,...}` links that the
+`amdrocm-core` postinst would have created, and keeps the LLVM static
+archives those packages install.
 
 | Target | Packages | Use |
 | --- | --- | --- |
-| `rocm_tree` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers. LLVM static archives kept | Parent of `torch_build_base` and `rocm_devel` |
-| `rocm_base` | Same packages. LLVM static archives outside `lib/clang` removed | Lean runtime target |
-| `rocm_devel` | `rocm_tree` plus developer-tools, RDC, OpenCL, blas/rccl tests | Default parent of `core` / `deps` / `final` |
+| `rocm_devel` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers, developer-tools, RDC, OpenCL, and blas/rccl tests. LLVM static archives kept | Parent of `torch_build_base` and `core` |
 
 `amdrocm-developer-tools` pulls the profiler, emulator, and debugger. It does
-not depend on `amdrocm-core`. `core` is `FROM ${ROCM_PARENT}`, which defaults to
-`rocm_devel`. `torch_build_base` fetches TheRock. `build_triton` and
-`build_pytorch` compile in series, then `build_vision`, `build_audio`, and
-`build_codec` compile in parallel. `build_torch_stack` gathers those wheels.
-Both parents install the wheels built by `build_torch_stack`.
-`deps` installs rocprofiler-compute's Python requirements only when that tree
-is present.
+not depend on `amdrocm-core`. `torch_build_base` fetches TheRock.
+`build_triton` and `build_pytorch` compile in series, then `build_vision`,
+`build_audio`, and `build_codec` compile in parallel. `build_torch_stack`
+gathers those wheels. `core` installs the wheels built by `build_torch_stack`.
+`deps` installs rocprofiler-compute's Python requirements.
 
 ```sh
-# pinned legacy snapshot, developer tools included
+# pinned legacy snapshot
 docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 
 # native Ubuntu 24.04 snapshot
@@ -56,10 +51,6 @@ docker build -f docker/Dockerfile.ci --target final \
     --build-arg ROCM_PACKAGE_REPOSITORY=native \
     --build-arg ROCM_RELEASE_ID=20261013-38325106112 \
     -t pytorch-xdit-native .
-
-# runtime + torch stack + AITER JIT, without developer tools
-docker build -f docker/Dockerfile.ci --target final \
-    --build-arg ROCM_PARENT=rocm_base -t pytorch-xdit-lean .
 ```
 
 The image does not build ROCm from source and does not support
@@ -71,7 +62,7 @@ available in the pinned nightly must first be published in a nightly snapshot.
 `docker/setup_amdsmi.sh` links the ROCm Python bindings into the venv, because
 the nightly debs ship them under `${ROCM_HOME}/share/amd_smi/amdsmi` with no
 `setup.py`, where pip cannot install them and nothing can import them. It runs
-in `rocm_tree` and `rocm_base`; the script header explains why a symlink is the only correct
+in `rocm_devel`; the script header explains why a symlink is the only correct
 mechanism.
 
 If a future nightly puts the bindings on `sys.path` itself, a build log prints
@@ -79,7 +70,7 @@ a `setup_amdsmi: RETIRE THIS SHIM` banner and the script makes no changes —
 delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping `ROCM_RELEASE_ID`:
 
 ```sh
-docker build -f docker/Dockerfile.ci --target rocm_base . --progress=plain 2>&1 \
+docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
     | grep -i 'setup_amdsmi'
 ```
 
@@ -88,7 +79,7 @@ docker build -f docker/Dockerfile.ci --target rocm_base . --progress=plain 2>&1 
 `docker/setup_rocm_llvm_layout.sh` links `${ROCM_PATH}/lib/llvm/bin` tools into
 `${ROCM_PATH}/llvm/bin`. Nightly debs install `ld.lld` under `lib/llvm/bin` and
 leave `llvm/bin` as clang `.cfg` stubs; FlyDSL/MLIR still invoke
-`$ROCM_PATH/llvm/bin/ld.lld`. It runs in `rocm_tree` and `rocm_base` after the ROCm `ENV`
+`$ROCM_PATH/llvm/bin/ld.lld`. It runs in `rocm_devel` after the ROCm `ENV`
 block, which also puts `lib/llvm/bin` on `PATH`.
 
 If a future nightly ships an executable `ld.lld` at the classic path, a build
@@ -101,7 +92,7 @@ looking for `$ROCM_PATH/llvm/bin/ld.lld` and uses `lib/llvm/bin`,
 print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
 
 ```sh
-docker build -f docker/Dockerfile.ci --target rocm_base . --progress=plain 2>&1 \
+docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
     | grep -i 'setup_rocm_llvm_layout'
 ```
 
@@ -112,7 +103,7 @@ so `find_package(hipblaslt)` can configure. hipBLASLt's installed package config
 requires `find_package(origami)` in a sibling `lib/cmake/origami` directory
 (`NO_DEFAULT_PATH`, so `CMAKE_PREFIX_PATH` does not help). Nightly debs ship
 `liborigami.so` in the BLAS host package but omit that CMake package from
-BLAS devel. It runs in `rocm_tree` and `rocm_base` after the `-dev` debs, which is when
+BLAS devel. It runs in `rocm_devel` after the `-dev` debs, which is when
 hipBLASLt's CMake files land. The script header explains why a stub imported
 target is the only correct mechanism.
 
@@ -123,6 +114,6 @@ point. The shim can also be deleted if hipBLASLt stops `find_dependency(origami)
 that will not print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
 
 ```sh
-docker build -f docker/Dockerfile.ci --target rocm_base . --progress=plain 2>&1 \
+docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
     | grep -i 'setup_origami_cmake'
 ```
