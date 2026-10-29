@@ -12,7 +12,7 @@
     width: 1280
     num_frames: 81
     ulysses_degree: 8
-    use_parallel_vae: True
+    use_parallel_vae: true
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -33,7 +33,7 @@
     width: 1280
     num_frames: 81
     ulysses_degree: 8
-    use_parallel_vae: True
+    use_parallel_vae: true
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -55,7 +55,7 @@
     width: 1280
     num_frames: 81
     ulysses_degree: 8
-    use_parallel_vae: True
+    use_parallel_vae: true
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -75,7 +75,7 @@
     width: 1280
     num_frames: 81
     ulysses_degree: 8
-    use_parallel_vae: True
+    use_parallel_vae: true
     seed: 42
     num_iterations: 1
     num_inference_steps: 40
@@ -96,11 +96,11 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
-    use_parallel_vae: True
+    use_parallel_vae: true
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: false
-    use_fp8_gemms: True
+    use_fp8_gemms: true
     guidance_scale: 5.0
     warmup_steps: 40
     attention_backend: aiter_quant
@@ -118,7 +118,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
-    use_parallel_vae: True
+    use_parallel_vae: true
     num_iterations: 1
     warmup_steps: 40
     num_inference_steps: 40
@@ -126,7 +126,7 @@
     guidance_scale: 5.0
     attention_backend: aiter_quant
     attention_backend_config: format=mxfp6
-    use_fp4_gemms: True
+    use_fp4_gemms: true
     quantization_ignored_layers:
       - blocks.0
       - blocks.1
