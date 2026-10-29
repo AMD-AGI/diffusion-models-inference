@@ -1,0 +1,28 @@
+diff --git a/xfuser/model_executor/models/transformers/transformer_z_image.py b/xfuser/model_executor/models/transformers/transformer_z_image.py
+index 28812c3..a9973a7 100644
+--- a/xfuser/model_executor/models/transformers/transformer_z_image.py
++++ b/xfuser/model_executor/models/transformers/transformer_z_image.py
+@@ -6,6 +6,7 @@ from typing import List, Optional
+ from diffusers.models.transformers.transformer_z_image import ZImageTransformer2DModel
+ from diffusers.models.attention_processor import Attention
+ from diffusers.models.modeling_outputs import Transformer2DModelOutput
++from diffusers.utils import apply_lora_scale
+ 
+ 
+ from xfuser.model_executor.layers.usp import USP
+@@ -195,6 +196,7 @@ class xFuserZImageTransformer2DWrapper(ZImageTransformer2DModel):
+         size = x.size(dim)
+         return x.narrow(dim=dim, start=0, length=size - pad_amount)
+ 
++    @apply_lora_scale("joint_attention_kwargs")
+     def forward(
+         self,
+         x: List[torch.Tensor],
+@@ -203,6 +205,7 @@ class xFuserZImageTransformer2DWrapper(ZImageTransformer2DModel):
+         patch_size=2,
+         f_patch_size=1,
+         return_dict: bool = True,
++        joint_attention_kwargs: Optional[dict] = None,
+     ):
+         assert patch_size in self.all_patch_size
+         assert f_patch_size in self.all_f_patch_size
