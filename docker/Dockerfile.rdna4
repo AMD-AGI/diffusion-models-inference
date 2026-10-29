@@ -8,9 +8,12 @@ ARG TORCH_SPEC=torch[device-gfx1200,device-gfx1201]==2.13.0+rocm10.0.0
 ARG TORCHVISION_SPEC=torchvision[device-gfx1200,device-gfx1201]==0.27.0+rocm10.0.0
 ARG TORCHAUDIO_SPEC=torchaudio==2.11.0.2+rocm10.0.0
 ARG AITER_REPO=https://github.com/pds-amd/aiter.git
-ARG AITER_COMMIT=87973ea85d2d5fad92c4ad3d8415b2a0bba641e1
+ARG AITER_REF=feat/flydsl-flash-attn-gfx1201-v9
+ARG AITER_COMMIT=e5a173b0227ebff1bbbd1f3a450b266ec5f5b8df
 ARG DIFFUSERS_COMMIT=77d9eb4ed7c3e4a1813ddf3b8ba995d4a988f801
-ARG XDIT_COMMIT=b714b357cb8f8d394af95ca6fbc2cc81dc1d186d
+ARG XDIT_REPO=https://github.com/pds-amd/xDiT.git
+ARG XDIT_REF=feat/z-image-pipefusion
+ARG XDIT_COMMIT=ecf0f588eefb8294356e75e2f14983d16a495034
 ARG FLYDSL_VERSION=0.3.2
 ARG TRANSFORMERS_VERSION=5.16.1
 
@@ -132,10 +135,11 @@ ENV PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
 WORKDIR /app/external
 
 ARG AITER_REPO
+ARG AITER_REF
 ARG AITER_COMMIT
 ARG FLYDSL_VERSION
 RUN python3 -m pip install --no-cache-dir "flydsl==${FLYDSL_VERSION}" && \
-    git clone --recursive "${AITER_REPO}" aiter && \
+    git clone --branch "${AITER_REF}" --single-branch --recursive "${AITER_REPO}" aiter && \
     cd aiter && \
     git checkout "${AITER_COMMIT}" && \
     git submodule update --init --recursive && \
@@ -157,8 +161,10 @@ RUN python3 -m pip install --no-cache-dir \
     python3 -m pip install --no-cache-dir --no-binary imageio-ffmpeg imageio-ffmpeg
 
 WORKDIR /app
+ARG XDIT_REPO
+ARG XDIT_REF
 ARG XDIT_COMMIT
-RUN git clone https://github.com/xdit-project/xDiT.git && \
+RUN git clone --branch "${XDIT_REF}" --single-branch "${XDIT_REPO}" xDiT && \
     cd xDiT && \
     git checkout "${XDIT_COMMIT}" && \
     echo "xDiT at $(git rev-parse HEAD)" && \
