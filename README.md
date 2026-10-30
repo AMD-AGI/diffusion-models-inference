@@ -26,6 +26,7 @@ The current xDiT benchmark configurations include:
 | LTX-2.5 | `Lightricks/LTX-2.5-Diffusers` |
 | MiniMax-H3 | `MiniMaxAI/MiniMax-H3` |
 | Qwen-Image | `Qwen/Qwen-Image-2512` |
+| Qwen-Image-2.1 | `Qwen/Qwen-Image-2.1` |
 | Qwen-Image-Edit | `Qwen/Qwen-Image-Edit` |
 | Stable Diffusion 3.5 | `stabilityai/stable-diffusion-3.5-large` |
 | Wan 2.1 | `Wan-AI/Wan2.1-I2V-14B-720P-Diffusers` |
