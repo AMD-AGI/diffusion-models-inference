@@ -138,6 +138,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git apply /patches/xfuser_runner_utils.patch && \
     git apply /patches/xfuser_flux.patch && \
     git apply /patches/xfuser_sd3_joint_attn_kv_cache.patch && \
+    git apply /patches/xfuser_z_image_joint_attention_kwargs.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 
