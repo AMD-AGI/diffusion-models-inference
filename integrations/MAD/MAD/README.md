@@ -44,6 +44,7 @@ latencies can be found from `results.csv` once the benchmark runs have finished.
 | pyt_xdit_ltx_2_5               | [LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)                                  |
 | pyt_xdit_minimax_h3            | [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3)                             |
 | pyt_xdit_qwen_image            | [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image-2512)                             |
+| pyt_xdit_qwen_image_2_1        | [Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1)                          |
 | pyt_xdit_qwen_image_edit       | [Qwen-Image-Edit](https://huggingface.co/Qwen/Qwen-Image-Edit)                        |
 | pyt_xdit_sd_3_5                | [Stable diffusion 3.5](https://huggingface.co/stabilityai/stable-diffusion-3.5-large) |
 | pyt_xdit_wan_2_1               | [Wan 2.1](https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-720P)                          |

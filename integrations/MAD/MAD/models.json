@@ -155,6 +155,23 @@
     "multiple_results": "results.csv"
   },
   {
+    "name": "pyt_xdit_qwen_image_2_1",
+    "dockerfile": "../../docker/pyt_xdit",
+    "scripts": "run.sh",
+    "n_gpus": "8",
+    "owner": "nsakkine@amd.com",
+    "training_precision": "",
+    "tags": [
+        "inference",
+        "diffusion",
+        "t2i",
+        "pyt",
+        "xdit"
+    ],
+    "args": "--workload qwen_image_2_1",
+    "multiple_results": "results.csv"
+  },
+  {
     "name": "pyt_xdit_qwen_image_edit",
     "dockerfile": "../../docker/pyt_xdit",
     "scripts": "run.sh",
