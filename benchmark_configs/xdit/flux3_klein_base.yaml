@@ -1,0 +1,42 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: flux3_klein_base.default
+  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  model: black-forest-labs/flux-3-image-klein-base
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A cat standing on a sunlit windowsill, looking out at a quiet city street in the late afternoon.
+    height: 2048
+    width: 2048
+    num_inference_steps: 50
+    guidance_scale: 3.5
+    warmup_calls: 3
+    num_iterations: 10
+    use_cfg_parallel: true
+    ulysses_degree: 4
+    use_torch_compile: true
+    use_parallel_vae: true
+    attention_backend: aiter
+    memory_efficient_replicated_load: true
+
+- name: flux3_klein_base.4k
+  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  model: black-forest-labs/flux-3-image-klein-base
+  runner: xdit
+  args:
+    seed: 42
+    prompt: A cat standing on a sunlit windowsill, looking out at a quiet city street in the late afternoon.
+    height: 4096
+    width: 4096
+    num_inference_steps: 50
+    guidance_scale: 3.5
+    warmup_calls: 3
+    num_iterations: 10
+    use_cfg_parallel: true
+    ulysses_degree: 4
+    use_torch_compile: true
+    use_parallel_vae: true
+    attention_backend: aiter
+    memory_efficient_replicated_load: true
