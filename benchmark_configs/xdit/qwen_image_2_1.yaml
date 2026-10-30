@@ -1,0 +1,53 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+- name: qwen_image_2_1.default
+  tags: [release, lucid, mad, instinct, gfx942, gfx950]
+  model: Qwen/Qwen-Image-2.1
+  runner: xdit
+  args:
+    prompt: A cat holding a sign that says hello world
+    height: 2048
+    width: 2048
+    seed: 42
+    num_inference_steps: 40
+    guidance_scale: 1.0
+    num_iterations: 10
+    ulysses_degree: 8
+    use_torch_compile: true
+    attention_backend: aiter
+    memory_efficient_replicated_load: true
+
+- name: qwen_image_2_1.default.hopper
+  tags: [lucid, hopper, h100, h200]
+  model: Qwen/Qwen-Image-2.1
+  runner: xdit
+  args:
+    prompt: A cat holding a sign that says hello world
+    height: 2048
+    width: 2048
+    seed: 42
+    num_inference_steps: 40
+    guidance_scale: 1.0
+    num_iterations: 10
+    ulysses_degree: 8
+    use_torch_compile: true
+    attention_backend: cudnn
+    memory_efficient_replicated_load: true
+
+- name: qwen_image_2_1.default.blackwell
+  tags: [lucid, blackwell, b200, b300]
+  model: Qwen/Qwen-Image-2.1
+  runner: xdit
+  args:
+    prompt: A cat holding a sign that says hello world
+    height: 2048
+    width: 2048
+    seed: 42
+    num_inference_steps: 40
+    guidance_scale: 1.0
+    num_iterations: 10
+    ulysses_degree: 8
+    use_torch_compile: true
+    attention_backend: cudnn
+    memory_efficient_replicated_load: true

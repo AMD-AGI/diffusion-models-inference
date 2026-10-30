@@ -34,9 +34,9 @@ ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
 # deps image arguments
 ARG AITER_COMMIT="e2d019f15599b73360ae027b73b8d72961903bd2"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
+ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="4865f4e48fffb5aca2f507647305e8b427b391dc"
+ARG XDIT_COMMIT="ce8f789fae6247e5ccf9672a273394a64039442b"
 ARG AO_COMMIT="92dcc96162f21928092f8e8e35bac29d3b180e34"
 ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
@@ -615,7 +615,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
-    git apply /patches/xfuser_sd3_joint_attn_kv_cache.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute ships with rocm_devel. ROCM_PARENT=rocm_base has no tree.

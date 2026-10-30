@@ -1,16 +1,26 @@
 diff --git a/xfuser/model_executor/models/runner_models/ltx.py b/xfuser/model_executor/models/runner_models/ltx.py
-index 2531cc1..940830d 100644
+index f516e03..467e034 100644
 --- a/xfuser/model_executor/models/runner_models/ltx.py
 +++ b/xfuser/model_executor/models/runner_models/ltx.py
-@@ -1,4 +1,5 @@
+@@ -1,9 +1,10 @@
  import copy
 +import gc
  from types import SimpleNamespace
  from typing import ClassVar
  
-@@ -605,6 +606,24 @@ class _xFuserLTX25VideoModelBase(xFuserModel):
-                     "Using guidance_scale=1.0. Other guidance scale values are not supported with this model."
+ import torch
+ from diffusers import FlowMatchEulerDiscreteScheduler
+ from diffusers.pipelines.pipeline_utils import DiffusionPipeline
+ 
+ from xfuser.core.utils.runner_utils import log
+@@ -599,16 +600,34 @@ class _xFuserLTX25VideoModelBase(xFuserModel):
+             if steps != 8:
+                 raise ValueError(
+                     f"LTX-2.5 distilled uses a fixed 8-step schedule; num_inference_steps must be 8, got {steps}."
                  )
+             guidance_scale = input_args.get("guidance_scale")
+             if guidance_scale != 1.0:
+                 log("Using guidance_scale=1.0. Other guidance scale values are not supported with this model.")
  
 +    def run(self, input_args: dict):
 +        gc_was_enabled = gc.isenabled()
@@ -30,6 +40,11 @@ index 2531cc1..940830d 100644
 +            if gc_was_enabled:
 +                gc.enable()
 +
+     @torch.inference_mode()
      def _run_pipe(self, input_args: dict) -> DiffusionOutput:
          from diffusers.pipelines.ltx2.utils import (
              DISTILLED_SIGMA_VALUES,
+             STAGE_2_DISTILLED_SIGMA_VALUES,
+         )
+ 
+         is_i2v = self.config.task == "i2v"
