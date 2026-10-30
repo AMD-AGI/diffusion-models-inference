@@ -100,6 +100,21 @@ def parse_args() -> argparse.Namespace:
     server.add_argument("--use_cfg_parallel", action=argparse.BooleanOptionalAction, default=False)
     server.add_argument("--use_parallel_vae", action=argparse.BooleanOptionalAction, default=False)
     server.add_argument("--use_torch_compile", action="store_true")
+    server.add_argument(
+        "--trust-remote-code",
+        "--trust_remote_code",
+        dest="trust_remote_code",
+        action="store_true",
+        help="Allow loading model components that execute checkpoint-provided code.",
+    )
+    server.add_argument(
+        "--qwen_image_split_text_embed_in_sp",
+        action="store_true",
+        help=(
+            "Enable Qwen-Image text embedding sequence parallelism via "
+            "stage 0 extras."
+        ),
+    )
     quantization = server.add_mutually_exclusive_group()
     quantization.add_argument(
         "--use_fp4_gemms",
@@ -113,8 +128,12 @@ def parse_args() -> argparse.Namespace:
     )
     server.add_argument(
         "--transformer_2_quantization_method",
-        choices=("fp8", "mxfp4"),
-        help="Optional quantization method for a second diffusion transformer.",
+        choices=("fp8", "mxfp4", "mxfp6"),
+        help=(
+            "Optional quantization method for a second diffusion transformer. "
+            "mxfp6 is AITER A6W6 MXFP6 (E2M3, gfx950 only), the same GEMM as xDiT's "
+            "gemm_quantization high=fp6."
+        ),
     )
     server.add_argument("--use_hsdp", action="store_true")
     server.add_argument("--enable_slicing", action="store_true")
@@ -150,12 +169,43 @@ def parse_args() -> argparse.Namespace:
         "--profile",
         action="store_true",
         help=(
-            "Call /start_profile and /stop_profile around timed iterations. "
+            "Run explicit profile wait/warmup/active phases and call "
+            "/start_profile and /stop_profile around them. "
             "Requires VLLM_TORCH_PROFILER_DIR and starts the server with "
             "--profiler-config so those endpoints are registered."
         ),
     )
-    return parser.parse_args()
+    benchmark.add_argument(
+        "--profile_wait",
+        type=int,
+        default=0,
+        help="Profiler-off requests before profiling starts.",
+    )
+    benchmark.add_argument(
+        "--profile_warmup",
+        type=int,
+        default=0,
+        help="Profiler-on warmup requests before active requests; timings are discarded.",
+    )
+    benchmark.add_argument(
+        "--profile_active",
+        type=int,
+        help="Number of active profiled requests; defaults to num_iterations.",
+    )
+    benchmark.add_argument(
+        "--profile_with_stack",
+        action="store_true",
+        help="Record Python call stacks in the PyTorch profiler trace.",
+    )
+    args = parser.parse_args()
+    # vllm-omni rejects this combination, but only after the (slow) server
+    # import/startup; fail before launching it.
+    if args.attention_backend and (args.diffusion_attention_config or {}).get("default") is not None:
+        parser.error(
+            "--attention_backend is mutually exclusive with "
+            "--diffusion_attention_config.default; set the backend in one place."
+        )
+    return args
 
 
 # ── Server management ─────────────────────────────────────────────────────────
@@ -189,6 +239,16 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
 
     if args.ulysses_mode:
         cmd += ["--ulysses-mode", args.ulysses_mode]
+    if args.trust_remote_code:
+        cmd += ["--trust-remote-code"]
+    if args.qwen_image_split_text_embed_in_sp:
+        cmd += [
+            "--stage-overrides",
+            json.dumps(
+                {"0": {"extras": {"qwen_image_split_text_embed_in_sp": True}}},
+                separators=(",", ":"),
+            ),
+        ]
 
     if not args.use_torch_compile:
         cmd += ["--enforce-eager"]
@@ -232,7 +292,7 @@ def build_serve_cmd(args: argparse.Namespace) -> list[str]:
         profiler_config = {
             "profiler": "torch",
             "torch_profiler_dir": profile_dir,
-            "torch_profiler_with_stack": False,
+            "torch_profiler_with_stack": args.profile_with_stack,
             "torch_profiler_record_shapes": True,
         }
         cmd += [
@@ -474,19 +534,40 @@ def main() -> None:
 
         output_path = os.path.join(args.output_directory, f"output.{ext}")
 
-        # Warmup iterations (timing discarded, output overwritten)
-        if args.warmup_calls > 0:
+        if args.profile:
+            # Profile mode follows the xDiT phase model.  Do not also run the
+            # ordinary warmup_calls: profile_wait replaces those requests.
+            if args.warmup_calls:
+                logger.info(
+                    "Ignoring warmup_calls=%d in profile mode; use profile_wait instead.",
+                    args.warmup_calls,
+                )
+            if args.profile_wait > 0:
+                logger.info("Running %d profiler wait request(s)...", args.profile_wait)
+                _run_iterations("Profile wait", args.profile_wait, base_url, args, output_path)
+            logger.info("Profiler wait complete.")
+
+            _call_profile_endpoint(base_url, "start_profile", args.request_timeout)
+        elif args.warmup_calls > 0:
             logger.info("Running %d warmup call(s)...", args.warmup_calls)
             _run_iterations("Warmup", args.warmup_calls, base_url, args, output_path)
             logger.info("Warmup complete.")
 
-        # Timed iterations — output is overwritten each time, last one is kept
-        if args.profile:
-            _call_profile_endpoint(base_url, "start_profile", args.request_timeout)
-
         try:
-            logger.info("Running %d timed iteration(s)...", args.num_iterations)
-            gen_times = _run_iterations("Iteration", args.num_iterations, base_url, args, output_path)
+            if args.profile and args.profile_warmup > 0:
+                logger.info("Running %d profiler warmup request(s)...", args.profile_warmup)
+                _run_iterations("Profile warmup", args.profile_warmup, base_url, args, output_path)
+                logger.info("Profiler warmup complete.")
+
+            active_iterations = (
+                args.profile_active
+                if args.profile and args.profile_active is not None
+                else args.num_iterations
+            )
+            if active_iterations <= 0:
+                raise ValueError("The number of active iterations must be positive.")
+            logger.info("Running %d active iteration(s)...", active_iterations)
+            gen_times = _run_iterations("Iteration", active_iterations, base_url, args, output_path)
         finally:
             if args.profile:
                 _call_profile_endpoint(base_url, "stop_profile", args.request_timeout)
@@ -494,7 +575,7 @@ def main() -> None:
         with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
             json.dump(gen_times, f)
 
-        logger.info("Done. %d iteration(s) completed.", args.num_iterations)
+        logger.info("Done. %d active iteration(s) completed.", len(gen_times))
         logger.info("Server command: %s", shlex.join(build_serve_cmd(args)))
 
     except RuntimeError as exc:
