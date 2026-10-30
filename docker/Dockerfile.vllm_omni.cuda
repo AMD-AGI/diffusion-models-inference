@@ -10,11 +10,11 @@
 #
 # Based on https://github.com/vllm-project/vllm-omni/blob/main/docker/Dockerfile.cuda
 
-ARG BASE_IMAGE=vllm/vllm-openai:v0.28.0
+ARG BASE_IMAGE=vllm/vllm-openai:v0.31.0
 FROM ${BASE_IMAGE} AS base
 
 ARG VLLM_OMNI_REPO=https://github.com/kTorp/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="a9739d74" # performance-v0.28.0_custom on v0.28.0
+ARG VLLM_OMNI_COMMIT="57a2a80" # v0.31.0 pre-release custom branch
 
 WORKDIR /app
 
