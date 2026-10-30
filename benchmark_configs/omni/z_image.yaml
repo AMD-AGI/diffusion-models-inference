@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: z_image.default
-  tags: [instinct, gfx942, gfx950]
+  tags: [instinct, gfx942, gfx950, lucid]
   model: Tongyi-MAI/Z-Image
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -13,14 +13,14 @@
     width: 1920
     num_inference_steps: 50
     ulysses_degree: 8
-    ulysses_mode: advanced_uaa
     use_torch_compile: true
     guidance_scale: 4.0
+    warmup_calls: 2
     num_iterations: 25
     attention_backend: FLASH_ATTN
 
 - name: z_image.default.hopper
-  tags: [hopper, h100, h200]
+  tags: [hopper, h200, lucid]
   model: Tongyi-MAI/Z-Image
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -34,11 +34,12 @@
     ulysses_mode: advanced_uaa
     use_torch_compile: true
     guidance_scale: 4.0
+    warmup_calls: 2
     num_iterations: 25
     attention_backend: FLASH_ATTN
 
 - name: z_image.default.blackwell
-  tags: [blackwell, b200, b300]
+  tags: [blackwell, b200, b300, lucid]
   model: Tongyi-MAI/Z-Image
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -52,5 +53,6 @@
     ulysses_mode: advanced_uaa
     use_torch_compile: true
     guidance_scale: 4.0
+    warmup_calls: 2
     num_iterations: 25
     attention_backend: CUDNN_ATTN

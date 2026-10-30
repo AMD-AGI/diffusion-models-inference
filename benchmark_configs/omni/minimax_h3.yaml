@@ -22,12 +22,13 @@
     use_parallel_vae: true
     use_torch_compile: true
     task_type: fl2va
-    warmup_calls: 5
-    num_iterations: 25
+    trust_remote_code: true
+    warmup_calls: 1
+    num_iterations: 5
     attention_backend: FLASH_ATTN
 
-- name: minimax_h3.hopper
-  tags: [lucid, hopper, h100, h200]
+- name: minimax_h3.default.hopper
+  tags: [lucid, hopper, h200]
   model: MiniMaxAI/MiniMax-H3
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -47,11 +48,12 @@
     use_parallel_vae: true
     use_torch_compile: true
     task_type: fl2va
-    warmup_calls: 5
-    num_iterations: 25
+    trust_remote_code: true
+    warmup_calls: 1
+    num_iterations: 5
     attention_backend: CUDNN_ATTN
 
-- name: minimax_h3.blackwell
+- name: minimax_h3.default.blackwell
   tags: [lucid, blackwell, b200, b300]
   model: MiniMaxAI/MiniMax-H3
   runner: python
@@ -72,6 +74,7 @@
     use_parallel_vae: true
     use_torch_compile: true
     task_type: fl2va
-    warmup_calls: 5
-    num_iterations: 25
+    trust_remote_code: true
+    warmup_calls: 1
+    num_iterations: 5
     attention_backend: CUDNN_ATTN

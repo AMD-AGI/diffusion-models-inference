@@ -15,14 +15,15 @@
     seed: 42
     num_inference_steps: 50
     true_cfg_scale: 4.0
-    warmup_calls: 5
+    warmup_calls: 2
     num_iterations: 25
     ulysses_degree: 8
+    qwen_image_split_text_embed_in_sp: true
     use_torch_compile: true
     attention_backend: FLASH_ATTN
 
 - name: qwen_image_edit.default.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [lucid, hopper, h200]
   model: Qwen/Qwen-Image-Edit
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -35,9 +36,10 @@
     seed: 42
     num_inference_steps: 50
     true_cfg_scale: 4.0
-    warmup_calls: 5
+    warmup_calls: 2
     num_iterations: 25
     ulysses_degree: 8
+    qwen_image_split_text_embed_in_sp: true
     use_torch_compile: true
     attention_backend: CUDNN_ATTN
 
@@ -55,8 +57,9 @@
     seed: 42
     num_inference_steps: 50
     true_cfg_scale: 4.0
-    warmup_calls: 5
+    warmup_calls: 2
     num_iterations: 25
     ulysses_degree: 8
+    qwen_image_split_text_embed_in_sp: true
     use_torch_compile: true
     attention_backend: CUDNN_ATTN

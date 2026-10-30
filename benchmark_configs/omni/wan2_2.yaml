@@ -1,8 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-- name: wan2_2.i2v
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+- name: wan2_2.i2v.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: python
   entrypoint: /app/.ci/online_runner.py
@@ -18,6 +18,33 @@
     use_parallel_vae: true
     use_torch_compile: true
     attention_backend: FLASH_ATTN
+    seed: 42
+    warmup_calls: 1
+    num_iterations: 1
+    num_inference_steps: 40
+    guidance_scale: 3.5
+
+- name: wan2_2.i2v.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    negative_prompt: bright colors, overexposed, static, blurred details, subtitles, style, artwork, painting, picture, still, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, malformed limbs, fused fingers, still picture, cluttered background, three legs, many people in the background, walking backwards
+    height: 1104
+    width: 832
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    fps: 16
+    ulysses_degree: 8
+    use_parallel_vae: true
+    use_torch_compile: true
+    diffusion_attention_config:
+      default:
+        backend: AITER_QUANT_ATTN
+        aiter_quant:
+          format: bf16
     seed: 42
     warmup_calls: 1
     num_iterations: 1
@@ -66,8 +93,75 @@
     use_parallel_vae: true
     use_torch_compile: true
     use_fp4_gemms: true
+    transformer_2_quantization_method: mxfp6
+    diffusion_attention_config:
+      default:
+        backend: AITER_QUANT_ATTN
+        aiter_quant:
+          format: bf16
+    seed: 42
+    warmup_calls: 1
+    num_iterations: 1
+    num_inference_steps: 40
+    guidance_scale: 3.5
+
+- name: wan2_2.quantgemm_quantattn.gfx942
+  tags: [release, mad, lucid, instinct, gfx942]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    negative_prompt: bright colors, overexposed, static, blurred details, subtitles, style, artwork, painting, picture, still, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, malformed limbs, fused fingers, still picture, cluttered background, three legs, many people in the background, walking backwards
+    height: 1104
+    width: 832
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    fps: 16
+    ulysses_degree: 8
+    use_parallel_vae: true
+    use_torch_compile: true
+    use_fp8_gemms: true
     transformer_2_quantization_method: fp8
-    attention_backend: FLASH_ATTN
+    diffusion_attention_config:
+      default:
+        backend: AITER_QUANT_ATTN
+        aiter_quant:
+          format: fp8
+    seed: 42
+    warmup_calls: 1
+    num_iterations: 1
+    num_inference_steps: 40
+    guidance_scale: 3.5
+
+- name: wan2_2.quantgemm_quantattn.gfx950
+  tags: [release, mad, lucid, instinct, gfx950]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    negative_prompt: bright colors, overexposed, static, blurred details, subtitles, style, artwork, painting, picture, still, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, malformed limbs, fused fingers, still picture, cluttered background, three legs, many people in the background, walking backwards
+    height: 1104
+    width: 832
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    fps: 16
+    ulysses_degree: 8
+    use_parallel_vae: true
+    use_torch_compile: true
+    use_fp4_gemms: true
+    transformer_2_quantization_method: mxfp6
+    diffusion_attention_config:
+      default:
+        backend: AITER_QUANT_ATTN
+        aiter_quant:
+          format: mxfp6
+      per_role:
+        cross:
+          backend: AITER_QUANT_ATTN
+          aiter_quant:
+            format: bf16
     seed: 42
     warmup_calls: 1
     num_iterations: 1
@@ -90,6 +184,31 @@
     ulysses_degree: 8
     use_parallel_vae: true
     use_torch_compile: true
+    attention_backend: FLASH_ATTN
+    seed: 42
+    warmup_calls: 1
+    num_iterations: 1
+    num_inference_steps: 40
+    guidance_scale: 3.5
+
+- name: wan2_2.quantgemm.hopper.h200
+  tags: [lucid, hopper, h200]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: python
+  entrypoint: /app/.ci/online_runner.py
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    negative_prompt: bright colors, overexposed, static, blurred details, subtitles, style, artwork, painting, picture, still, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, malformed limbs, fused fingers, still picture, cluttered background, three legs, many people in the background, walking backwards
+    height: 1104
+    width: 832
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    fps: 16
+    ulysses_degree: 8
+    use_parallel_vae: true
+    use_torch_compile: true
+    use_fp8_gemms: true
+    transformer_2_quantization_method: fp8
     attention_backend: FLASH_ATTN
     seed: 42
     warmup_calls: 1
