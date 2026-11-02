@@ -43,7 +43,10 @@ not depend on `amdrocm-core`. `core` is `FROM ${ROCM_PARENT}`, which defaults to
 `rocm_devel`. `torch_build_base` fetches TheRock. `build_triton` and
 `build_pytorch` compile in series, then `build_vision`, `build_audio`, and
 `build_codec` compile in parallel. `build_torch_stack` gathers those wheels.
-Both parents install the wheels built by `build_torch_stack`.
+Both parents install the wheels built by `build_torch_stack`. `build_mori`
+builds the MORI wheel from `rocm_tree` without UMBP, and `core` installs it
+after AITER; MORI provides the symmetric memory behind AITER's intranode
+attention A2A.
 `deps` installs rocprofiler-compute's Python requirements only when that tree
 is present.
 
