@@ -18,8 +18,8 @@ inputs:
     description: 'Force full retuning (delete existing tuning databases before tuning)'
     required: false
     default: 'false'
-  use_brr_if_available:
-    description: 'Use brr for resource allocation when the brr client is available'
+  disable_brr:
+    description: 'Disable brr'
     required: false
     default: 'false'
 
@@ -32,7 +32,7 @@ runs:
         ARCH: ${{ inputs.arch }}
         FORCE_RETUNING: ${{ inputs.force_retuning }}
         DOCKER_IMAGE: ${{ inputs.image }}
-        USE_BRR_IF_AVAILABLE: ${{ inputs.use_brr_if_available }}
+        DISABLE_BRR: ${{ inputs.disable_brr }}
         WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
       run: ${{ github.action_path }}/scripts/run-tuning.sh
     
