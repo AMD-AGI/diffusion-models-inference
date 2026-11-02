@@ -694,8 +694,13 @@ def _group_by_model(experiments: List[Experiment]) -> Dict[str, List[Experiment]
     return grouped
 
 
-def _list_experiments(experiments: List[Experiment]) -> None:
-    """Print the resolved experiment plan as JSON on stdout.
+def _experiment_plan(
+    experiments: List[Experiment],
+    clear_model_cache: bool,
+    no_clear_model_cache: bool,
+    cached_models: Dict[str, bool],
+) -> List[Dict[str, Any]]:
+    """Build the experiment plan from explicit cache policy and cache state.
 
     CI uses this to run each experiment as its own scheduled job, so a GPU
     allocation is held for one experiment at a time instead of for a whole
@@ -711,15 +716,13 @@ def _list_experiments(experiments: List[Experiment]) -> None:
 
     Nothing is downloaded and no experiment is run.
     """
-    preserve_original_state = not args.clear_model_cache and not args.no_clear_model_cache
+    preserve_original_state = not clear_model_cache and not no_clear_model_cache
 
     plan: List[Dict[str, Any]] = []
     for exps in _group_by_model(experiments).values():
         # Matches `main`: one revision and one cache decision per model group.
         model = exps[0].model
-        revision = exps[0].revision
-        cached_before = _model_in_cache(model, revision)
-        clear_after_group = args.clear_model_cache or (preserve_original_state and not cached_before)
+        clear_after_group = clear_model_cache or (preserve_original_state and not cached_models[model])
         for index, exp in enumerate(exps, 1):
             plan.append(
                 {
@@ -730,9 +733,7 @@ def _list_experiments(experiments: List[Experiment]) -> None:
                 }
             )
 
-    json.dump(plan, sys.stdout, indent=2)
-    sys.stdout.write("\n")
-    sys.stdout.flush()
+    return plan
 
 
 def main():
@@ -761,7 +762,13 @@ def main():
     # with a side effect, so the orchestrator can resolve without touching the
     # results directory or the model cache.
     if args.list_experiments:
-        _list_experiments(experiments)
+        cached_models = {
+            model: _model_in_cache(model, exps[0].revision) for model, exps in _group_by_model(experiments).items()
+        }
+        plan = _experiment_plan(experiments, args.clear_model_cache, args.no_clear_model_cache, cached_models)
+        json.dump(plan, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
         return
 
     collect_memory_stats = args.collect_memory_stats or env_enabled(os.environ.get("CI_RUN_PY_COLLECT_MEMORY", "0"))

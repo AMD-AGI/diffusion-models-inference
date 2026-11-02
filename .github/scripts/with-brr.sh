@@ -15,6 +15,7 @@ set -euo pipefail
 #
 # Sized requests are exclusive: brr defaults to shared mode, which would let
 # another job land on the same GPU and quietly distort benchmark numbers.
+# Pin the first N amd-smi indices so repeated benchmarks use the same devices.
 
 if [ "$#" -eq 0 ]; then
   echo "usage: with-brr.sh COMMAND [ARG...]" >&2
@@ -24,8 +25,13 @@ fi
 if [ "${DISABLE_BRR:-false}" != "true" ]; then
   if command -v brr >/dev/null 2>&1; then
     if [ -n "${BRR_GPU_REQUEST:-}" ]; then
-      echo "brr is available; requesting $BRR_GPU_REQUEST GPU(s), exclusive use, before running the workload" >&2
-      exec brr run --gpus "$BRR_GPU_REQUEST" --node --grace 0 -- "$@"
+      if [[ ! "$BRR_GPU_REQUEST" =~ ^[1-9][0-9]*$ ]]; then
+        echo "BRR_GPU_REQUEST must be a positive integer: $BRR_GPU_REQUEST" >&2
+        exit 2
+      fi
+      BRR_GPU_LIST=$(seq -s, 0 "$((BRR_GPU_REQUEST - 1))")
+      echo "brr is available; requesting GPU(s) $BRR_GPU_LIST, exclusive use, before running the workload" >&2
+      exec brr run --gpu-list "$BRR_GPU_LIST" --exclusive --grace 0 -- "$@"
     fi
     echo "brr is available; requesting resources (full node, exclusive use) before running the workload" >&2
     exec brr run --node --grace 0 -- "$@"
