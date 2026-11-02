@@ -19,6 +19,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # The helper path is resolved relative to this action at runtime.
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../../../scripts/container-name.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../../../scripts/with-brr.sh"
 
 MIOPEN_USER_DB_PATH_ARGS=()
 if [ "$BENCHMARK_ONLY" != "true" ]; then
@@ -50,10 +52,8 @@ BENCHMARK_OUTPUT_DIR="$GITHUB_WORKSPACE/$OUTPUT_DIR/$ARCH"
 CONTAINER_NAME="$(container_name xdit-bench)"
 echo "Running benchmarks as container '$CONTAINER_NAME'." >&2
 
-# brr hands a job its GPUs by setting CUDA_VISIBLE_DEVICES on the process it
-# starts, so docker has to forward the variable instead of pinning it; pinning
-# it would hand the container GPUs it was never allocated. The default below is
-# what this script has always used and keeps the no-brr path unchanged.
+# Preserve the legacy visibility on the direct path. In brr mode the client
+# inside the container replaces this value after receiving its allocation.
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 
 DOCKER_ARGS=(
@@ -91,11 +91,13 @@ RESOLVE_GFX_TAG='
 
 # shellcheck disable=SC2016
 RUN_BENCHMARKS='
-    python3 /app/.ci/run.py $FLAGS \
+    "$@" python3 /app/.ci/run.py $FLAGS \
       --results-directory "$BENCHMARK_OUTPUT_DIR" \
       --csv-output-path "$BENCHMARK_OUTPUT_DIR/results.csv" \
       /app/.ci/benchmark_configs/*.yaml;
+    STATUS=$?
     source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
+    exit "$STATUS"
 '
 
 # shellcheck disable=SC2016
@@ -103,18 +105,16 @@ LIST_EXPERIMENTS='
     python3 /app/.ci/run.py $FLAGS --list-experiments /app/.ci/benchmark_configs/*.yaml
 '
 
-brr_is_usable() {
-  [ "${DISABLE_BRR:-false}" != "true" ] && command -v brr >/dev/null 2>&1
-}
-
 if ! brr_is_usable; then
   # No brr: one container owns the node for the whole sweep.
-  "$WITH_BRR" docker run "${DOCKER_ARGS[@]}" \
+  docker run "${DOCKER_ARGS[@]}" \
     -e BENCHMARK_FLAGS="$EFFECTIVE_BENCHMARK_FLAGS" \
     "$DOCKER_IMAGE" \
     bash -c "$RESOLVE_GFX_TAG$RUN_BENCHMARKS"
   exit 0
 fi
+
+prepare_brr_container
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "jq is required to split the sweep into per-experiment brr jobs" >&2
@@ -167,10 +167,10 @@ while IFS=$'\t' read -r NAME GPUS CLEAR_CACHE; do
 
   echo "::group::Experiment $INDEX/$TOTAL: $NAME (${GPUS:-all} GPU(s))"
   STATUS=0
-  "$WITH_BRR" docker run "${DOCKER_ARGS[@]}" \
+  docker run "${DOCKER_ARGS[@]}" "${BRR_DOCKER_ARGS[@]}" \
     -e BENCHMARK_FLAGS="$EXPERIMENT_FLAGS" \
     "$DOCKER_IMAGE" \
-    bash -c "$RESOLVE_GFX_TAG$RUN_BENCHMARKS" || STATUS=$?
+    bash -c "$RESOLVE_GFX_TAG$RUN_BENCHMARKS" -- "${BRR_CONTAINER_LAUNCH[@]}" || STATUS=$?
   echo "::endgroup::"
 
   if [ "$STATUS" -ne 0 ]; then

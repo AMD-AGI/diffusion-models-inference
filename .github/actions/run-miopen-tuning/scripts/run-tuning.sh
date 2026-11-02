@@ -12,6 +12,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # The helper path is resolved relative to this action at runtime.
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../../../scripts/container-name.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../../../scripts/with-brr.sh"
 
 rm -f .tuning_successful
 RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
@@ -20,11 +22,12 @@ RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
 
 CONTAINER_NAME="$(container_name miopen-tune)"
 echo "Running MIOpen tuning as container '$CONTAINER_NAME'." >&2
+prepare_brr_container
 
 # The bash -c body below is deliberately single-quoted: it is expanded by the
 # shell inside the container, using the variables passed in with -e.
 # shellcheck disable=SC2016
-"$WITH_BRR" docker run \
+docker run \
   --security-opt seccomp=unconfined \
   --device=/dev/kfd \
   --device=/dev/dri \
@@ -32,6 +35,7 @@ echo "Running MIOpen tuning as container '$CONTAINER_NAME'." >&2
   --shm-size 128G \
   --name "$CONTAINER_NAME" \
   --mount type=bind,src="$RUNNER_WORK_ROOT",dst="$RUNNER_WORK_ROOT" \
+  "${BRR_DOCKER_ARGS[@]}" \
   -e HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
   -e OMP_NUM_THREADS=16 \
   -e ARCH="$ARCH" \
@@ -45,9 +49,11 @@ echo "Running MIOpen tuning as container '$CONTAINER_NAME'." >&2
   -e GITHUB_WORKSPACE \
   "$DOCKER_IMAGE" \
   bash -c '
-    bash "$ROOTDIR/data/miopen/tune.sh";
+    "$@" bash "$ROOTDIR/data/miopen/tune.sh";
+    STATUS=$?
     source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";
-  '
+    exit "$STATUS"
+  ' -- "${BRR_CONTAINER_LAUNCH[@]}"
 
 if [ ! -f .tuning_successful ]; then
   exit 1
