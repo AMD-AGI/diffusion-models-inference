@@ -193,6 +193,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
             echo "xDiT run ${xrun}: request metadata fields are missing or invalid"
             continue
         fi
+        request_metadata=$(jq -c . "$metadata_dir/request.json")
         rm -rf "$metadata_dir"
 
         if [[ ! "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
@@ -202,7 +203,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
 
         # Architectures stay out of this check: the hardware workflow resolves
         # architecture tags once it knows which runners the request landed on.
-        if ! sanitized_benchmarks=$(normalize_benchmark_selection "$requested_benchmarks"); then
+        if ! normalize_benchmark_selection "$requested_benchmarks" >/dev/null; then
             echo "xDiT run ${xrun}: invalid benchmark selection, skipping"
             continue
         fi
@@ -223,7 +224,6 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
             echo "xDiT run ${xrun}: no valid architectures requested, skipping"
             continue
         fi
-        sanitized_architectures=$(IFS=,; echo "${architectures[*]}")
 
         if [[ ! "$amd_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] ||
            ! git check-ref-format "refs/heads/${amd_ref}" >/dev/null 2>&1; then
@@ -255,10 +255,8 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
         api "repos/${GITHUB_REPOSITORY}/actions/workflows/${HEAVY_WORKFLOW}/dispatches" \
             -f ref="${GITHUB_REF_NAME}" \
             -f inputs[xdit_sha]="$sha" \
-            -f 'inputs[benchmarks]='"$sanitized_benchmarks" \
-            -f 'inputs[architectures]='"$sanitized_architectures" \
             -f 'inputs[xdit_run_id]='"$original_run_id" \
-            -f 'inputs[amd_ref]='"$amd_ref" || api_status=$?
+            -f 'inputs[request_metadata]='"$request_metadata" || api_status=$?
         [[ "$api_status" -ne "$AUTH_FAILURE_STATUS" ]] || fail_auth
         if [[ "$api_status" -ne 0 ]]; then
             echo "xDiT run ${xrun}: hardware dispatch failed, retrying on the next poll"
@@ -266,6 +264,37 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
         fi
 
         echo "dispatched hardware run for original xDiT run ${original_run_id} (sha ${sha})"
+        hardware_url=''
+        # Dispatch returns no run ID; allow the new run to appear in the runs API.
+        for attempt in 1 2 3 4 5 6; do
+            api_status=0
+            heavy_runs=$(api "repos/${GITHUB_REPOSITORY}/actions/workflows/${HEAVY_WORKFLOW}/runs?event=workflow_dispatch&per_page=100") \
+                || api_status=$?
+            if [[ "$api_status" -eq 0 ]]; then
+                if ! hardware_url=$(printf '%s' "$heavy_runs" | jq -er \
+                    --arg title "xDiT compat ${sha} [xdit-run:${original_run_id}]" \
+                    '[.workflow_runs[] | select(.display_title == $title)] | max_by(.id) | .html_url // empty'); then
+                    hardware_url=''
+                fi
+                [[ -z "$hardware_url" ]] || break
+            else
+                echo "::warning::Could not list hardware runs while resolving the dispatched run link (exit ${api_status})."
+            fi
+            if [[ "$attempt" -lt 6 ]]; then
+                sleep 5
+            fi
+        done
+        if [[ -z "$hardware_url" ]]; then
+            echo "::warning::Hardware workflow was dispatched, but its run link is not available yet."
+            hardware_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/${HEAVY_WORKFLOW}"
+        fi
+        echo "Hardware workflow: ${hardware_url}"
+        {
+            echo "## xDiT hardware handoff"
+            echo
+            echo "- [Hardware workflow](${hardware_url})"
+            echo "- [Original xDiT request](${GITHUB_SERVER_URL}/${XDIT_REPO}/actions/runs/${original_run_id})"
+        } >> "$GITHUB_STEP_SUMMARY"
         relaunch
         exit 0
     done

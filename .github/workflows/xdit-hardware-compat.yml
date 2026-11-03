@@ -11,19 +11,12 @@ on:
       xdit_sha:
         description: 'xDiT commit SHA under test'
         required: true
-      benchmarks:
-        description: 'Benchmark names, or --name/--tag filters, requested by xDiT'
-        required: true
-      architectures:
-        description: 'Comma-separated GPU architectures requested by xDiT'
-        required: true
       xdit_run_id:
         description: 'Original xDiT run ID waiting on this workflow'
         required: true
-      amd_ref:
-        description: 'AMD-AGI branch or release tag used as the image build context'
-        required: false
-        default: 'main'
+      request_metadata:
+        description: 'Request JSON with benchmarks (names or --name/--tag filters), architectures (CSV), and amd_ref (branch or release tag)'
+        required: true
 
 permissions:
   contents: read
@@ -38,11 +31,39 @@ jobs:
       image: ${{ steps.tag.outputs.image }}
       benchmark_flags: ${{ steps.benchmarks.outputs.benchmark_flags }}
       architectures: ${{ steps.architectures.outputs.architectures }}
+      amd_ref: ${{ steps.request.outputs.amd_ref }}
     steps:
+      - name: Validate request metadata
+        id: request
+        env:
+          REQUEST_METADATA: ${{ inputs.request_metadata }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$REQUEST_METADATA" | jq -se '
+            length == 1 and (.[0] | type == "object" and
+              ([.benchmarks, .architectures, .amd_ref] | all(.[];
+                type == "string" and length > 0 and
+                (test("[\u0000-\u001f\u007f]") | not))))
+          ' >/dev/null; then
+            echo "::error::Request metadata must be one JSON object with non-empty, single-line string fields: benchmarks, architectures, amd_ref."
+            exit 1
+          fi
+          amd_ref=$(printf '%s' "$REQUEST_METADATA" | jq -r '.amd_ref')
+          if [[ ! "$amd_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] ||
+             ! git check-ref-format "refs/heads/${amd_ref}" >/dev/null 2>&1; then
+            echo "::error::Invalid AMD ref: '${amd_ref}'"
+            exit 1
+          fi
+          printf '%s' "$REQUEST_METADATA" | jq -r '
+            "benchmarks=\(.benchmarks)",
+            "architectures=\(.architectures)",
+            "amd_ref=\(.amd_ref)"
+          ' >> "$GITHUB_OUTPUT"
+
       - name: Checkout AMD-AGI ref
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.amd_ref }}
+          ref: ${{ steps.request.outputs.amd_ref }}
 
       - name: Create image tag
         id: tag
@@ -68,7 +89,7 @@ jobs:
       - name: Validate architectures
         id: architectures
         env:
-          REQUESTED_ARCHITECTURES: ${{ inputs.architectures }}
+          REQUESTED_ARCHITECTURES: ${{ steps.request.outputs.architectures }}
         run: |
           set -euo pipefail
           architectures=()
@@ -92,7 +113,7 @@ jobs:
       - name: Validate benchmark selection
         id: benchmarks
         env:
-          REQUESTED_BENCHMARKS: ${{ inputs.benchmarks }}
+          REQUESTED_BENCHMARKS: ${{ steps.request.outputs.benchmarks }}
           REQUESTED_ARCHITECTURES: ${{ steps.architectures.outputs.architectures }}
         run: |
           set -euo pipefail
@@ -103,22 +124,41 @@ jobs:
             "$REQUESTED_BENCHMARKS" "$REQUESTED_ARCHITECTURES")
           echo "benchmark_flags=${benchmark_flags}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate AMD ref
+      - name: Summarize xDiT request
         env:
-          AMD_REF: ${{ inputs.amd_ref }}
+          XDIT_RUN_ID: ${{ inputs.xdit_run_id }}
+          XDIT_SHA: ${{ inputs.xdit_sha }}
+          BENCHMARK_FLAGS: ${{ steps.benchmarks.outputs.benchmark_flags }}
+          IMAGE: ${{ steps.tag.outputs.image }}
+          REQUEST_METADATA: ${{ inputs.request_metadata }}
         run: |
-          if [[ ! "$AMD_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] ||
-             ! git check-ref-format "refs/heads/${AMD_REF}" >/dev/null 2>&1; then
-            echo "::error::Invalid AMD ref: '${AMD_REF}'"
-            exit 1
-          fi
+          metadata=$(printf '%s' "$REQUEST_METADATA" | jq .)
+          {
+            echo "## xDiT hardware request"
+            echo
+            echo "[Original xDiT run](${GITHUB_SERVER_URL}/xdit-project/xDiT/actions/runs/${XDIT_RUN_ID})"
+            echo
+            echo "### Received request metadata"
+            echo
+            echo "Original request.json:"
+            echo '<pre>'
+            printf '%s\n' "$metadata" | jq -Rr '@html'
+            echo '</pre>'
+            echo
+            echo "### Execution"
+            echo '<pre>'
+            printf 'xDiT commit: %s\nImage: %s\nBenchmark flags: %s\n' \
+              "$XDIT_SHA" "$IMAGE" "${BENCHMARK_FLAGS:-(architecture filter only)}" \
+              | jq -Rr '@html'
+            echo '</pre>'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build-image:
     name: Build xDiT image
     needs: [prepare]
     uses: ./.github/workflows/build-core-image-reusable.yml
     with:
-      git_ref: ${{ inputs.amd_ref }}
+      git_ref: ${{ needs.prepare.outputs.amd_ref }}
       image_tag: ${{ needs.prepare.outputs.image_tag }}
       core_image_name: amdsiloai/pytorch-xdit-edge
       staging_image_name: amdsiloai/pytorch-xdit-edge
@@ -136,7 +176,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/build-and-benchmark.yml
     with:
-      git_branch: ${{ inputs.amd_ref }}
+      git_branch: ${{ needs.prepare.outputs.amd_ref }}
       base_image: ${{ needs.build-image.outputs.staging_image_with_tag }}
       image_tag: ${{ needs.prepare.outputs.image_tag }}
       rebuild: false
