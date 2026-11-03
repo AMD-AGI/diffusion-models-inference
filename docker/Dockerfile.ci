@@ -30,6 +30,7 @@ ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
 ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
 ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
 ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
+ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
 # deps image arguments
 ARG AITER_COMMIT="e2d019f15599b73360ae027b73b8d72961903bd2"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
@@ -388,6 +389,43 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --evidence-root audio=/evidence/audio \
     --evidence-root codec=/evidence/codec
 
+# MORI provides the symmetric memory behind AITER's intranode attention A2A.
+# UMBP stays off: its control plane needs gRPC and protobuf. Without UMBP only
+# the msgpack-c and spdlog submodules are built.
+FROM rocm_tree AS build_mori
+ARG MORI_COMMIT
+ARG PYTORCH_ROCM_ARCH
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    libibverbs-dev && \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+# A full clone, so setuptools-scm can derive the release version.
+RUN git clone https://github.com/ROCm/mori.git && \
+    cd mori && \
+    git checkout --detach ${MORI_COMMIT} && \
+    git submodule update --init 3rdparty/msgpack-c 3rdparty/spdlog
+# MORI_GPU_ARCHS, because MORI prefers a detected local GPU over PYTORCH_ROCM_ARCH.
+# CMake and the linker use ROCm's bundled NUMA and DRM sysdeps.
+RUN mkdir -p /wheel && \
+    cd mori && \
+    BUILD_UMBP=OFF \
+    BUILD_TORCH_SYMM=OFF \
+    CMAKE_PREFIX_PATH="${ROCM_HOME}/lib/rocm_sysdeps" \
+    LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
+    MORI_GPU_ARCHS="${PYTORCH_ROCM_ARCH}" \
+    pip wheel . --no-deps --wheel-dir /wheel && \
+    rm -rf build
+
+FROM build_mori AS evidence_mori
+COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
+RUN python3 /usr/local/libexec/collect_image_licenses.py \
+    --output /evidence/mori \
+    --scan-root mori=/app/mori \
+    --git-root /app/mori \
+    --fail-on-missing-git-license \
+    --required-git-depth 0
+
 FROM ${ROCM_PARENT} AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
@@ -433,10 +471,13 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
+RUN --mount=type=bind,from=build_mori,source=/wheel,target=/mori-wheel \
+    pip install --no-cache-dir /mori-wheel/*.whl
 # Held in core rather than final so that no stage downstream of core has an edge
 # back into a builder stage.
 COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/torch-build-sources
 COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
+COPY --from=evidence_mori /evidence/mori /opt/license-evidence/mori-build-sources
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
@@ -552,6 +593,7 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --scan-root local=/usr/local \
     --evidence-root torch-build-sources=/opt/license-evidence/torch-build-sources \
     --evidence-root ffmpeg-build-sources=/opt/license-evidence/ffmpeg-build-sources \
+    --evidence-root mori-build-sources=/opt/license-evidence/mori-build-sources \
     --git-root /app \
     --python-root /venv \
     --debian \
