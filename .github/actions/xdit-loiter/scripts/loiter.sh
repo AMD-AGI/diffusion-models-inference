@@ -103,7 +103,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
     fi
 
     if ! rows=$(printf '%s' "$candidates" | jq -c \
-        '[(.workflow_runs | select(type == "array"))[] | {id, attempt: .run_attempt, workflow_id, sha: .head_sha, actor: (.triggering_actor.login // .actor.login // ""), title: (.display_title // "")}]' \
+        '[(.workflow_runs | select(type == "array"))[] | {id, attempt: .run_attempt, workflow_id, event, sha: .head_sha, actor: (.triggering_actor.login // .actor.login // ""), title: (.display_title // "")}]' \
         2>/dev/null); then
         echo "xDiT run list had an unexpected shape; retrying after the poll interval"
         sleep "$POLL_INTERVAL_SECONDS"
@@ -116,6 +116,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
         actor=$(echo "$rows" | jq -r ".[$i].actor")
         current_workflow_id=$(echo "$rows" | jq -r ".[$i].workflow_id")
         sha=$(echo "$rows" | jq -r ".[$i].sha")
+        origin_event=$(echo "$rows" | jq -r ".[$i].event")
 
         # A restarted xDiT wait job has a new run ID but carries the initial human-triggered run ID
         # in its title. Deduplicating on that stable ID prevents a second heavy build.
@@ -141,6 +142,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
             fi
             actor=$(printf '%s' "$origin" | jq -r '.triggering_actor.login // .actor.login // ""')
             sha=$(printf '%s' "$origin" | jq -r '.head_sha // ""')
+            origin_event=$(printf '%s' "$origin" | jq -r '.event // ""')
         fi
 
         if ! printf '%s\n' "$allowed" | grep -Fxqi "$actor"; then
@@ -195,6 +197,10 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
         fi
         request_metadata=$(jq -c . "$metadata_dir/request.json")
         rm -rf "$metadata_dir"
+
+        if [[ "$origin_event" == issue_comment ]]; then
+            sha=$(printf '%s' "$request_metadata" | jq -r '.xdit_sha // ""')
+        fi
 
         if [[ ! "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
             echo "xDiT run ${original_run_id}: invalid requested SHA '${sha}', skipping"
