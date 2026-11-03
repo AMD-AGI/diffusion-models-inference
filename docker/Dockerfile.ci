@@ -31,9 +31,9 @@ ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
 ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
 ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
 ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
+ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
 # deps image arguments
 ARG AITER_COMMIT="e2d019f15599b73360ae027b73b8d72961903bd2"
-ARG MORI_COMMIT="3145152d093848062a49fe37c166751fecff6a1e"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="9f7aee48215c5d01b1d84b52058669710596c7ee"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
@@ -512,10 +512,7 @@ ARG MORI_COMMIT
 ARG PYTORCH_ROCM_ARCH
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    libdrm-dev \
-    libibverbs-dev \
-    libnuma-dev \
-    libpci-dev && \
+    libibverbs-dev && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 # A full clone, so setuptools-scm can derive the release version.
@@ -524,9 +521,14 @@ RUN git clone https://github.com/ROCm/mori.git && \
     git checkout --detach ${MORI_COMMIT} && \
     git submodule update --init 3rdparty/msgpack-c 3rdparty/spdlog
 # MORI_GPU_ARCHS, because MORI prefers a detected local GPU over PYTORCH_ROCM_ARCH.
+# CMake and the linker use ROCm's bundled NUMA and DRM sysdeps.
 RUN mkdir -p /wheel && \
     cd mori && \
-    BUILD_UMBP=OFF MORI_GPU_ARCHS="${PYTORCH_ROCM_ARCH}" \
+    BUILD_UMBP=OFF \
+    BUILD_TORCH_SYMM=OFF \
+    CMAKE_PREFIX_PATH="${ROCM_HOME}/lib/rocm_sysdeps" \
+    LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
+    MORI_GPU_ARCHS="${PYTORCH_ROCM_ARCH}" \
     pip wheel . --no-deps --wheel-dir /wheel && \
     rm -rf build
 
@@ -543,7 +545,7 @@ FROM ${ROCM_PARENT} AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
-# Runtime libs for torchcodec/FFmpeg, OpenBLAS-linked torch, OpenCV/GLib, and MORI.
+# Runtime libs for torchcodec/FFmpeg, OpenBLAS-linked torch, and OpenCV/GLib.
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
   libass9 \
@@ -554,10 +556,8 @@ RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libglib2.0-0t64 \
   libgnutls30 \
   libmp3lame0 \
-  libnuma1 \
   libopenblas0 \
   libopenh264-7 \
-  libpci3 \
   libvorbis0a \
   libvorbisenc2 \
   && rm -rf /var/lib/apt/lists/*
