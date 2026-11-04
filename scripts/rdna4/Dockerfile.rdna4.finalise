@@ -49,9 +49,12 @@ COPY runtime-entrypoint.sh /usr/local/bin/rdna4-runtime.sh
 RUN chmod a+rx /usr/local/bin/rdna4-runtime.sh
 ENTRYPOINT ["/usr/local/bin/rdna4-runtime.sh"]
 
+# MIOpen's default find mode skips some of the solvers recorded in the tuned
+# find-db; NORMAL uses them, matching how tune.sh collected the timings.
 ENV PYTORCH_TUNABLEOP_ENABLED=1 \
     PYTORCH_TUNABLEOP_TUNING=0 \
     PYTORCH_TUNABLEOP_FILENAME=/opt/tunableop/tunableop_results.csv \
     AITER_ONLINE_TUNE=0 \
     MIOPEN_USER_DB_PATH=/miopen-db \
-    MIOPEN_CUSTOM_CACHE_DIR=/miopen-db/cache
+    MIOPEN_CUSTOM_CACHE_DIR=/miopen-db/cache \
+    MIOPEN_FIND_MODE=NORMAL

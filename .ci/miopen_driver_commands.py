@@ -25,17 +25,32 @@ class MIOpenDriverCommandCollector:
         self.output_directory = results_directory / "miopen_workloads"
         self.output_directory.mkdir(parents=True, exist_ok=True)
         self.manifest_path = self.output_directory / "manifest.json"
-        self._workloads = {
-            name: {
+        # Entries already on disk are carried over so a sweep split across
+        # several invocations (one scheduled job per experiment) accumulates one
+        # manifest instead of each invocation replacing the previous one. Names
+        # in this invocation are reset to "not_run", because they are about to
+        # be run again.
+        self._workloads = self._load_manifest()
+        for name in workload_names:
+            self._workloads[name] = {
                 "name": name,
                 "benchmark_status": "not_run",
                 "collection_status": "not_started",
                 "command_count": 0,
                 "file": None,
             }
-            for name in workload_names
-        }
         self._write_manifest()
+
+    def _load_manifest(self) -> dict:
+        """Return manifest entries already on disk, keyed by workload name."""
+        if not self.manifest_path.is_file():
+            return {}
+        try:
+            manifest = json.loads(self.manifest_path.read_text())
+        except (OSError, ValueError) as exc:
+            logger.warning("Ignoring unreadable MIOpen workload manifest: %s", exc)
+            return {}
+        return {entry["name"]: entry for entry in manifest.get("workloads", []) if "name" in entry}
 
     def collect(self, workload_name: str, stderr_path: Path, process_succeeded: bool) -> None:
         """Extract commands emitted by one completed benchmark process."""

@@ -33,13 +33,16 @@ archives those packages install.
 
 | Target | Packages | Use |
 | --- | --- | --- |
-| `rocm_devel` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers, developer-tools, RDC, OpenCL, and blas/rccl tests. LLVM static archives kept | Parent of `torch_build_base` and `core` |
+| `rocm_devel` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers, developer-tools, RDC, OpenCL, and blas/rccl tests. LLVM static archives kept | Parent of `torch_build_base`, `build_mori`, and `core` |
 
 `amdrocm-developer-tools` pulls the profiler, emulator, and debugger. It does
 not depend on `amdrocm-core`. `torch_build_base` fetches TheRock.
 `build_triton` and `build_pytorch` compile in series, then `build_vision`,
 `build_audio`, and `build_codec` compile in parallel. `build_torch_stack`
 gathers those wheels. `core` installs the wheels built by `build_torch_stack`.
+`build_mori` builds the MORI wheel from `rocm_devel` without UMBP, and `core`
+installs it after AITER; MORI provides the symmetric memory behind AITER's
+intranode attention A2A.
 `deps` installs rocprofiler-compute's Python requirements.
 
 ```sh

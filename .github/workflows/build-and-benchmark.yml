@@ -62,8 +62,8 @@ on:
         type: boolean
         required: false
         default: false
-      use_brr_if_available:
-        description: 'Use brr for GPU resource allocation when available'
+      disable_brr:
+        description: 'Disable brr'
         type: boolean
         required: false
         default: false
@@ -146,8 +146,8 @@ on:
         required: false
         type: boolean
         default: false
-      use_brr_if_available:
-        description: 'Use brr for GPU resource allocation when available'
+      disable_brr:
+        description: 'Do not use brr, even when it is available'
         required: false
         type: boolean
         default: false
@@ -429,7 +429,7 @@ jobs:
           arch: ${{ matrix.arch }}
           artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
           force_retuning: ${{ inputs.force_retuning }}
-          use_brr_if_available: ${{ inputs.use_brr_if_available }}
+          disable_brr: ${{ inputs.disable_brr }}
       
       - name: Run benchmarks
         if: ${{ inputs.run_benchmarks }}
@@ -441,11 +441,16 @@ jobs:
           benchmark_only: ${{ !inputs.run_miopen_tuning }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
           force_determinism_check: ${{ inputs.force_determinism_check }}
-          use_brr_if_available: ${{ inputs.use_brr_if_available }}
+          disable_brr: ${{ inputs.disable_brr }}
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}
           artifact_name: ${{ github.run_number }}-benchmarks-${{ matrix.arch }}
           miopen_workloads_artifact_name: ${{ github.run_number }}-miopen-workloads-${{ matrix.arch }}
+
+      - name: Show GPU status
+        if: always()
+        shell: bash
+        run: amd-smi || rocm-smi || true
       
       - name: Image cleanup
         if: always()

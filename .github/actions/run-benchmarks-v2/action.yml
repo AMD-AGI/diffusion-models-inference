@@ -26,8 +26,8 @@ inputs:
     description: 'Collect hipBLASLt GEMM logs per benchmark'
     required: false
     default: 'false'
-  use_brr_if_available:
-    description: 'Use brr for resource allocation when the brr client is available'
+  disable_brr:
+    description: 'Disable brr'
     required: false
     default: 'false'
   output_dir:
@@ -155,7 +155,7 @@ runs:
         JOB_TIMEOUT_MINUTES: ${{ inputs.job_timeout_minutes }}
         DATABRICKS_HOST: ${{ inputs.databricks_host }}
         DATABRICKS_TOKEN: ${{ inputs.databricks_token }}
-        USE_BRR_IF_AVAILABLE: ${{ inputs.use_brr_if_available }}
+        DISABLE_BRR: ${{ inputs.disable_brr }}
         WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
       run: |
         "$WITH_BRR" "$GITHUB_ACTION_PATH/run-inference-testing.sh"

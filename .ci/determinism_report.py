@@ -75,6 +75,11 @@ def write_report(results_directory: Path, entries: List[Dict[str, Any]]) -> Opti
     if necessary. Failures are logged rather than raised, so this can be
     called as a fire-and-forget step at the end of a benchmark run.
 
+    Entries are merged into any report already present, keyed by experiment
+    name, so a sweep split across several invocations (one scheduled job per
+    experiment) produces the same report as a single invocation. An experiment
+    that is run again replaces its earlier entry rather than being duplicated.
+
     Args:
         results_directory: Directory the report is written into.
         entries: Per-experiment entries, as built by `make_entry`.
@@ -84,10 +89,26 @@ def write_report(results_directory: Path, entries: List[Dict[str, Any]]) -> Opti
     """
     results_directory = Path(results_directory)
     path = results_directory / REPORT_FILENAME
+
+    merged: Dict[str, Dict[str, Any]] = {}
+    try:
+        existing = load_report(results_directory)
+    except (OSError, ValueError) as exc:
+        # A corrupt or unreadable report must not sink the run that is still
+        # producing results; start over rather than lose this invocation.
+        logger.warning("Ignoring unreadable determinism report at %s: %s", path, exc)
+        existing = None
+    if existing:
+        for entry in existing.get("experiments", []):
+            merged[entry["name"]] = entry
+    for entry in entries:
+        merged[entry["name"]] = entry
+
+    all_entries = list(merged.values())
     report = {
-        "experiments": entries,
-        "failed_experiments": sum(1 for e in entries if e["status"] == STATUS_FAILED),
-        "failed_checks": sum(e["failed_checks"] for e in entries),
+        "experiments": all_entries,
+        "failed_experiments": sum(1 for e in all_entries if e["status"] == STATUS_FAILED),
+        "failed_checks": sum(e["failed_checks"] for e in all_entries),
     }
     try:
         results_directory.mkdir(parents=True, exist_ok=True)
@@ -100,7 +121,7 @@ def write_report(results_directory: Path, entries: List[Dict[str, Any]]) -> Opti
         "Determinism report written to %s (%d of %d experiments failed).",
         path,
         report["failed_experiments"],
-        len(entries),
+        len(all_entries),
     )
     return path
 
