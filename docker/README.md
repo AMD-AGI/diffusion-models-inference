@@ -36,12 +36,13 @@ benchmark config choice.
 
 | `ROCM_PACKAGE_REPOSITORY` | Package index | `ROCM_DEB_SERIES` |
 | --- | --- | --- |
-| `legacy` (default) | [Legacy multi-arch index](https://rocm.nightlies.amd.com/packages-multi-arch/deb/) | Required and defaults to `10.1` |
-| `native` | [Ubuntu 24.04 native index](https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/) | Derived from the snapshot's `amdrocm-runtime-dev` metadata |
+| `native` (default) | [Ubuntu 24.04 native index](https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/) | Derived from the snapshot's `amdrocm-runtime-dev` metadata. The pinned snapshot is `10.3`. |
+| `legacy` | [Legacy multi-arch index](https://rocm.nightlies.amd.com/packages-multi-arch/deb/) | Required. Snapshots on that index are `10.1`. |
 
-The default `ROCM_RELEASE_ID` remains on the legacy index. Select the repository
+The default `ROCM_RELEASE_ID` is a native Ubuntu 24.04 snapshot. Select the repository
 explicitly when overriding it; release IDs are not assumed to be portable
-between indexes. The scheduled nightly workflow selects `native`.
+between indexes. The scheduled nightly workflow also selects `native` and
+resolves the latest release ID.
 `ROCM_GFX_TARGETS` controls which architecture-specific package shards are
 installed. `PYTORCH_ROCM_ARCH` controls the architectures built into PyTorch
 and related wheels; it defaults to `ROCM_GFX_TARGETS` but can be overridden
