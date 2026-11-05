@@ -50,8 +50,32 @@ packages="$(awk '
   /^$/ { emit() }
   END { emit() }
 ' "$extract_dir/dpkg-status")"
-if [[ -z "${packages}" ]]; then
-  echo "(no amdrocm-* or rocm-* packages found)" >&2
+
+wheel_packages="$(
+  docker run --rm --entrypoint /venv/bin/python "$IMAGE" -c '
+from importlib.metadata import distributions
+
+selected = []
+for distribution in distributions():
+    name = distribution.metadata.get("Name", "")
+    normalized = name.lower().replace("_", "-")
+    if (
+        normalized == "rocm"
+        or normalized.startswith("rocm-")
+        or normalized.startswith("amd-torch")
+        or normalized in {"torch", "torchvision", "torchaudio", "triton"}
+    ):
+        selected.append((normalized, distribution.version))
+for name, version in sorted(selected):
+    print(f"{name}\t{version}")
+' 2>/dev/null || true
+)"
+rocm_sdk_version="$(
+  docker run --rm --entrypoint /venv/bin/rocm-sdk "$IMAGE" version 2>/dev/null || true
+)"
+
+if [[ -z "${packages}" && -z "${wheel_packages}" ]]; then
+  echo "(no native or Python ROCm packages found)" >&2
   exit 1
 fi
 
@@ -65,8 +89,22 @@ fi
     echo "(none found)"
   fi
   echo
-  echo "=== installed ROCm packages ==="
-  echo "${packages}"
+  echo "=== installed native ROCm packages ==="
+  if [[ -n "${packages}" ]]; then
+    echo "${packages}"
+  else
+    echo "(none; ROCm is installed from Python wheels)"
+  fi
+  echo
+  echo "=== installed ROCm and PyTorch wheels ==="
+  if [[ -n "${wheel_packages}" ]]; then
+    echo "${wheel_packages}"
+  else
+    echo "(none)"
+  fi
+  echo
+  echo "=== rocm-sdk version ==="
+  echo "${rocm_sdk_version:-"(unavailable)"}"
   echo
   echo "=== ROCm version files ==="
   found=

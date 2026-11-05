@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 name: Record image versions
-description: Record git HEAD and installed ROCm identity from a Docker image
+description: Record git HEAD and installed ROCm/PyTorch identity from a Docker image
 
 inputs:
   image:
@@ -20,7 +20,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Record repository and ROCm versions
+    - name: Record repository, ROCm, and PyTorch versions
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}
