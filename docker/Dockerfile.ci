@@ -496,6 +496,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
     git apply /patches/xfuser_sd3_joint_attn_kv_cache.patch && \
     git apply /patches/xfuser_z_image_joint_attention_kwargs.patch && \
+    git apply /patches/xfuser_aiter_gfx1250.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute ships with rocm_devel.
