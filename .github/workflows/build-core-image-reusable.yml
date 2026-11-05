@@ -122,9 +122,9 @@ jobs:
           fi
       
       # The core build is the only step in the pipeline that exports cache. Its
-      # expensive stages (build_rocm, build_torch_stack, ffmpeg_builder) never
-      # reach the final image, so only a mode=max registry export can describe
-      # them; the untuned and tuned builds import what this step writes.
+      # expensive wheel download, MORI, and ffmpeg_builder layers benefit from
+      # a mode=max registry export; the untuned and tuned builds import what
+      # this step writes.
       - name: Resolve core build cache
         id: core_cache
         if: ${{ steps.images.outputs.skip_core_build == 'false' }}

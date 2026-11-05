@@ -23,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.resolve.outputs.release_id }}
+      rocm_version: ${{ steps.resolve.outputs.rocm_version }}
+      pytorch_version: ${{ steps.resolve.outputs.pytorch_version }}
+      pytorch_vision_version: ${{ steps.resolve.outputs.pytorch_vision_version }}
+      pytorch_audio_version: ${{ steps.resolve.outputs.pytorch_audio_version }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -39,6 +43,10 @@ jobs:
             {
               "ROCm package": {
                 "release_id": "${{ steps.resolve.outputs.release_id }}",
+                "rocm_version": "${{ steps.resolve.outputs.rocm_version }}",
+                "pytorch_version": "${{ steps.resolve.outputs.pytorch_version }}",
+                "pytorch_vision_version": "${{ steps.resolve.outputs.pytorch_vision_version }}",
+                "pytorch_audio_version": "${{ steps.resolve.outputs.pytorch_audio_version }}",
                 "image_tag": "nightly-${{ steps.resolve.outputs.release_id }}"
               }
             }
@@ -62,6 +70,10 @@ jobs:
       docker_build_args: |
         ROCM_PACKAGE_REPOSITORY=native
         ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
+        ROCM_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.rocm_version }}
+        PYTORCH_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.pytorch_version }}
+        PYTORCH_VISION_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.pytorch_vision_version }}
+        PYTORCH_AUDIO_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.pytorch_audio_version }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
