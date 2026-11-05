@@ -7,9 +7,10 @@
 # exactly the same syntax: the poller decides whether a request is dispatchable
 # at all, and the workflow rebuilds the flags it passes to the benchmark runner.
 
-# Tags that can actually match on the ROCm runners this handoff targets. The
+# Downstream tags that can match on the ROCm runners this handoff targets. The
 # config set also carries NVIDIA (hopper/blackwell) and RDNA (rdna4) tags, which
 # would always select zero configs here and waste a full build and tuning cycle.
+# Upstream configs may introduce their own tags; only syntax is checked for those.
 BENCHMARK_TAG_ALLOWLIST=(release lucid mad instinct nightly gfx942 gfx950)
 BENCHMARK_ARCH_TAGS=(gfx942 gfx950)
 
@@ -17,14 +18,22 @@ BENCHMARK_ARCH_TAGS=(gfx942 gfx950)
 # could otherwise reach a command line as an option.
 BENCHMARK_VALUE_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
 
-# Usage: normalize_benchmark_selection RAW [ARCHITECTURES_CSV]
+# Usage: normalize_benchmark_selection RAW [ARCHITECTURES_CSV] [USE_XDIT_CONFIGS]
 # Prints the canonical flag string, e.g. "--name flux.default" or "--tag release".
 # An empty result is valid and means "every config for the architecture under
 # test", because the benchmark runner appends the runner's own --tag <gfx arch>.
 normalize_benchmark_selection() {
-    local raw="$1" architectures="${2:-}"
+    local raw="$1" architectures="${2:-}" upstream="${3:-false}"
     local -a tokens=() names=() tags=() kept=() flags=()
     local token pending='' mode=name
+    if [[ "$upstream" != true && "$upstream" != false ]]; then
+        echo "::error::use_xdit_configs must be true or false." >&2
+        return 1
+    fi
+    if [[ "$raw" == *[[:cntrl:]]* ]]; then
+        echo "::error::Benchmark selection must not contain control characters." >&2
+        return 1
+    fi
 
     # Commas and whitespace are interchangeable separators, so "a,b", "a, b",
     # "--tag a,b" and "--tag a --tag b" all reduce to the same token list.
@@ -76,7 +85,7 @@ normalize_benchmark_selection() {
     fi
 
     for token in "${tags[@]}"; do
-        if [[ " ${BENCHMARK_TAG_ALLOWLIST[*]} " != *" ${token} "* ]]; then
+        if [[ "$upstream" == false && " ${BENCHMARK_TAG_ALLOWLIST[*]} " != *" ${token} "* ]]; then
             echo "::error::Unsupported benchmark tag: '${token}'" >&2
             echo "::error::Allowed tags: ${BENCHMARK_TAG_ALLOWLIST[*]}" >&2
             return 1

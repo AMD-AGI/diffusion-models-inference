@@ -198,6 +198,14 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
         request_metadata=$(jq -c . "$metadata_dir/request.json")
         rm -rf "$metadata_dir"
 
+        if ! use_xdit_configs=$(printf '%s' "$request_metadata" | jq -er '
+            if has("use_xdit_configs") then
+              .use_xdit_configs | select(type == "boolean") | tostring
+            else "false" end'); then
+            echo "xDiT run ${xrun}: use_xdit_configs must be a boolean, skipping"
+            continue
+        fi
+
         if [[ "$origin_event" == issue_comment ]]; then
             sha=$(printf '%s' "$request_metadata" | jq -r '.xdit_sha // ""')
         fi
@@ -209,7 +217,7 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
 
         # Architectures stay out of this check: the hardware workflow resolves
         # architecture tags once it knows which runners the request landed on.
-        if ! normalize_benchmark_selection "$requested_benchmarks" >/dev/null; then
+        if ! normalize_benchmark_selection "$requested_benchmarks" "" "$use_xdit_configs" >/dev/null; then
             echo "xDiT run ${xrun}: invalid benchmark selection, skipping"
             continue
         fi

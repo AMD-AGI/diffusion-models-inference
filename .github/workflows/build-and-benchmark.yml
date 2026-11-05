@@ -52,6 +52,11 @@ on:
         description: 'Flags used to filter benchmarks, e.g. --tag release or --name CONFIG_NAME, leave empty to run all'
         required: false
         default: ''
+      use_xdit_configs:
+        description: 'Use configs from the xDiT checkout in the image instead of downstream configs'
+        type: boolean
+        required: false
+        default: false
       collect_hipblaslt_logs:
         description: 'Collect hipBLASLt GEMM logs per benchmark (adds runtime overhead, intended for ad-hoc GEMM tuning data collection only)'
         type: boolean
@@ -141,6 +146,11 @@ on:
         required: false
         type: string
         default: ''
+      use_xdit_configs:
+        description: 'Use configs from the xDiT checkout in the image instead of downstream configs'
+        required: false
+        type: boolean
+        default: false
       collect_hipblaslt_logs:
         description: 'Collect hipBLASLt logs per benchmark'
         required: false
@@ -438,6 +448,7 @@ jobs:
           image: ${{ steps.metadata.outputs.working_image }}
           arch: ${{ matrix.arch }}
           benchmark_flags: ${{ inputs.benchmark_flags }}
+          use_xdit_configs: ${{ inputs.use_xdit_configs }}
           benchmark_only: ${{ !inputs.run_miopen_tuning }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
           force_determinism_check: ${{ inputs.force_determinism_check }}

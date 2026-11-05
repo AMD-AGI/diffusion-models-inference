@@ -530,6 +530,9 @@ COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
 COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY .ci/determinism_report.py /app/.ci/determinism_report.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
+RUN if [ -d /app/xDiT/.ci/configs ]; then \
+      cp -a /app/xDiT/.ci/configs /app/.ci/benchmark_configs_xdit; \
+    fi
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
 COPY .ci/quality_check.py /app/.ci/quality_check.py
 # use shared MIOpen databases

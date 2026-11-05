@@ -15,7 +15,7 @@ on:
         description: 'Original xDiT run ID waiting on this workflow'
         required: true
       request_metadata:
-        description: 'Request JSON with benchmarks (names or --name/--tag filters), architectures (CSV), and amd_ref (branch or release tag)'
+        description: 'Request JSON: benchmarks, architectures (CSV), amd_ref, optional use_xdit_configs (boolean, default false)'
         required: true
 
 permissions:
@@ -32,6 +32,7 @@ jobs:
       benchmark_flags: ${{ steps.benchmarks.outputs.benchmark_flags }}
       architectures: ${{ steps.architectures.outputs.architectures }}
       amd_ref: ${{ steps.request.outputs.amd_ref }}
+      use_xdit_configs: ${{ steps.request.outputs.use_xdit_configs }}
     steps:
       - name: Validate request metadata
         id: request
@@ -43,9 +44,10 @@ jobs:
             length == 1 and (.[0] | type == "object" and
               ([.benchmarks, .architectures, .amd_ref] | all(.[];
                 type == "string" and length > 0 and
-                (test("[\u0000-\u001f\u007f]") | not))))
+                (test("[\u0000-\u001f\u007f]") | not))) and
+              (if has("use_xdit_configs") then .use_xdit_configs | type == "boolean" else true end))
           ' >/dev/null; then
-            echo "::error::Request metadata must be one JSON object with non-empty, single-line string fields: benchmarks, architectures, amd_ref."
+            echo "::error::Request metadata must be one JSON object with non-empty, single-line string fields: benchmarks, architectures, amd_ref; optional use_xdit_configs must be a boolean."
             exit 1
           fi
           amd_ref=$(printf '%s' "$REQUEST_METADATA" | jq -r '.amd_ref')
@@ -57,7 +59,8 @@ jobs:
           printf '%s' "$REQUEST_METADATA" | jq -r '
             "benchmarks=\(.benchmarks)",
             "architectures=\(.architectures)",
-            "amd_ref=\(.amd_ref)"
+            "amd_ref=\(.amd_ref)",
+            "use_xdit_configs=\(.use_xdit_configs // false)"
           ' >> "$GITHUB_OUTPUT"
 
       - name: Checkout AMD-AGI ref
@@ -115,13 +118,14 @@ jobs:
         env:
           REQUESTED_BENCHMARKS: ${{ steps.request.outputs.benchmarks }}
           REQUESTED_ARCHITECTURES: ${{ steps.architectures.outputs.architectures }}
+          USE_XDIT_CONFIGS: ${{ steps.request.outputs.use_xdit_configs }}
         run: |
           set -euo pipefail
           source "$GITHUB_WORKSPACE/.github/scripts/benchmark-selection.sh"
           # An empty result is valid: it selects every config for the
           # architecture under test, which the runner filters on by itself.
           benchmark_flags=$(normalize_benchmark_selection \
-            "$REQUESTED_BENCHMARKS" "$REQUESTED_ARCHITECTURES")
+            "$REQUESTED_BENCHMARKS" "$REQUESTED_ARCHITECTURES" "$USE_XDIT_CONFIGS")
           echo "benchmark_flags=${benchmark_flags}" >> "$GITHUB_OUTPUT"
 
       - name: Summarize xDiT request
@@ -131,6 +135,7 @@ jobs:
           BENCHMARK_FLAGS: ${{ steps.benchmarks.outputs.benchmark_flags }}
           IMAGE: ${{ steps.tag.outputs.image }}
           REQUEST_METADATA: ${{ inputs.request_metadata }}
+          USE_XDIT_CONFIGS: ${{ steps.request.outputs.use_xdit_configs }}
         run: |
           metadata=$(printf '%s' "$REQUEST_METADATA" | jq .)
           {
@@ -147,8 +152,8 @@ jobs:
             echo
             echo "### Execution"
             echo '<pre>'
-            printf 'xDiT commit: %s\nImage: %s\nBenchmark flags: %s\n' \
-              "$XDIT_SHA" "$IMAGE" "${BENCHMARK_FLAGS:-(architecture filter only)}" \
+            printf 'xDiT commit: %s\nImage: %s\nBenchmark flags: %s\nUse xDiT configs: %s\n' \
+              "$XDIT_SHA" "$IMAGE" "${BENCHMARK_FLAGS:-(architecture filter only)}" "$USE_XDIT_CONFIGS" \
               | jq -Rr '@html'
             echo '</pre>'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -185,6 +190,7 @@ jobs:
       build_final: true
       create_miopen_db_branch: false
       benchmark_flags: ${{ needs.prepare.outputs.benchmark_flags }}
+      use_xdit_configs: ${{ fromJSON(needs.prepare.outputs.use_xdit_configs) }}
       cache_scope: 'xdit-external'
       docker_build_args: |
         XDIT_COMMIT=${{ inputs.xdit_sha }}
