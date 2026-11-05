@@ -49,11 +49,12 @@ git diff-tree --no-commit-id --name-only -r COMMIT_SHA
 ## Diff dependency pins
 
 Show which dependency pins changed in `docker/Dockerfile.ci` between releases.
-Include source commits, TheRock wheel versions, index, and target settings:
+Include active source commits, TheRock wheel versions, index, and target
+settings:
 
 ```bash
 git diff FROM_TAG..TO_REF -- docker/Dockerfile.ci | \
-  grep -E '^[+-]ARG\s+(\w+_COMMIT|\w+_WHEEL_VERSION|THEROCK_WHEEL_INDEX|ROCM_GFX_TARGETS|PYTORCH_ROCM_ARCH|ROCM_PACKAGE_REPOSITORY|ROCM_RELEASE_ID|ROCM_DEB_SERIES)=' | sort
+  grep -E '^[+-]ARG\s+(\w+_COMMIT|\w+_WHEEL_VERSION|THEROCK_WHEEL_INDEX|ROCM_GFX_TARGETS)=' | sort
 ```
 
 ## Look up upstream changes
@@ -61,14 +62,8 @@ git diff FROM_TAG..TO_REF -- docker/Dockerfile.ci | \
 For each active changed commit hash (`OLD_HASH` → `NEW_HASH`), query the
 upstream repo to see what was added. Use the repo mapping below to resolve the
 GitHub org/repo. Record `*_WHEEL_VERSION` and `THEROCK_WHEEL_INDEX` changes as
-TheRock binary-stack updates. `ROCM_GFX_TARGETS` and `PYTORCH_ROCM_ARCH` are
-target changes.
-
-The PyTorch-family `*_COMMIT`, `THEROCK_COMMIT`,
-`ROCM_PACKAGE_REPOSITORY`, `ROCM_RELEASE_ID`, and `ROCM_DEB_SERIES` arguments
-are compatibility no-ops in wheel-based releases. Mention changes to them only
-when documenting an older source/DEB-based release or a compatibility-contract
-change.
+TheRock binary-stack updates. `ROCM_GFX_TARGETS` changes both wheel device
+extras and MORI build architectures.
 
 ```bash
 gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
@@ -79,12 +74,6 @@ gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
 
 | ARG name | GitHub repo |
 |---|---|
-| THEROCK_COMMIT | ROCm/TheRock |
-| TRITON_COMMIT | triton-lang/triton |
-| PYTORCH_COMMIT | pytorch/pytorch |
-| PYTORCH_VISION_COMMIT | pytorch/vision |
-| PYTORCH_AUDIO_COMMIT | pytorch/audio |
-| PYTORCH_CODEC_COMMIT | meta-pytorch/torchcodec |
 | AITER_COMMIT | ROCm/aiter |
 | LONGCONTEXTATTENTION_COMMIT | feifeibear/long-context-attention |
 | DIFFUSERS_COMMIT | huggingface/diffusers |

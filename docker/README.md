@@ -23,12 +23,11 @@ describe one coherent published stack:
 | `PYTORCH_WHEEL_VERSION` | PyTorch version; also pins its matching Triton |
 | `PYTORCH_VISION_WHEEL_VERSION` | Matching torchvision version |
 | `PYTORCH_AUDIO_WHEEL_VERSION` | Matching torchaudio version; empty omits it |
-| `ROCM_GFX_TARGETS` | `;`-separated device extras, such as `gfx942;gfx950` |
+| `ROCM_GFX_TARGETS` | `;`-separated device extras and MORI build architectures, such as `gfx942;gfx950` |
 
-`PYTORCH_ROCM_ARCH` remains the architecture input for source-built MORI and
-defaults to `ROCM_GFX_TARGETS`. The old `THEROCK_COMMIT`, PyTorch-family commit
-arguments, `ROCM_PACKAGE_REPOSITORY`, `ROCM_RELEASE_ID`, and `ROCM_DEB_SERIES`
-remain accepted for CI/caller compatibility but cannot affect prebuilt wheels.
+PyTorch, torchvision, torchaudio, and Triton source commits are selected by
+TheRock when it publishes the pinned wheels; they are not independently
+configurable by this Dockerfile.
 
 The SDK is installed in `/venv` and expanded by `rocm-sdk init`.
 `ROCM_HOME`, compiler/CMake paths, and a compatibility `/opt/rocm` symlink
