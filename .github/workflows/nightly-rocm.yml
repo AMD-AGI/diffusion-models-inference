@@ -68,8 +68,6 @@ jobs:
       cache_scope: 'nightly-rocm'
       benchmark_flags: "--tag nightly"
       docker_build_args: |
-        ROCM_PACKAGE_REPOSITORY=native
-        ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
         ROCM_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.rocm_version }}
         PYTORCH_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.pytorch_version }}
         PYTORCH_VISION_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.pytorch_vision_version }}

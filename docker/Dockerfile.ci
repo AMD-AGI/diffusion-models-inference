@@ -17,20 +17,8 @@ ARG ROCM_WHEEL_VERSION="10.3.0a20261104"
 ARG PYTORCH_WHEEL_VERSION="2.16.0a0+rocm10.3.0a20261104"
 ARG PYTORCH_VISION_WHEEL_VERSION="0.30.0a0+rocm10.3.0a20261104"
 ARG PYTORCH_AUDIO_WHEEL_VERSION="2.11.1+rocm10.3.0a20261104"
-# Compatibility build arguments retained for existing callers. The source
-# commit and DEB selector pins cannot affect prebuilt wheel contents.
-ARG THEROCK_COMMIT="ab56f1f7c5b54746bf9f7948fff3f306b2bef8b2"
-ARG ROCM_PACKAGE_REPOSITORY="native"
-ARG ROCM_RELEASE_ID="20261104-41743613538"
-ARG ROCM_DEB_SERIES="10.3"
-# ROCM_GFX_TARGETS selects TheRock device wheel extras. PYTORCH_ROCM_ARCH is
-# retained separately for source-built MORI and defaults to the same targets.
+# ROCM_GFX_TARGETS selects TheRock device wheel extras and MORI architectures.
 ARG ROCM_GFX_TARGETS="gfx942;gfx950"
-ARG PYTORCH_ROCM_ARCH="${ROCM_GFX_TARGETS}"
-ARG TRITON_COMMIT="669b31acc1dd1b3fd93286afd5db67f65d9f7557"
-ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
-ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
-ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
 ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
 # deps image arguments
 ARG AITER_COMMIT="d4d80a02f4e2a9085603aadc4b6d2999075d0364"
@@ -84,23 +72,6 @@ RUN THEROCK_WHEEL_INDEX="${THEROCK_WHEEL_INDEX}" \
     PYTORCH_VISION_WHEEL_VERSION="${PYTORCH_VISION_WHEEL_VERSION}" \
     PYTORCH_AUDIO_WHEEL_VERSION="${PYTORCH_AUDIO_WHEEL_VERSION}" \
     install_therock_wheels
-
-# Deprecated compatibility args are declared after wheel installation so
-# changing a no-op source/DEB pin does not invalidate the multi-gigabyte layer.
-ARG THEROCK_COMMIT
-ARG ROCM_PACKAGE_REPOSITORY
-ARG ROCM_RELEASE_ID
-ARG ROCM_DEB_SERIES
-ARG TRITON_COMMIT
-ARG PYTORCH_COMMIT
-ARG PYTORCH_VISION_COMMIT
-ARG PYTORCH_AUDIO_COMMIT
-ARG PYTORCH_CODEC_COMMIT
-RUN printf 'Using TheRock wheels; compatibility args: repository=%s release=%s series=%s\n' \
-        "${ROCM_PACKAGE_REPOSITORY}" "${ROCM_RELEASE_ID}" "${ROCM_DEB_SERIES}" && \
-    printf 'Source pins replaced by wheel metadata: TheRock=%s Triton=%s PyTorch=%s vision=%s audio=%s codec=%s\n' \
-        "${THEROCK_COMMIT}" "${TRITON_COMMIT}" "${PYTORCH_COMMIT}" \
-        "${PYTORCH_VISION_COMMIT}" "${PYTORCH_AUDIO_COMMIT}" "${PYTORCH_CODEC_COMMIT}"
 
 # Ubuntu 24.04 supplies Python 3.12, and this image fixes the venv at /venv.
 # These are the paths exposed by `rocm-sdk path` after `rocm-sdk init`.
@@ -190,7 +161,7 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
 # the msgpack-c and spdlog submodules are built.
 FROM rocm_devel AS build_mori
 ARG MORI_COMMIT
-ARG PYTORCH_ROCM_ARCH
+ARG ROCM_GFX_TARGETS
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libibverbs-dev && \
@@ -201,7 +172,7 @@ RUN git clone https://github.com/ROCm/mori.git && \
     cd mori && \
     git checkout --detach ${MORI_COMMIT} && \
     git submodule update --init 3rdparty/msgpack-c 3rdparty/spdlog
-# MORI_GPU_ARCHS, because MORI prefers a detected local GPU over PYTORCH_ROCM_ARCH.
+# MORI_GPU_ARCHS, because MORI prefers a detected local GPU over build targets.
 # CMake and the linker use ROCm's bundled NUMA and DRM sysdeps.
 RUN mkdir -p /wheel && \
     cd mori && \
@@ -209,7 +180,7 @@ RUN mkdir -p /wheel && \
     BUILD_TORCH_SYMM=OFF \
     CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}:${ROCM_HOME}/lib/rocm_sysdeps" \
     LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
-    MORI_GPU_ARCHS="${PYTORCH_ROCM_ARCH}" \
+    MORI_GPU_ARCHS="${ROCM_GFX_TARGETS}" \
     pip wheel . --no-deps --wheel-dir /wheel && \
     rm -rf build
 
