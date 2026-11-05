@@ -49,20 +49,26 @@ git diff-tree --no-commit-id --name-only -r COMMIT_SHA
 ## Diff dependency pins
 
 Show which dependency pins changed in `docker/Dockerfile.ci` between releases.
-Include `*_COMMIT` and the ROCm repository settings:
+Include source commits, TheRock wheel versions, index, and target settings:
 
 ```bash
 git diff FROM_TAG..TO_REF -- docker/Dockerfile.ci | \
-  grep -E '^[+-]ARG\s+(\w+_COMMIT|ROCM_PACKAGE_REPOSITORY|ROCM_RELEASE_ID|ROCM_DEB_SERIES)=' | sort
+  grep -E '^[+-]ARG\s+(\w+_COMMIT|\w+_WHEEL_VERSION|THEROCK_WHEEL_INDEX|ROCM_GFX_TARGETS|PYTORCH_ROCM_ARCH|ROCM_PACKAGE_REPOSITORY|ROCM_RELEASE_ID|ROCM_DEB_SERIES)=' | sort
 ```
 
 ## Look up upstream changes
 
-For each changed commit hash (`OLD_HASH` → `NEW_HASH`), query the upstream repo
-to see what was added. Use the repo mapping below to resolve the GitHub org/repo.
-Record `ROCM_PACKAGE_REPOSITORY`, `ROCM_RELEASE_ID`, and `ROCM_DEB_SERIES`
-changes as TheRock nightly deb configuration updates; they are not Git commit
-hashes.
+For each active changed commit hash (`OLD_HASH` → `NEW_HASH`), query the
+upstream repo to see what was added. Use the repo mapping below to resolve the
+GitHub org/repo. Record `*_WHEEL_VERSION` and `THEROCK_WHEEL_INDEX` changes as
+TheRock binary-stack updates. `ROCM_GFX_TARGETS` and `PYTORCH_ROCM_ARCH` are
+target changes.
+
+The PyTorch-family `*_COMMIT`, `THEROCK_COMMIT`,
+`ROCM_PACKAGE_REPOSITORY`, `ROCM_RELEASE_ID`, and `ROCM_DEB_SERIES` arguments
+are compatibility no-ops in wheel-based releases. Mention changes to them only
+when documenting an older source/DEB-based release or a compatibility-contract
+change.
 
 ```bash
 gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \

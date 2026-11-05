@@ -5,9 +5,9 @@
 # Make `import amdsmi` work inside the venv.
 #
 # The amd-smi CLI lives at ${ROCM_HOME}/bin and is unaffected by this script.
-# The nightly debs drop the Python bindings at ${ROCM_HOME}/share/amd_smi/amdsmi
-# with no setup.py or pyproject.toml, so pip refuses to install them and they
-# land nowhere on sys.path. torch.cuda wants them for device_count() and for
+# The expanded TheRock SDK keeps the Python bindings at
+# ${ROCM_HOME}/share/amd_smi/amdsmi, outside Python's import path. torch.cuda
+# wants them for device_count() and for
 # utilization/memory_usage/temperature/power_draw/clock_rate; accelerate wants
 # them for set_numa_affinity under ACCELERATE_CPU_AFFINITY.
 #
@@ -64,7 +64,7 @@ fi
 
 if [[ ! -d "${src}" ]]; then
     echo "amdsmi is not importable and ${src} does not exist;" >&2
-    echo "is the amdrocm-amdsmi deb installed in this layer?" >&2
+    echo "was the TheRock SDK initialized with amd-smi support?" >&2
     exit 1
 fi
 

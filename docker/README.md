@@ -32,113 +32,69 @@ benchmark config choice.
 
 ### ROCm nightly packages
 
-`Dockerfile.ci` supports two generations of TheRock nightly deb repositories:
+`Dockerfile.ci` installs ROCm, PyTorch, torchvision, torchaudio, and Triton
+from TheRock's unified [multi-arch nightly wheel
+index](https://nightly.repo.amd.com/rocm/whl-next/). The version arguments must
+describe one coherent published stack:
 
-| `ROCM_PACKAGE_REPOSITORY` | Package index | `ROCM_DEB_SERIES` |
-| --- | --- | --- |
-| `native` (default) | [Ubuntu 24.04 native index](https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/) | Derived from the snapshot's `amdrocm-runtime-dev` metadata. The pinned snapshot is `10.3`. |
-| `legacy` | [Legacy multi-arch index](https://rocm.nightlies.amd.com/packages-multi-arch/deb/) | Required. Snapshots on that index are `10.1`. |
+| Build argument | Purpose |
+| --- | --- |
+| `THEROCK_WHEEL_INDEX` | Aggregate ROCm/framework Python index |
+| `ROCM_WHEEL_VERSION` | `rocm` SDK version required by PyTorch |
+| `PYTORCH_WHEEL_VERSION` | PyTorch version; also pins its matching Triton |
+| `PYTORCH_VISION_WHEEL_VERSION` | Matching torchvision version |
+| `PYTORCH_AUDIO_WHEEL_VERSION` | Matching torchaudio version; empty omits it |
+| `ROCM_GFX_TARGETS` | `;`-separated device extras, such as `gfx942;gfx950` |
 
-The default `ROCM_RELEASE_ID` is a native Ubuntu 24.04 snapshot. Select the repository
-explicitly when overriding it; release IDs are not assumed to be portable
-between indexes. The scheduled nightly workflow also selects `native` and
-resolves the latest release ID.
-`ROCM_GFX_TARGETS` controls which architecture-specific package shards are
-installed. `PYTORCH_ROCM_ARCH` controls the architectures built into PyTorch
-and related wheels; it defaults to `ROCM_GFX_TARGETS` but can be overridden
-independently.
+`PYTORCH_ROCM_ARCH` remains the architecture input for source-built MORI and
+defaults to `ROCM_GFX_TARGETS`. The old `THEROCK_COMMIT`, PyTorch-family commit
+arguments, `ROCM_PACKAGE_REPOSITORY`, `ROCM_RELEASE_ID`, and `ROCM_DEB_SERIES`
+remain accepted for CI/caller compatibility but cannot affect prebuilt wheels.
 
-Leaf packages install under `/opt/rocm/core-<series>`. `rocm_devel` registers
-the unversioned `/opt/rocm/{bin,lib,include,...}` links that the
-`amdrocm-core` postinst would have created, and keeps the LLVM static
-archives those packages install.
-
-| Target | Packages | Use |
-| --- | --- | --- |
-| `rocm_devel` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers, developer-tools, RDC, OpenCL, and blas/rccl tests. LLVM static archives kept | Parent of `torch_build_base`, `build_mori`, and `core` |
-
-`amdrocm-developer-tools` pulls the profiler, emulator, and debugger. It does
-not depend on `amdrocm-core`. `torch_build_base` fetches TheRock.
-`build_triton` and `build_pytorch` compile in series, then `build_vision`
-and `build_audio` compile in parallel. `build_torch_stack`
-gathers those wheels. `core` installs the wheels built by `build_torch_stack`.
-`build_mori` builds the MORI wheel from `rocm_devel` without UMBP, and `core`
-installs it after AITER; MORI provides the symmetric memory behind AITER's
-intranode attention A2A.
-`deps` installs rocprofiler-compute's Python requirements.
+The SDK is installed in `/venv` and expanded by `rocm-sdk init`.
+`ROCM_HOME`, compiler/CMake paths, and a compatibility `/opt/rocm` symlink
+point at that expanded tree. `rocm_devel` is the parent of `build_mori` and
+`core`; it contains the wheel stack, SDK headers/toolchain, and profiler.
+MORI and AITER remain source builds. Torchcodec is omitted because TheRock does
+not publish it. The locally built non-GPL FFmpeg remains for video export.
 
 ```sh
-# pinned legacy snapshot
+# Pinned defaults
 docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 
-# native Ubuntu 24.04 snapshot
+# Override with another coherent wheel stack
 docker build -f docker/Dockerfile.ci --target final \
-    --build-arg ROCM_PACKAGE_REPOSITORY=native \
-    --build-arg ROCM_RELEASE_ID=20261013-38325106112 \
-    -t pytorch-xdit-native .
+    --build-arg ROCM_WHEEL_VERSION=10.3.0a20261104 \
+    --build-arg PYTORCH_WHEEL_VERSION=2.16.0a0+rocm10.3.0a20261104 \
+    --build-arg PYTORCH_VISION_WHEEL_VERSION=0.30.0a0+rocm10.3.0a20261104 \
+    --build-arg PYTORCH_AUDIO_WHEEL_VERSION=2.11.1+rocm10.3.0a20261104 \
+    -t pytorch-xdit-wheels .
 ```
 
-The image does not build ROCm from source and does not support
-`rocm-libraries` or `rocm-systems` commit overrides. Changes that are not
-available in the pinned nightly must first be published in a nightly snapshot.
+The scheduled nightly workflow selects the highest published PyTorch release
+line, then its newest complete Python 3.12 Linux stack, and passes all four
+version arguments. ROCm can publish ahead of PyTorch; the workflow therefore
+follows PyTorch's exact ROCm dependency instead of independently choosing the
+newest `rocm` package.
 
 ### amd-smi Python bindings
 
-`docker/setup_amdsmi.sh` links the ROCm Python bindings into the venv, because
-the nightly debs ship them under `${ROCM_HOME}/share/amd_smi/amdsmi` with no
-`setup.py`, where pip cannot install them and nothing can import them. It runs
-in `rocm_devel`; the script header explains why a symlink is the only correct
-mechanism.
+`docker/setup_amdsmi.sh` links the SDK's matching Python bindings from
+`${ROCM_HOME}/share/amd_smi/amdsmi` into the venv when wheel packaging does not
+make them importable directly. It runs after `rocm-sdk init`; the script header
+explains why a symlink is used instead of installing an unrelated PyPI wheel.
 
 If a future nightly puts the bindings on `sys.path` itself, a build log prints
 a `setup_amdsmi: RETIRE THIS SHIM` banner and the script makes no changes —
-delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping `ROCM_RELEASE_ID`:
+delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping
+`ROCM_WHEEL_VERSION`:
 
 ```sh
 docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
     | grep -i 'setup_amdsmi'
 ```
 
-### LLVM classic toolkit path
-
-`docker/setup_rocm_llvm_layout.sh` links `${ROCM_PATH}/lib/llvm/bin` tools into
-`${ROCM_PATH}/llvm/bin`. Nightly debs install `ld.lld` under `lib/llvm/bin` and
-leave `llvm/bin` as clang `.cfg` stubs; FlyDSL/MLIR still invoke
-`$ROCM_PATH/llvm/bin/ld.lld`. It runs in `rocm_devel` after the ROCm `ENV`
-block, which also puts `lib/llvm/bin` on `PATH`.
-
-If a future nightly ships an executable `ld.lld` at the classic path, a build
-log prints a `setup_rocm_llvm_layout: RETIRE THIS SHIM` banner and the script
-makes no changes — delete it and its `COPY`/`RUN` at that point. Keep the
-`PATH=/opt/rocm/lib/llvm/bin` `ENV` unless the nightly also puts that directory
-on `PATH`. The shim can also be deleted if FlyDSL (or its bundled MLIR) stops
-looking for `$ROCM_PATH/llvm/bin/ld.lld` and uses `lib/llvm/bin`,
-`HIP_CLANG_PATH`, `TRITON_HIP_LLD_PATH`, or `PATH` instead; that will not
-print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
-
-```sh
-docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
-    | grep -i 'setup_rocm_llvm_layout'
-```
-
-### Origami CMake package
-
-`docker/setup_origami_cmake.sh` writes `${ROCM_HOME}/lib/cmake/origami/origami-config.cmake`
-so `find_package(hipblaslt)` can configure. hipBLASLt's installed package config
-requires `find_package(origami)` in a sibling `lib/cmake/origami` directory
-(`NO_DEFAULT_PATH`, so `CMAKE_PREFIX_PATH` does not help). Nightly debs ship
-`liborigami.so` in the BLAS host package but omit that CMake package from
-BLAS devel. It runs in `rocm_devel` after the `-dev` debs, which is when
-hipBLASLt's CMake files land. The script header explains why a stub imported
-target is the only correct mechanism.
-
-If a future nightly ships `origami-config.cmake` (or `origamiConfig.cmake`) next
-to hipBLASLt, a build log prints a `setup_origami_cmake: RETIRE THIS SHIM`
-banner and the script makes no changes — delete it and its `COPY`/`RUN` at that
-point. The shim can also be deleted if hipBLASLt stops `find_dependency(origami)`;
-that will not print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
-
-```sh
-docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
-    | grep -i 'setup_origami_cmake'
-```
+The wheel development tree already supplies both the classic
+`${ROCM_PATH}/llvm/bin/ld.lld` path required by FlyDSL and the Origami CMake
+package required by hipBLASLt. The former DEB-layout shims for those paths have
+therefore been removed.

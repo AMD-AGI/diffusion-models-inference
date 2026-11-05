@@ -11,14 +11,20 @@
 
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
+# TheRock multi-arch wheel stack. Keep these versions on one ROCm build date.
+ARG THEROCK_WHEEL_INDEX="https://nightly.repo.amd.com/rocm/whl-next/"
+ARG ROCM_WHEEL_VERSION="10.3.0a20261104"
+ARG PYTORCH_WHEEL_VERSION="2.16.0a0+rocm10.3.0a20261104"
+ARG PYTORCH_VISION_WHEEL_VERSION="0.30.0a0+rocm10.3.0a20261104"
+ARG PYTORCH_AUDIO_WHEEL_VERSION="2.11.1+rocm10.3.0a20261104"
+# Compatibility build arguments retained for existing callers. The source
+# commit and DEB selector pins cannot affect prebuilt wheel contents.
 ARG THEROCK_COMMIT="ab56f1f7c5b54746bf9f7948fff3f306b2bef8b2"
 ARG ROCM_PACKAGE_REPOSITORY="native"
 ARG ROCM_RELEASE_ID="20261104-41743613538"
 ARG ROCM_DEB_SERIES="10.3"
-# ROCM_GFX_TARGETS selects architecture-specific nightly deb package shards.
-# PYTORCH_ROCM_ARCH defaults to the package targets but can be overridden.
-# Values are ";" separated; supported LLVM targets are documented at
-# https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
+# ROCM_GFX_TARGETS selects TheRock device wheel extras. PYTORCH_ROCM_ARCH is
+# retained separately for source-built MORI and defaults to the same targets.
 ARG ROCM_GFX_TARGETS="gfx942;gfx950"
 ARG PYTORCH_ROCM_ARCH="${ROCM_GFX_TARGETS}"
 ARG TRITON_COMMIT="669b31acc1dd1b3fd93286afd5db67f65d9f7557"
@@ -37,7 +43,7 @@ FROM ${BASE_IMAGE} AS base
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Shared fetch/compiler tools. Native extensions in core (AITER)
-# and the torch/ffmpeg builders still need a host toolchain.
+# and the MORI/FFmpeg builders still need a host toolchain.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
@@ -60,167 +66,59 @@ ENV PATH="/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 
 FROM base AS rocm_devel
+ARG THEROCK_WHEEL_INDEX
+ARG ROCM_WHEEL_VERSION
+ARG PYTORCH_WHEEL_VERSION
+ARG PYTORCH_VISION_WHEEL_VERSION
+ARG PYTORCH_AUDIO_WHEEL_VERSION
+ARG ROCM_GFX_TARGETS
+
+COPY docker/install_therock_wheels.sh /usr/local/bin/install_therock_wheels
+COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
+RUN chmod +x /usr/local/bin/install_therock_wheels \
+        /usr/local/bin/setup_amdsmi
+RUN THEROCK_WHEEL_INDEX="${THEROCK_WHEEL_INDEX}" \
+    ROCM_GFX_TARGETS="${ROCM_GFX_TARGETS}" \
+    ROCM_WHEEL_VERSION="${ROCM_WHEEL_VERSION}" \
+    PYTORCH_WHEEL_VERSION="${PYTORCH_WHEEL_VERSION}" \
+    PYTORCH_VISION_WHEEL_VERSION="${PYTORCH_VISION_WHEEL_VERSION}" \
+    PYTORCH_AUDIO_WHEEL_VERSION="${PYTORCH_AUDIO_WHEEL_VERSION}" \
+    install_therock_wheels
+
+# Deprecated compatibility args are declared after wheel installation so
+# changing a no-op source/DEB pin does not invalidate the multi-gigabyte layer.
+ARG THEROCK_COMMIT
 ARG ROCM_PACKAGE_REPOSITORY
 ARG ROCM_RELEASE_ID
 ARG ROCM_DEB_SERIES
-ARG ROCM_GFX_TARGETS
-COPY docker/configure_rocm_legacy_repo.sh /usr/local/bin/configure_rocm_legacy_repo
-COPY docker/configure_rocm_native_repo.sh /usr/local/bin/configure_rocm_native_repo
-COPY docker/install_rocm_debs.sh /usr/local/bin/install_rocm_debs
-COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
-COPY docker/setup_rocm_llvm_layout.sh /usr/local/bin/setup_rocm_llvm_layout
-COPY docker/setup_origami_cmake.sh /usr/local/bin/setup_origami_cmake
-RUN chmod +x /usr/local/bin/configure_rocm_legacy_repo \
-        /usr/local/bin/configure_rocm_native_repo \
-        /usr/local/bin/install_rocm_debs \
-        /usr/local/bin/setup_amdsmi \
-        /usr/local/bin/setup_rocm_llvm_layout \
-        /usr/local/bin/setup_origami_cmake \
-    && install_rocm_debs
-# The nightly deb ships the amd-smi Python bindings somewhere pip cannot reach;
-# link them into site-packages. Prints a RETIRE banner and does nothing once a
-# nightly makes `import amdsmi` work on its own.
-RUN setup_amdsmi
-ENV PATH="/opt/rocm/libexec/rocprofiler-compute:/opt/rocm/lib/llvm/bin:/opt/rocm/bin:$PATH" \
-    ROCM_HOME=/opt/rocm \
-    ROCM_PATH=/opt/rocm \
-    HIP_CLANG_PATH=/opt/rocm/lib/llvm/bin \
-    HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode \
-    TRITON_HIP_LLD_PATH=/opt/rocm/lib/llvm/bin/ld.lld
-# Nightly debs leave $ROCM_PATH/llvm/bin as a stub; FlyDSL/MLIR still
-# invoke ld.lld there. Prints a RETIRE banner and does nothing once a
-# nightly ships that path itself. Also retire if FlyDSL stops looking
-# there. PATH is the ENV above, not this shim.
-RUN setup_rocm_llvm_layout
-# hipBLASLt's CMake config find_dependency(origami) next to hipblaslt;
-# nightly debs ship liborigami.so without lib/cmake/origami. Prints a
-# RETIRE banner and does nothing once a nightly ships that package.
-RUN setup_origami_cmake
-
-# Shared checkout tooling for the torch stack. Each project is fetched and
-# built in its own stage so a downstream pin does not recompile Triton or
-# PyTorch. Vision and audio depend on the PyTorch wheel and not on each
-# other, so BuildKit runs those two stages in parallel. core still
-# installs /install/*.whl from build_torch_stack.
-FROM rocm_devel AS torch_build_base
-ARG THEROCK_COMMIT
-ARG DEBIAN_FRONTEND=noninteractive
-
-# CPU BLAS headers for the PyTorch wheel. Runtime libs are installed in core.
-RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    libopenblas-dev \
-    pkg-config && \
-    rm -rf /var/lib/apt/lists/*
-
-# TheRock is only needed for external-builds/pytorch checkout scripts.
-WORKDIR /app
-RUN git init TheRock && \
-    cd TheRock && \
-    git remote add origin https://github.com/ROCm/TheRock.git && \
-    git fetch --depth 1 origin ${THEROCK_COMMIT} && \
-    git checkout --detach FETCH_HEAD
-
-# needed for HIPIFY commits created by the build process
-RUN git config --global user.name "TheRock Builder" && \
-    git config --global user.email "builder@rocm.ai"
-
-WORKDIR /app/TheRock/external-builds/pytorch
-RUN pip install -r /app/TheRock/requirements.txt && \
-    mkdir -p /install
-
-FROM torch_build_base AS build_triton
 ARG TRITON_COMMIT
-RUN python pytorch_triton_repo.py checkout --gitrepo-origin https://github.com/ROCm/triton.git --repo-hashtag ${TRITON_COMMIT} --jobs 8 --depth 1
-RUN cd triton && \
-    pip install -r python/requirements.txt && \
-    pip wheel . --wheel-dir dist/ && \
-    pip install dist/*.whl && \
-    mv dist/*.whl /install && \
-    rm -rf build python/build dist
-
-# License bundles sit beside the compiles, one stage per project, so a
-# collector change reruns the scan and leaves the wheel builds cached.
-# --required-git-depth 0 requires the project repository itself. Nested
-# submodules are recorded, and a missing submodule license stays a warning,
-# matching the previous scan of the parent directory at depth 1.
-FROM build_triton AS evidence_triton
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /evidence/triton \
-    --scan-root triton=/app/TheRock/external-builds/pytorch/triton \
-    --git-root /app/TheRock/external-builds/pytorch/triton \
-    --fail-on-missing-git-license \
-    --required-git-depth 0
-
-FROM build_triton AS build_pytorch
 ARG PYTORCH_COMMIT
-ARG PYTORCH_ROCM_ARCH
-RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1
-RUN cd pytorch && \
-    UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
-    PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
-    pip install -r requirements.txt && \
-    BUILD_TEST=0 \
-    USE_KINETO=ON USE_GLOO=ON USE_ROCM=ON USE_CUDA=OFF USE_MPI=OFF \
-    USE_MEM_EFF_ATTENTION=ON USE_FLASH_ATTENTION=ON USE_ROCM_CK_SDPA=ON \
-    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" \
-    PYTORCH_BUILD_VERSION="${PYTORCH_VERSION}+git${UPSTREAM_HASH}" \
-    PYTORCH_BUILD_NUMBER=1 \
-    CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
-    LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
-    PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
-    python setup.py bdist_wheel && \
-    pip install dist/*.whl && \
-    mv dist/*.whl /install && \
-    rm -rf build dist
-
-FROM build_pytorch AS evidence_pytorch
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /evidence/pytorch \
-    --scan-root pytorch=/app/TheRock/external-builds/pytorch/pytorch \
-    --git-root /app/TheRock/external-builds/pytorch/pytorch \
-    --fail-on-missing-git-license \
-    --required-git-depth 0
-
-FROM build_pytorch AS build_vision
 ARG PYTORCH_VISION_COMMIT
-RUN python pytorch_vision_repo.py checkout --gitrepo-origin https://github.com/ROCm/vision.git --repo-hashtag ${PYTORCH_VISION_COMMIT} --jobs 8 --depth 1
-RUN mkdir -p /wheel && \
-    cd pytorch_vision && \
-    FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 \
-    python setup.py bdist_wheel && \
-    mv dist/*.whl /wheel && \
-    rm -rf build dist
-
-FROM build_vision AS evidence_vision
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /evidence/vision \
-    --scan-root vision=/app/TheRock/external-builds/pytorch/pytorch_vision \
-    --git-root /app/TheRock/external-builds/pytorch/pytorch_vision \
-    --fail-on-missing-git-license \
-    --required-git-depth 0
-
-FROM build_pytorch AS build_audio
 ARG PYTORCH_AUDIO_COMMIT
-ARG PYTORCH_ROCM_ARCH
-RUN python pytorch_audio_repo.py checkout --gitrepo-origin https://github.com/ROCm/audio.git --repo-hashtag ${PYTORCH_AUDIO_COMMIT} --jobs 8 --depth 1
-RUN mkdir -p /wheel && \
-    cd pytorch_audio && \
-    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 \
-    python setup.py bdist_wheel && \
-    mv dist/*.whl /wheel && \
-    rm -rf build dist
+ARG PYTORCH_CODEC_COMMIT
+RUN printf 'Using TheRock wheels; compatibility args: repository=%s release=%s series=%s\n' \
+        "${ROCM_PACKAGE_REPOSITORY}" "${ROCM_RELEASE_ID}" "${ROCM_DEB_SERIES}" && \
+    printf 'Source pins replaced by wheel metadata: TheRock=%s Triton=%s PyTorch=%s vision=%s audio=%s codec=%s\n' \
+        "${THEROCK_COMMIT}" "${TRITON_COMMIT}" "${PYTORCH_COMMIT}" \
+        "${PYTORCH_VISION_COMMIT}" "${PYTORCH_AUDIO_COMMIT}" "${PYTORCH_CODEC_COMMIT}"
 
-FROM build_audio AS evidence_audio
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /evidence/audio \
-    --scan-root audio=/app/TheRock/external-builds/pytorch/pytorch_audio \
-    --git-root /app/TheRock/external-builds/pytorch/pytorch_audio \
-    --fail-on-missing-git-license \
-    --required-git-depth 0
+# Ubuntu 24.04 supplies Python 3.12, and this image fixes the venv at /venv.
+# These are the paths exposed by `rocm-sdk path` after `rocm-sdk init`.
+ENV ROCM_HOME=/venv/lib/python3.12/site-packages/_rocm_sdk_devel \
+    ROCM_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel \
+    ROCM_SOURCE_DIR=/venv/lib/python3.12/site-packages/_rocm_sdk_devel \
+    HIP_CLANG_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/llvm/bin \
+    HIP_DEVICE_LIB_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/llvm/amdgcn/bitcode \
+    ROCM_DEVICE_LIB_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/llvm/amdgcn/bitcode \
+    TRITON_HIP_LLD_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/llvm/bin/ld.lld \
+    CMAKE_PREFIX_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/cmake \
+    PKG_CONFIG_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib/pkgconfig \
+    LD_LIBRARY_PATH=/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/host-math/lib:/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib \
+    PATH="/venv/lib/python3.12/site-packages/_rocm_sdk_devel/bin:/venv/lib/python3.12/site-packages/_rocm_sdk_devel/lib/llvm/bin:$PATH"
+RUN test "$(rocm-sdk path --root)" = "${ROCM_HOME}" && \
+    test "$(rocm-sdk path --cmake)" = "${CMAKE_PREFIX_PATH}" && \
+    setup_amdsmi && \
+    ln -s "${ROCM_HOME}" /opt/rocm
 
 FROM base AS ffmpeg_builder
 # Reference: https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
@@ -287,27 +185,6 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
-# Triton and PyTorch wheels are already in /install. The two wheels below
-# come from stages BuildKit schedules together. Each evidence stage scanned
-# only its own checkout; this stage imports those bundles.
-FROM build_pytorch AS build_torch_stack
-COPY --from=build_vision /wheel/ /install/
-COPY --from=build_audio /wheel/ /install/
-COPY --from=evidence_triton /evidence/triton/ /evidence/triton/
-COPY --from=evidence_pytorch /evidence/pytorch/ /evidence/pytorch/
-COPY --from=evidence_vision /evidence/vision/ /evidence/vision/
-COPY --from=evidence_audio /evidence/audio/ /evidence/audio/
-RUN pip install --no-cache-dir \
-    /install/torchvision-*.whl \
-    /install/torchaudio-*.whl
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /install/license-evidence \
-    --evidence-root triton=/evidence/triton \
-    --evidence-root pytorch=/evidence/pytorch \
-    --evidence-root vision=/evidence/vision \
-    --evidence-root audio=/evidence/audio
-
 # MORI provides the symmetric memory behind AITER's intranode attention A2A.
 # UMBP stays off: its control plane needs gRPC and protobuf. Without UMBP only
 # the msgpack-c and spdlog submodules are built.
@@ -330,7 +207,7 @@ RUN mkdir -p /wheel && \
     cd mori && \
     BUILD_UMBP=OFF \
     BUILD_TORCH_SYMM=OFF \
-    CMAKE_PREFIX_PATH="${ROCM_HOME}/lib/rocm_sysdeps" \
+    CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}:${ROCM_HOME}/lib/rocm_sysdeps" \
     LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
     MORI_GPU_ARCHS="${PYTORCH_ROCM_ARCH}" \
     pip wheel . --no-deps --wheel-dir /wheel && \
@@ -347,9 +224,8 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
 
 FROM rocm_devel AS core
 ARG AITER_COMMIT
-RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
-    pip install --no-cache-dir /install/*.whl
-# Runtime libs for FFmpeg, OpenBLAS-linked torch, and OpenCV/GLib.
+# Runtime libs for the locally built FFmpeg and OpenCV/GLib. Keep the prior
+# OpenBLAS/Fortran runtime contract for downstream native extensions.
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
   libass9 \
@@ -377,8 +253,8 @@ COPY docker/libkineto.conf /config/libkineto.conf
 ENV KINETO_CONFIG="/config/libkineto.conf"
 # install aiter
 WORKDIR /app/external
-# Keep the Triton wheel we built from TRITON_COMMIT against our PyTorch; otherwise
-# AITER's setup.py would uninstall it and pull a wheel from pypi.amd.com (see
+# Keep the Triton wheel selected by TheRock's PyTorch package; otherwise AITER's
+# setup.py would uninstall it and pull a wheel from pypi.amd.com (see
 # https://github.com/ROCm/aiter/pull/3161). No-op on AITER_COMMIT pins predating
 # that PR, but safe and forward-compatible.
 ENV AITER_USE_SYSTEM_TRITON=1
@@ -394,7 +270,6 @@ RUN --mount=type=bind,from=build_mori,source=/wheel,target=/mori-wheel \
     pip install --no-cache-dir /mori-wheel/*.whl
 # Held in core rather than final so that no stage downstream of core has an edge
 # back into a builder stage.
-COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/torch-build-sources
 COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
 COPY --from=evidence_mori /evidence/mori /opt/license-evidence/mori-build-sources
 
@@ -441,10 +316,12 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git apply /patches/xfuser_aiter_gfx1250.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
-# rocprofiler-compute ships with rocm_devel.
-# Due to https://github.com/ROCm/rocm-systems/pull/2821 drop numpy to avoid installing numpy<2
-RUN sed -i '/numpy/d' "${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt" && \
-    pip install --no-cache-dir -r "${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt"
+# rocprofiler-compute ships in the rocm-profiler wheel. Preserve the existing
+# NumPy override while locating requirements through wheel metadata instead of
+# assuming a native-package path.
+RUN requirements="$(python3 -c 'from importlib.metadata import distribution; d=distribution("rocm-profiler"); p=[d.locate_file(f) for f in (d.files or []) if str(f).endswith("libexec/rocprofiler-compute/requirements.txt")]; assert len(p) == 1, p; print(p[0])')" && \
+    sed -i '/numpy/d' "${requirements}" && \
+    pip install --no-cache-dir -r "${requirements}"
 # imageio + imageio-ffmpeg for diffusers export_to_video H.264 encoding
 # --no-binary avoids shipping imageio-ffmpeg's bundled GPL ffmpeg binary
 RUN pip install --no-cache-dir --no-binary :all: imageio-ffmpeg
@@ -489,9 +366,7 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --scan-root app=/app \
     --scan-root project=/tmp/project-license \
     --scan-root python=/venv \
-    --scan-root rocm=/opt/rocm \
     --scan-root local=/usr/local \
-    --evidence-root torch-build-sources=/opt/license-evidence/torch-build-sources \
     --evidence-root ffmpeg-build-sources=/opt/license-evidence/ffmpeg-build-sources \
     --evidence-root mori-build-sources=/opt/license-evidence/mori-build-sources \
     --git-root /app \

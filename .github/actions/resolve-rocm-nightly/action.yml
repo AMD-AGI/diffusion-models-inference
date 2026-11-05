@@ -2,12 +2,24 @@
 # SPDX-License-Identifier: MIT
 
 name: Resolve ROCm Nightly
-description: Resolves the latest ROCm nightly release ID from the package index
+description: Resolves the latest coherent TheRock ROCm and PyTorch wheel stack
 
 outputs:
   release_id:
-    description: 'Latest ROCm nightly release ID'
+    description: 'Compatibility ID in YYYYMMDD-run-number form'
     value: ${{ steps.resolve.outputs.release_id }}
+  rocm_version:
+    description: 'ROCm wheel version required by the resolved PyTorch wheel'
+    value: ${{ steps.resolve.outputs.rocm_version }}
+  pytorch_version:
+    description: 'Resolved PyTorch wheel version'
+    value: ${{ steps.resolve.outputs.pytorch_version }}
+  pytorch_vision_version:
+    description: 'Resolved torchvision wheel version'
+    value: ${{ steps.resolve.outputs.pytorch_vision_version }}
+  pytorch_audio_version:
+    description: 'Resolved torchaudio wheel version'
+    value: ${{ steps.resolve.outputs.pytorch_audio_version }}
 
 runs:
   using: composite
@@ -15,22 +27,6 @@ runs:
     - name: Resolve latest ROCm nightly
       id: resolve
       shell: bash
-      env:
-        ROCM_NIGHTLY_ROOT: https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404
       run: |
         set -euo pipefail
-
-        release_id=$(
-          curl --fail --silent --show-error --location "${ROCM_NIGHTLY_ROOT}/" |
-            grep -oE '[0-9]{8}-[0-9]+/index\.html' |
-            sed 's#/index\.html##' |
-            sort -V |
-            tail -n 1
-        )
-        if [[ ! "$release_id" =~ ^[0-9]{8}-[0-9]+$ ]]; then
-          echo "::error::Could not resolve a valid ROCm nightly release ID"
-          exit 1
-        fi
-
-        echo "Resolved ROCm nightly release: ${release_id}"
-        echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+        python3 "${{ github.action_path }}/resolve.py" | tee -a "$GITHUB_OUTPUT"
