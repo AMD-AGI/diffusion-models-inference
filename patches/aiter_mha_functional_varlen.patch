@@ -1,8 +1,8 @@
 diff --git a/aiter/ops/mha.py b/aiter/ops/mha.py
-index dbb74ae5d..87e933b19 100644
+index 307cc75..24734ab 100644
 --- a/aiter/ops/mha.py
 +++ b/aiter/ops/mha.py
-@@ -3151,6 +3151,142 @@ def _flash_attn_varlen_forward(
+@@ -3563,6 +3563,142 @@ def _flash_attn_varlen_forward(
      return out, softmax_lse, S_dmask, rng_state
  
  
@@ -145,7 +145,7 @@ index dbb74ae5d..87e933b19 100644
  def _flash_attn_varlen_backward(
      dout: torch.Tensor,
      q: torch.Tensor,
-@@ -3384,7 +3520,7 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
+@@ -3883,7 +4019,7 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
              k = torch.nn.functional.pad(k, [0, 8 - head_size_q_og % 8])
          if head_size_v_og % 8 != 0:
              v = torch.nn.functional.pad(v, [0, 8 - head_size_v_og % 8])
@@ -154,7 +154,7 @@ index dbb74ae5d..87e933b19 100644
              q,
              k,
              v,
-@@ -3397,23 +3533,38 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
+@@ -3896,23 +4032,38 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
              min_seqlen_q,
              dropout_p,
              softmax_scale,
@@ -165,9 +165,9 @@ index dbb74ae5d..87e933b19 100644
 -            sink_size=window_size[2] if len(window_size) > 2 else 0,
 -            bias=bias,
 -            alibi_slopes=alibi_slopes,
--            q_descale=None,
--            k_descale=None,
--            v_descale=None,
+-            q_descale=q_descale,
+-            k_descale=k_descale,
+-            v_descale=v_descale,
 -            return_lse=return_lse,
 -            return_softmax=return_softmax and dropout_p > 0,
 -            how_v3_bf16_cvt=how_v3_bf16_cvt,
@@ -183,9 +183,9 @@ index dbb74ae5d..87e933b19 100644
 +            "sink_size": window_size[2] if len(window_size) > 2 else 0,
 +            "bias": bias,
 +            "alibi_slopes": alibi_slopes,
-+            "q_descale": None,
-+            "k_descale": None,
-+            "v_descale": None,
++            "q_descale": q_descale,
++            "k_descale": k_descale,
++            "v_descale": v_descale,
 +            "return_lse": return_lse,
 +            "return_softmax": return_softmax and dropout_p > 0,
 +            "how_v3_bf16_cvt": how_v3_bf16_cvt,
