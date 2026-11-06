@@ -43,6 +43,7 @@ benchmark-only run (no builds, no tuning) is `base_image` set, `rebuild=false`,
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `benchmark_flags` | string | `''` | Filter which benchmarks to run. Examples: `--tag release`, `--name CONFIG_NAME`. Empty runs all. |
+| `use_xdit_configs` | boolean | `false` | Select `/app/.ci/benchmark_configs_xdit/`, copied from the tested xDiT commit's `.ci/configs/`, instead of downstream configs. Missing configs or an empty selection fail; no fallback. Does not change MIOpen tuning workloads. |
 | `collect_hipblaslt_logs` | boolean | `false` | Collect per-process hipBLASLt GEMM YAML logs for each benchmark. |
 | `force_determinism_check` | boolean | `false` | Force xFuser determinism checks for every benchmark. Each architecture is checked in its own `<arch> determinism check` job; a non-deterministic benchmark fails that job, so the run goes red while `build-final` and the MIOpen branch still complete. |
 | `disable_docker_cache` | boolean | `false` | Disable Docker cache when a core image build is required. The cache is still re-exported, so this is how a stale cache gets replaced. |

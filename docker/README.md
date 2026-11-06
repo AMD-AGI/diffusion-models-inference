@@ -9,6 +9,27 @@
 
 ## How-tos
 
+### PR benchmark configurations from xDiT
+
+`Dockerfile.ci` keeps downstream benchmark configs in
+`/app/.ci/benchmark_configs/`. If the tested `XDIT_COMMIT` contains
+`.ci/configs/`, its entire contents are also copied to
+`/app/.ci/benchmark_configs_xdit/`. Older xDiT commits without that directory
+still build normally.
+
+The `use_xdit_configs` workflow/action input defaults to `false`. Set it to
+`true` to select only the xDiT configs; `benchmark_flags` still filters with
+`--name` or `--tag`. Missing YAML files or an empty upstream selection fail
+explicitly, without falling back to downstream configs. Both direct execution
+and brr experiment discovery/execution use the selected source.
+
+Configs use this repository's benchmark YAML schema. Copying neighboring assets
+preserves directory contents but does not change the runner's working directory
+(`/app`); relative argument paths must account for that. Tag selections also
+require the runner's architecture tag, such as `gfx942` or `gfx950`.
+MIOpen tuning continues to use downstream workload files, independently of this
+benchmark config choice.
+
 ### ROCm nightly packages
 
 `Dockerfile.ci` supports two generations of TheRock nightly deb repositories:

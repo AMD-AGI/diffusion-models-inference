@@ -19,6 +19,10 @@ inputs:
     description: 'Whether running in benchmark-only mode'
     required: false
     default: 'false'
+  use_xdit_configs:
+    description: 'Use /app/.ci/benchmark_configs_xdit instead of downstream benchmark configs'
+    required: false
+    default: 'false'
   collect_hipblaslt_logs:
     description: 'Collect hipBLASLt GEMM logs per benchmark (adds runtime overhead). Files are written per-experiment as hipblaslt_gemms_pid<PID>.yaml (one file per worker process) under each experiments output directory.'
     required: false
@@ -74,6 +78,7 @@ runs:
         BENCHMARK_ONLY: ${{ inputs.benchmark_only }}
         RUN_PY_FLAGS: ${{ steps.hf_cache.outputs.run_py_flags }}
         INPUT_BENCHMARK_FLAGS: ${{ inputs.benchmark_flags }}
+        USE_XDIT_CONFIGS: ${{ inputs.use_xdit_configs }}
         OUTPUT_DIR: ${{ inputs.output_dir }}
         ARCH: ${{ inputs.arch }}
         HF_CACHE_ARGS: ${{ steps.hf_cache.outputs.hf_cache_args }}
