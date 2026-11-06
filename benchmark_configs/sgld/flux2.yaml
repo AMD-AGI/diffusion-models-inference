@@ -15,8 +15,8 @@
     max_sequence_length: 512
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+    use_torch_compile: false
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -35,11 +35,10 @@
     max_sequence_length: 512
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+    use_torch_compile: false
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: cudnn
 
 - name: flux2.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -55,11 +54,10 @@
     max_sequence_length: 512
     warmup_calls: 5
     ulysses_degree: 8
-    use_torch_compile: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+    use_torch_compile: false
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
-    attention_backend: cudnn
 
 - name: flux2.quantgemm.gfx942
   tags: [release, mad, lucid, instinct, gfx942]
@@ -74,10 +72,10 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp8_gemms: True
+    use_fp8_gemms: true
     ulysses_degree: 8
-    use_torch_compile: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+    use_torch_compile: false
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -95,10 +93,10 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp4_gemms: True
+    use_fp4_gemms: true
     ulysses_degree: 8
-    use_torch_compile: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+    use_torch_compile: false
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
     attention_backend: aiter
@@ -116,10 +114,10 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp8_gemms: True
+    use_fp8_gemms: true
     ulysses_degree: 8
-    use_torch_compile: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+    use_torch_compile: false
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
 
@@ -136,9 +134,9 @@
     num_inference_steps: 50
     max_sequence_length: 512
     warmup_calls: 5
-    use_fp8_gemms: True
+    use_fp8_gemms: true
     ulysses_degree: 8
-    use_torch_compile: True
-    input_images: https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
+    use_torch_compile: false
+    input_images: /app/data/flux_cat.png
     guidance_scale: 4.0
     num_iterations: 25
