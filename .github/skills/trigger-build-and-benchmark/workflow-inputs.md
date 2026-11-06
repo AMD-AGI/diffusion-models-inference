@@ -8,6 +8,7 @@ Complete reference for all `build-and-benchmark.yml` workflow_dispatch inputs.
 |---|---|---|---|
 | `git_branch` | string | `''` | Git branch to build from. Empty uses the repo default branch. |
 | `base_image` | string | `''` | Tag or full Docker Hub path to start from. Empty always forces a rebuild. |
+| `use_latest_main_core` | boolean | `false` | Replace `base_image` with the untuned (`-temp`) image from the latest successful push-triggered core build on `main`. |
 | `image_tag` | string | `''` | Override the built image tag. Empty uses the checked-out repository short SHA. |
 | `rebuild` | boolean | `false` | Attempt to rebuild the image using `base_image` as a prebuilt core image. Forced on when `base_image` is empty. With `base_image` set, this uses it as a build cache source (bare tag against the core image) instead of using it directly. May trigger full rebuild if `base_image` has drifted from the branch the workflow has been dispatched from. |
 
@@ -17,6 +18,7 @@ Complete reference for all `build-and-benchmark.yml` workflow_dispatch inputs.
 base_image empty                → rebuild forced on, full build from source
 base_image set, rebuild=false   → use base_image directly, no build
 base_image set, rebuild=true    → build from source using base_image as cache
+latest main core enabled        → replace base_image with that build's untuned image
 ```
 
 ## Step Checkboxes
