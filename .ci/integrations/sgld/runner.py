@@ -546,6 +546,10 @@ def run_api(args):
     )
     if args.attention_backend:
         from_pretrained_kwargs["attention_backend"] = args.attention_backend
+    if args.attention_backend_config is not None:
+        # ServerArgs takes the same string the CLI flag does (key=value pairs, a
+        # JSON string, or a path to a JSON/YAML file) and parses it itself.
+        from_pretrained_kwargs["attention_backend_config"] = args.attention_backend_config
     if args.pipeline_class_name is not None:
         from_pretrained_kwargs["pipeline_class_name"] = args.pipeline_class_name
 
@@ -627,12 +631,16 @@ def main():
     if args.run_type == "cli":
         run_cli(args, extra)
     elif args.run_type == "api":
+        # Silently dropping any of these would benchmark a different configuration
+        # than the one the config asked for.
         if extra:
-            # Silently dropping them would benchmark a different configuration
-            # than the one the config asked for.
             raise ValueError(
                 f"Unrecognized arguments {extra} can only be forwarded with --run_type cli, not --run_type api"
             )
+        if args.cross_attention_backend is not None:
+            # DiffGenerator.from_pretrained has no equivalent knob: ServerArgs
+            # exposes no cross-attention backend, so the API path cannot honour it.
+            raise ValueError("--cross_attention_backend can only be used with --run_type cli, not --run_type api")
         run_api(args)
     else:
         raise ValueError(f"Invalid run type: {args.run_type}")
