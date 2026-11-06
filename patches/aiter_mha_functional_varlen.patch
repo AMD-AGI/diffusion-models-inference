@@ -1,8 +1,8 @@
 diff --git a/aiter/ops/mha.py b/aiter/ops/mha.py
-index ef348e88d6..affb357017 100644
+index 307cc75..24734ab 100644
 --- a/aiter/ops/mha.py
 +++ b/aiter/ops/mha.py
-@@ -3264,6 +3264,142 @@ def _flash_attn_varlen_forward(
+@@ -3563,6 +3563,142 @@ def _flash_attn_varlen_forward(
      return out, softmax_lse, S_dmask, rng_state
  
  
@@ -145,7 +145,7 @@ index ef348e88d6..affb357017 100644
  def _flash_attn_varlen_backward(
      dout: torch.Tensor,
      q: torch.Tensor,
-@@ -3559,7 +3695,7 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
+@@ -3883,7 +4019,7 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
              k = torch.nn.functional.pad(k, [0, 8 - head_size_q_og % 8])
          if head_size_v_og % 8 != 0:
              v = torch.nn.functional.pad(v, [0, 8 - head_size_v_og % 8])
@@ -154,7 +154,7 @@ index ef348e88d6..affb357017 100644
              q,
              k,
              v,
-@@ -3572,23 +3708,38 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
+@@ -3896,23 +4032,38 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
              min_seqlen_q,
              dropout_p,
              softmax_scale,
