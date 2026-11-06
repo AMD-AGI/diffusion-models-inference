@@ -21,11 +21,13 @@ The current xDiT benchmark configurations include:
 | FLUX.1 Kontext | `black-forest-labs/FLUX.1-Kontext-dev` |
 | FLUX.2 | `black-forest-labs/FLUX.2-dev` |
 | FLUX.2 Klein | `black-forest-labs/FLUX.2-klein-9B` |
+| FLUX.3 Klein Base | `black-forest-labs/flux-3-image-klein-base` |
 | HunyuanVideo | `tencent/HunyuanVideo` |
 | HunyuanVideo 1.5 | `hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v` |
 | LTX-2.5 | `Lightricks/LTX-2.5-Diffusers` |
 | MiniMax-H3 | `MiniMaxAI/MiniMax-H3` |
 | Qwen-Image | `Qwen/Qwen-Image-2512` |
+| Qwen-Image-2.1 | `Qwen/Qwen-Image-2.1` |
 | Qwen-Image-Edit | `Qwen/Qwen-Image-Edit` |
 | Stable Diffusion 3.5 | `stabilityai/stable-diffusion-3.5-large` |
 | Wan 2.1 | `Wan-AI/Wan2.1-I2V-14B-720P-Diffusers` |

@@ -85,4 +85,4 @@ MIOpenDriver conv -n 2 -c 8 -H 1 -W 165600 -k 8 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l
 MIOpenDriver conv -n 2 -c 8 -H 1 -W 165600 -k 8 -y 1 -x 7 -p 0 -q 9 -u 1 -v 1 -l 1 -j 3 -m conv -g 1 -F 1 -t 1
 MIOpenDriver conv -n 2 -c 8 -H 1 -W 331211 -k 8 -y 1 -x 12 -p 0 -q 0 -u 1 -v 2 -l 1 -j 1 -m conv -g 8 -F 1 -t 1
 MIOpenDriver conv -n 2 -c 8 -H 1 -W 331230 -k 8 -y 1 -x 12 -p 0 -q 0 -u 1 -v 2 -l 1 -j 1 -m conv -g 8 -F 2 -t 1
-MIOpenDriver convfp16 -n 1 -c 24 --in_d 7 -H 16 -W 16 -k 24 --fil_d 1 -y 1 -x 1 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
+MIOpenDriver convbfp16 -n 1 -c 24 --in_d 7 -H 16 -W 16 -k 24 --fil_d 1 -y 1 -x 1 --pad_d 0 -p 0 -q 0 --conv_stride_d 1 -u 1 -v 1 --dilation_d 1 -l 1 -j 1 --spatial_dim 3 -m conv -g 1 -F 1 -t 1
