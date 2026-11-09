@@ -53,16 +53,15 @@ Include `*_COMMIT` and the ROCm repository settings:
 
 ```bash
 git diff FROM_TAG..TO_REF -- docker/Dockerfile.ci | \
-  grep -E '^[+-]ARG\s+(\w+_COMMIT|ROCM_PACKAGE_REPOSITORY|ROCM_RELEASE_ID|ROCM_DEB_SERIES)=' | sort
+  grep -E '^[+-]ARG\s+(\w+_COMMIT|ROCM_RELEASE_ID)=' | sort
 ```
 
 ## Look up upstream changes
 
 For each changed commit hash (`OLD_HASH` → `NEW_HASH`), query the upstream repo
 to see what was added. Use the repo mapping below to resolve the GitHub org/repo.
-Record `ROCM_PACKAGE_REPOSITORY`, `ROCM_RELEASE_ID`, and `ROCM_DEB_SERIES`
-changes as TheRock nightly deb configuration updates; they are not Git commit
-hashes.
+Record `ROCM_RELEASE_ID` changes as TheRock nightly deb snapshot updates;
+they are not Git commit hashes.
 
 ```bash
 gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \

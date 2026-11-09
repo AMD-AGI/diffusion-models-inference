@@ -9,7 +9,6 @@ if [[ $# -ne 0 ]]; then
     exit 2
 fi
 
-readonly package_repository="${ROCM_PACKAGE_REPOSITORY:?ROCM_PACKAGE_REPOSITORY must be set}"
 readonly gfx_targets="${ROCM_GFX_TARGETS:?ROCM_GFX_TARGETS must be set}"
 readonly rocm_root="${ROCM_HOME:-/opt/rocm}"
 
@@ -24,18 +23,7 @@ if [[ "${#usable[@]}" -eq 0 ]]; then
     exit 2
 fi
 
-case "${package_repository}" in
-    legacy)
-        deb_series="$(configure_rocm_legacy_repo)"
-        ;;
-    native)
-        deb_series="$(configure_rocm_native_repo)"
-        ;;
-    *)
-        echo "Unknown ROCm package repository '${package_repository}'; expected legacy or native" >&2
-        exit 2
-        ;;
-esac
+deb_series="$(configure_rocm_native_repo)"
 readonly deb_series
 readonly prefix="/opt/rocm/core-${deb_series}"
 
