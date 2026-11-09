@@ -25,7 +25,7 @@ ARG AITER_COMMIT="f705d6b7a0637b411a3c177b2fc523f9ce31d0ca"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="1a40661fffd215b08c0e9a3ff934c37f152f9052"
+ARG XDIT_COMMIT="405a46b3b52c69636067b3b419a3f2d060fa9702"
 
 FROM ${BASE_IMAGE} AS base
 ARG DEBIAN_FRONTEND=noninteractive
@@ -285,7 +285,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
-    git apply /patches/xfuser_aiter_gfx1250.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute ships in the rocm-profiler wheel. Preserve the existing
