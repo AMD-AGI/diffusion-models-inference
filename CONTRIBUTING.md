@@ -159,7 +159,7 @@ docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 ```
 
 This build does not require a GPU. The ROCm stack comes from the nightly deb
-snapshot selected by `ROCM_PACKAGE_REPOSITORY` and pinned by `ROCM_RELEASE_ID`
+snapshot from the Ubuntu 24.04 native index, pinned by `ROCM_RELEASE_ID`
 in the Dockerfile.
 See [docker/README.md](docker/README.md) for the ROCm package and architecture
 settings.
