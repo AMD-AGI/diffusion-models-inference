@@ -227,6 +227,8 @@
     cross_attention_backend: aiter_bf16
     gemm_quantization: low=fp4,high=fp6
     memory_efficient_replicated_load: true
+    attention_a2a: auto
+    attention_a2a_hadamard: auto
 
 - name: wan2_2.quantgemm_quantattn.hopper.h100  
   tags: [lucid, hopper, h100]
@@ -323,7 +325,7 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    attention_backend: aiter_fp8_sparge
+    attention_backend: aiter_mxfp6_sparge
     cross_attention_backend: aiter_bf16
     gemm_quantization: low=fp4,high=fp6
     spargeattn_simthreshold: 0.2
