@@ -1,0 +1,80 @@
+From 85bc08033b280d94c67ec59461ffaee119409ea5 Mon Sep 17 00:00:00 2001
+From: Mikko Lauri <mikko.lauri@amd.com>
+Date: Tue, 10 Nov 2026 12:45:12 +0000
+Subject: [PATCH] [JIT] [Bugfix] Exclude FP8 kernels from BF16 varlen attention
+ builds
+
+Signed-off-by: Mikko Lauri <mikko.lauri@amd.com>
+---
+ aiter/jit/utils/mha_recipes.py |  2 +-
+ op_tests/test_mha_recipes.py   | 48 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 49 insertions(+), 1 deletion(-)
+ create mode 100644 op_tests/test_mha_recipes.py
+
+diff --git a/aiter/jit/utils/mha_recipes.py b/aiter/jit/utils/mha_recipes.py
+index 58da126ab63..812dfa722c6 100644
+--- a/aiter/jit/utils/mha_recipes.py
++++ b/aiter/jit/utils/mha_recipes.py
+@@ -55,7 +55,7 @@ def compose_mha_fwd_variant_suffix_and_filter(
+ 
+     filt = (
+         "*"
+-        + f"{dtype}*"
++        + f"_{dtype}*"
+         + ("_logits*" if logits_positive else "_nlogits*")
+         + ("_bias*" if has_bias else ("_alibi*" if has_alibi else "_nbias*"))
+         + ("_mask*" if use_mask else "_nmask*")
+diff --git a/op_tests/test_mha_recipes.py b/op_tests/test_mha_recipes.py
+new file mode 100644
+index 00000000000..fec9539dcc4
+--- /dev/null
++++ b/op_tests/test_mha_recipes.py
+@@ -0,0 +1,48 @@
++# SPDX-License-Identifier: MIT
++# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
++
++"""CPU regression tests for varlen attention kernel dtype selection."""
++
++import fnmatch
++import importlib.util
++import unittest
++from pathlib import Path
++
++source = Path(__file__).resolve().parents[1] / "aiter/jit/utils/mha_recipes.py"
++spec = importlib.util.spec_from_file_location("mha_recipes", source)
++recipes = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(recipes)
++
++# Kernel names emitted by CK 96afae1d for receipt 200 and target gfx1250.
++BF16_KERNEL = (
++    "fmha_fwd_d32_bf16_group_b64x64x32x32x32x64_r4x1x1_r4x1x1"
++    "_w16x16x32_w16x16x32_qr_tdm_vr_pssk_nlogits_nbias_nmask_nlse"
++    "_ndropout_nskip_nqscale_ntrload_kvlp_plk_sink_gfx125"
++)
++FP8BF16_KERNEL = (
++    "fmha_fwd_d128_fp8bf16_group_b64x128x128x128x128x128_r4x1x1_r4x1x1"
++    "_w16x16x128_w16x16x128_qr_tdm_vr_pssk_nlogits_nbias_nmask_nlse"
++    "_ndropout_nskip_nqscale_ntrload_nkvlp_nplk_nsink_gfx125"
++)
++
++
++class TestMhaRecipeDtypeSelection(unittest.TestCase):
++    def test_bf16_request_excludes_fp8_kernels(self):
++        _, pattern = recipes.compose_mha_fwd_variant_suffix_and_filter(
++            "bf16", False, False, False, False, False, True, True, True
++        )
++
++        self.assertTrue(fnmatch.fnmatchcase(BF16_KERNEL, pattern))
++        self.assertFalse(fnmatch.fnmatchcase(FP8BF16_KERNEL, pattern))
++
++    def test_fp8_request_keeps_fp8_kernels(self):
++        _, pattern = recipes.compose_mha_fwd_variant_suffix_and_filter(
++            "fp8bf16", False, False, False, False, False, True, True, True
++        )
++
++        self.assertTrue(fnmatch.fnmatchcase(FP8BF16_KERNEL, pattern))
++        self.assertFalse(fnmatch.fnmatchcase(BF16_KERNEL, pattern))
++
++
++if __name__ == "__main__":
++    unittest.main()

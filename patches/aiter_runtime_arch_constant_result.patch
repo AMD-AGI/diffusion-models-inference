@@ -1,0 +1,91 @@
+From e3194090cab8fbaa7eed4d4774707df1c296ad02 Mon Sep 17 00:00:00 2001
+From: Mikko Lauri <mikko.lauri@amd.com>
+Date: Tue, 10 Nov 2026 10:21:01 +0000
+Subject: [PATCH 1/2] test(jit): cover runtime architecture probing under
+ fullgraph
+
+---
+ op_tests/test_build_targets_architecture.py | 29 +++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/op_tests/test_build_targets_architecture.py b/op_tests/test_build_targets_architecture.py
+index 60ff62462f4..bacc3884adc 100644
+--- a/op_tests/test_build_targets_architecture.py
++++ b/op_tests/test_build_targets_architecture.py
+@@ -325,6 +325,35 @@ def setUp(self):
+     def tearDown(self):
+         self.chip_info.get_gfx_runtime.cache_clear()
+ 
++    def test_runtime_arch_fullgraph_with_cold_and_warm_caches(self):
++        if not self.torch.cuda.is_available():
++            self.skipTest("requires a live GPU for runtime architecture detection")
++
++        torch, chip_info = self.torch, self.chip_info
++
++        def dispatch(x):
++            arch = chip_info.get_gfx_runtime()
++            return x + (1 if arch == "gfx950" else -1), arch
++
++        for warm in (False, True):
++            with self.subTest(warm=warm):
++                torch._dynamo.reset()
++                for probe in (
++                    chip_info.get_gfx_runtime,
++                    chip_info._detect_native,
++                    chip_info._gpu_info_output,
++                ):
++                    probe.cache_clear()
++                    self.addCleanup(probe.cache_clear)
++                if warm:
++                    chip_info.get_gfx_runtime()
++                compiled = torch.compile(dispatch, backend="eager", fullgraph=True)
++                x = torch.ones(1, device="cpu")
++                out, arch = compiled(x)
++                expected, expected_arch = dispatch(x)
++                self.assertEqual(arch, expected_arch)
++                torch.testing.assert_close(out, expected, rtol=0, atol=0)
++
+     def test_native_detection_preserves_strict_identity(self):
+         # Regression lock: _detect_native must return the exact ROCr-reported
+         # identity, NOT fold gfx1250-strict (A0) to gfx1250. Folding here makes
+
+From e44363390c446cdbaa0696b2c7d3a1b27db5e356 Mon Sep 17 00:00:00 2001
+From: Mikko Lauri <mikko.lauri@amd.com>
+Date: Tue, 10 Nov 2026 10:29:27 +0000
+Subject: [PATCH 2/2] fix(jit): specialize runtime architecture detection
+ during tracing
+
+---
+ aiter/jit/utils/chip_info.py | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/aiter/jit/utils/chip_info.py b/aiter/jit/utils/chip_info.py
+index 6c57c86ba25..217301e743d 100644
+--- a/aiter/jit/utils/chip_info.py
++++ b/aiter/jit/utils/chip_info.py
+@@ -22,6 +22,15 @@
+ )
+ from torch_guard import torch_compile_guard
+ 
++# These utilities are also imported by build tools without PyTorch installed.
++try:
++    from torch.compiler import assume_constant_result
++except ImportError:
++
++    def assume_constant_result(fn):
++        return fn
++
++
+ logger = logging.getLogger("aiter")
+ 
+ IS_WINDOWS = sys.platform == "win32"
+@@ -120,7 +129,9 @@ def get_lds_capacity_bytes(gfx: str | None = None) -> int:
+         raise ValueError(f"Unknown LDS capacity for architecture {arch!r}") from exc
+ 
+ 
++# The live architecture is process-cached; specialize on it without tracing the probe.
+ @functools.lru_cache(maxsize=1)
++@assume_constant_result
+ def get_gfx_runtime() -> str:
+     """Return the live GPU arch, using Torch if Windows hipinfo is unavailable.
+ 

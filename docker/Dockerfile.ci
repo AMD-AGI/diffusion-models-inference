@@ -235,6 +235,8 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git reset --hard ${AITER_COMMIT} && \
     git apply /patches/aiter_mha_functional_varlen.patch && \
     git apply /patches/aiter_flydsl_attention_disable_compile.patch && \
+    git apply /patches/aiter_mha_bf16_kernel_filter.patch && \
+    git apply /patches/aiter_runtime_arch_constant_result.patch && \
     git submodule update --init --recursive && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
