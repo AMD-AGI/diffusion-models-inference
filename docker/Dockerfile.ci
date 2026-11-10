@@ -25,7 +25,6 @@ ARG TRITON_COMMIT="669b31acc1dd1b3fd93286afd5db67f65d9f7557"
 ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
 ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
 ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
-ARG PYTORCH_CODEC_COMMIT="dc0f10da1fa2c807dedb7ed97de7b36d762b968b"
 ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
 # deps image arguments
 ARG AITER_COMMIT="d4d80a02f4e2a9085603aadc4b6d2999075d0364"
@@ -101,8 +100,8 @@ RUN setup_origami_cmake
 
 # Shared checkout tooling for the torch stack. Each project is fetched and
 # built in its own stage so a downstream pin does not recompile Triton or
-# PyTorch. Vision, audio, and torchcodec depend on the PyTorch wheel and not
-# on each other, so BuildKit runs those three stages in parallel. core still
+# PyTorch. Vision and audio depend on the PyTorch wheel and not on each
+# other, so BuildKit runs those two stages in parallel. core still
 # installs /install/*.whl from build_torch_stack.
 FROM rocm_devel AS torch_build_base
 ARG THEROCK_COMMIT
@@ -289,62 +288,26 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
 
-# fetch torchcodec - TODO: after merging https://github.com/ROCm/TheRock/pull/2590 switch to using the functionality there
-FROM build_pytorch AS build_codec
-ARG PYTORCH_CODEC_COMMIT
-ARG PYTORCH_ROCM_ARCH
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update -qq && apt-get install -y --no-install-recommends pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-RUN git clone https://github.com/meta-pytorch/torchcodec.git pytorch_codec && \
-    cd pytorch_codec && \
-    git reset --hard ${PYTORCH_CODEC_COMMIT}
-# I_CONFIRM_THIS_IS_NOT_A_LICENSE_VIOLATION to link against ffmpeg built
-# without --enable-gpl or --enable-nonfree.
-COPY --from=ffmpeg_builder /ffmpeg/build /ffmpeg/build
-RUN mkdir -p /wheel && \
-    pip install --no-cache-dir pybind11 pybind11[global] && \
-    cd pytorch_codec && \
-    PKG_CONFIG_PATH=/ffmpeg/build/lib/pkgconfig \
-    I_CONFIRM_THIS_IS_NOT_A_LICENSE_VIOLATION=1 \
-    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" ENABLE_CUDA=0 TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR=1 \
-    python -m build --wheel -vvv --no-isolation -o dist && \
-    mv dist/*.whl /wheel && \
-    rm -rf build dist
-
-FROM build_codec AS evidence_codec
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /evidence/codec \
-    --scan-root codec=/app/TheRock/external-builds/pytorch/pytorch_codec \
-    --git-root /app/TheRock/external-builds/pytorch/pytorch_codec \
-    --fail-on-missing-git-license \
-    --required-git-depth 0
-
-# Triton and PyTorch wheels are already in /install. The three wheels below
+# Triton and PyTorch wheels are already in /install. The two wheels below
 # come from stages BuildKit schedules together. Each evidence stage scanned
 # only its own checkout; this stage imports those bundles.
 FROM build_pytorch AS build_torch_stack
 COPY --from=build_vision /wheel/ /install/
 COPY --from=build_audio /wheel/ /install/
-COPY --from=build_codec /wheel/ /install/
 COPY --from=evidence_triton /evidence/triton/ /evidence/triton/
 COPY --from=evidence_pytorch /evidence/pytorch/ /evidence/pytorch/
 COPY --from=evidence_vision /evidence/vision/ /evidence/vision/
 COPY --from=evidence_audio /evidence/audio/ /evidence/audio/
-COPY --from=evidence_codec /evidence/codec/ /evidence/codec/
 RUN pip install --no-cache-dir \
     /install/torchvision-*.whl \
-    /install/torchaudio-*.whl \
-    /install/torchcodec-*.whl
+    /install/torchaudio-*.whl
 COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /install/license-evidence \
     --evidence-root triton=/evidence/triton \
     --evidence-root pytorch=/evidence/pytorch \
     --evidence-root vision=/evidence/vision \
-    --evidence-root audio=/evidence/audio \
-    --evidence-root codec=/evidence/codec
+    --evidence-root audio=/evidence/audio
 
 # MORI provides the symmetric memory behind AITER's intranode attention A2A.
 # UMBP stays off: its control plane needs gRPC and protobuf. Without UMBP only
@@ -387,7 +350,7 @@ FROM rocm_devel AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
-# Runtime libs for torchcodec/FFmpeg, OpenBLAS-linked torch, and OpenCV/GLib.
+# Runtime libs for FFmpeg, OpenBLAS-linked torch, and OpenCV/GLib.
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
   libass9 \
