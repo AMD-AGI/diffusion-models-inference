@@ -174,6 +174,15 @@ def _parse_args():
         ),
     )
     parser.add_argument(
+        "--command-wrapper",
+        metavar="EXECUTABLE",
+        help=(
+            "Launch each benchmark subprocess through this executable. "
+            "Model downloads, cache cleanup, and result processing run outside the wrapper. "
+            "CI uses with-brr.sh here so GPU allocation covers only the benchmark."
+        ),
+    )
+    parser.add_argument(
         "--override-runner",
         type=str,
         required=False,
@@ -432,8 +441,12 @@ def _run_experiment(
     collect_hipblaslt_logs: bool = False,
     collect_miopen_driver_commands: bool = False,
     collect_memory_stats: bool = False,
+    command_wrapper: Optional[str] = None,
 ) -> bool:
     """Runs a single experiment."""
+
+    if command_wrapper:
+        cmd = [command_wrapper, *cmd]
 
     if dry_run:
         logger.info(f"[dry-run] Running command: {shlex.join([str(part) for part in cmd])}")
@@ -839,6 +852,7 @@ def main():
                 collect_hipblaslt_logs=args.collect_hipblaslt_logs,
                 collect_miopen_driver_commands=collect_miopen_driver_commands,
                 collect_memory_stats=collect_memory_stats,
+                command_wrapper=args.command_wrapper,
             )
             seconds = round(time.monotonic() - t0, 2)
             timing["experiments"].append({"name": exp.name, "seconds": seconds})

@@ -67,6 +67,15 @@ on:
         type: boolean
         required: false
         default: false
+      brr_priority:
+        description: 'brr scheduling priority for tuning and benchmarks'
+        type: choice
+        options:
+          - low
+          - normal
+          - high
+        required: false
+        default: low
       disable_brr:
         description: 'Disable brr'
         type: boolean
@@ -156,6 +165,11 @@ on:
         required: false
         type: boolean
         default: false
+      brr_priority:
+        description: 'brr scheduling priority: low, normal, or high (defaults to low)'
+        type: string
+        required: false
+        default: low
       disable_brr:
         description: 'Do not use brr, even when it is available'
         required: false
@@ -439,6 +453,7 @@ jobs:
           arch: ${{ matrix.arch }}
           artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
           force_retuning: ${{ inputs.force_retuning }}
+          brr_priority: ${{ inputs.brr_priority }}
           disable_brr: ${{ inputs.disable_brr }}
       
       - name: Run benchmarks
@@ -452,6 +467,7 @@ jobs:
           benchmark_only: ${{ !inputs.run_miopen_tuning }}
           collect_hipblaslt_logs: ${{ inputs.collect_hipblaslt_logs }}
           force_determinism_check: ${{ inputs.force_determinism_check }}
+          brr_priority: ${{ inputs.brr_priority }}
           disable_brr: ${{ inputs.disable_brr }}
           hf_token: ${{ secrets.HF_TOKEN }}
           hf_cache_map: ${{ vars.HF_CACHE_MAP }}

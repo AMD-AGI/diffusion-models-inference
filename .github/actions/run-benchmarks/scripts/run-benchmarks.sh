@@ -11,9 +11,9 @@ set -euo pipefail
 #   DISABLE_BRR, WITH_BRR, USE_XDIT_CONFIGS (optional, defaults to false)
 #
 # With brr the sweep is split into one container per experiment, run back to
-# back, so a GPU allocation is held for a single experiment instead of for the
-# whole sweep and other work can use the rest of the node meanwhile. Without
-# brr the sweep runs as one container, exactly as it always has.
+# back. run.py wraps only the benchmark subprocess, leaving model downloads and
+# result processing outside the GPU allocation. Without brr the sweep runs as
+# one container, exactly as it always has.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # The helper path is resolved relative to this action at runtime.
@@ -108,7 +108,7 @@ RESOLVE_GFX_TAG='
 
 # shellcheck disable=SC2016
 RUN_BENCHMARKS='
-    "$@" python3 /app/.ci/run.py $FLAGS \
+    python3 /app/.ci/run.py $FLAGS "$@" \
       --results-directory "$BENCHMARK_OUTPUT_DIR" \
       --csv-output-path "$BENCHMARK_OUTPUT_DIR/results.csv" \
       "${CONFIGS[@]}";
@@ -213,7 +213,7 @@ while IFS=$'\t' read -r NAME GPUS CLEAR_CACHE; do
   docker run "${DOCKER_ARGS[@]}" "${BRR_DOCKER_ARGS[@]}" \
     -e BENCHMARK_FLAGS="$EXPERIMENT_FLAGS" \
     "$DOCKER_IMAGE" \
-    bash -c "$RESOLVE_GFX_TAG$RUN_BENCHMARKS" -- "${BRR_CONTAINER_LAUNCH[@]}" || STATUS=$?
+    bash -c "$RESOLVE_GFX_TAG$RUN_BENCHMARKS" -- --command-wrapper "${BRR_CONTAINER_LAUNCH[0]}" || STATUS=$?
   echo "::endgroup::"
 
   if [ "$STATUS" -ne 0 ]; then
