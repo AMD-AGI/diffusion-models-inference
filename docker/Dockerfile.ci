@@ -13,10 +13,10 @@
 ARG BASE_IMAGE="ubuntu:24.04"
 # TheRock multi-arch wheel stack. Keep these versions on one ROCm build date.
 ARG THEROCK_WHEEL_INDEX="https://nightly.repo.amd.com/rocm/whl-next/"
-ARG ROCM_WHEEL_VERSION="10.3.0a20261104"
-ARG PYTORCH_WHEEL_VERSION="2.16.0a0+rocm10.3.0a20261104"
-ARG PYTORCH_VISION_WHEEL_VERSION="0.30.0a0+rocm10.3.0a20261104"
-ARG PYTORCH_AUDIO_WHEEL_VERSION="2.11.1+rocm10.3.0a20261104"
+ARG ROCM_WHEEL_VERSION="10.3.0a20261110"
+ARG PYTORCH_WHEEL_VERSION="2.14.0+rocm10.3.0a20261110"
+ARG PYTORCH_VISION_WHEEL_VERSION="0.29.0+rocm10.3.0a20261110"
+ARG PYTORCH_AUDIO_WHEEL_VERSION="2.11.0.3+rocm10.3.0a20261110"
 # ROCM_GFX_TARGETS selects TheRock device wheel extras and MORI architectures.
 ARG ROCM_GFX_TARGETS="gfx942;gfx950"
 ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
@@ -25,7 +25,7 @@ ARG AITER_COMMIT="97d2389d41238c287880c8e7794b37dda9f01994"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="405a46b3b52c69636067b3b419a3f2d060fa9702"
+ARG XDIT_COMMIT="fdd127e70f312bfcd10e47af1bc4d905268e5742"
 
 FROM ${BASE_IMAGE} AS base
 ARG DEBIAN_FRONTEND=noninteractive
@@ -285,6 +285,7 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
+    git apply /patches/xfuser_minimax_h3_offline_loading.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute ships in the rocm-profiler wheel. Preserve the existing
