@@ -78,15 +78,14 @@ newest `rocm` package.
 
 ### xDiT patches
 
-`Dockerfile.ci` applies these patches to its pinned xDiT checkout:
+`Dockerfile.ci` applies `xfuser_ltx25_disable_gc_during_inference.patch` to its
+pinned xDiT checkout. It disables cyclic garbage collection during LTX-2.5
+inference and profiling, restoring its prior state afterward. This behavior is
+still absent from the pinned upstream commit.
 
-- `xfuser_ltx25_disable_gc_during_inference.patch` disables cyclic garbage
-  collection during LTX-2.5 inference and profiling, restoring its prior state
-  afterward. This behavior is still absent from the pinned upstream commit.
-- `xfuser_minimax_h3_offline_loading.patch` vendors
-  [xDiT PR #955](https://github.com/xdit-project/xDiT/pull/955), including its CPU
-  regression tests, to support MiniMax-H3 component loading with
-  `HF_HUB_OFFLINE=1`. Remove it once the pinned commit includes that PR.
+MiniMax-H3 component loading with `HF_HUB_OFFLINE=1` is included upstream via
+[xDiT PR #955](https://github.com/xdit-project/xDiT/pull/955), so its downstream
+patch has been removed.
 
 The CUDA Dockerfile also uses `xfuser_runner_utils.patch` and
 `xfuser_flux.patch`; their changes are still absent from both xDiT pins. The
