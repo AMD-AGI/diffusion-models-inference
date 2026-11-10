@@ -8,6 +8,7 @@
 # Env vars:
 #   DISABLE_BRR      'true' to bypass brr even when it is installed.
 #   BRR_EXECUTABLE   Client path; defaults to brr on PATH.
+#   BRR_PRIORITY     low, normal, or high; unset or empty defaults to low.
 #   BRR_GPU_REQUEST  Number of GPUs to claim. Unset or empty claims the whole
 #                    node, which is the right request for a workload that
 #                    manages all GPUs itself.
@@ -49,6 +50,7 @@ prepare_brr_container() {
     -e BRR_EXECUTABLE=/opt/ci-brr/brr
     -e DISABLE_BRR=false
     -e BRR_GPU_REQUEST
+    -e "BRR_PRIORITY=${BRR_PRIORITY:-low}"
   )
   # Installed clients are self-contained zipapps; source-tree launchers also
   # need their adjacent brrlib package.
@@ -73,6 +75,14 @@ fi
 if [ "${DISABLE_BRR:-false}" != "true" ]; then
   BRR_EXECUTABLE=${BRR_EXECUTABLE:-brr}
   if command -v "$BRR_EXECUTABLE" >/dev/null 2>&1; then
+    BRR_PRIORITY=${BRR_PRIORITY:-low}
+    case "$BRR_PRIORITY" in
+      low|normal|high) ;;
+      *)
+        echo "BRR_PRIORITY must be low, normal, or high: $BRR_PRIORITY" >&2
+        exit 2
+        ;;
+    esac
     if [ -n "${BRR_GPU_REQUEST:-}" ]; then
       if [[ ! "$BRR_GPU_REQUEST" =~ ^[1-9][0-9]*$ ]]; then
         echo "BRR_GPU_REQUEST must be a positive integer: $BRR_GPU_REQUEST" >&2
@@ -80,10 +90,10 @@ if [ "${DISABLE_BRR:-false}" != "true" ]; then
       fi
       BRR_GPU_LIST=$(seq -s, 0 "$((BRR_GPU_REQUEST - 1))")
       echo "brr is available; requesting GPU(s) $BRR_GPU_LIST, exclusive use, before running the workload" >&2
-      exec "$BRR_EXECUTABLE" run --gpu-list "$BRR_GPU_LIST" --exclusive --grace 0 -- "$@"
+      exec "$BRR_EXECUTABLE" run --gpu-list "$BRR_GPU_LIST" --exclusive --grace 0 --priority "$BRR_PRIORITY" -- "$@"
     fi
     echo "brr is available; requesting resources (full node, exclusive use) before running the workload" >&2
-    exec "$BRR_EXECUTABLE" run --node --grace 0 -- "$@"
+    exec "$BRR_EXECUTABLE" run --node --grace 0 --priority "$BRR_PRIORITY" -- "$@"
   fi
   if [ "$BRR_EXECUTABLE" != "brr" ]; then
     echo "Configured brr client is unavailable: $BRR_EXECUTABLE" >&2

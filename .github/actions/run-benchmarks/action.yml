@@ -31,6 +31,10 @@ inputs:
     description: 'Force xFuser determinism checks for every benchmark and emit determinism_report.json (adds runtime overhead).'
     required: false
     default: 'false'
+  brr_priority:
+    description: 'brr scheduling priority: low, normal, or high (defaults to low)'
+    required: false
+    default: 'low'
   disable_brr:
     description: 'Disable brr'
     required: false
@@ -87,6 +91,7 @@ runs:
         COLLECT_HIPBLASLT_LOGS: ${{ inputs.collect_hipblaslt_logs }}
         FORCE_DETERMINISM_CHECK: ${{ inputs.force_determinism_check }}
         DISABLE_BRR: ${{ inputs.disable_brr }}
+        BRR_PRIORITY: ${{ inputs.brr_priority }}
         WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
       run: ${{ github.action_path }}/scripts/run-benchmarks.sh
     

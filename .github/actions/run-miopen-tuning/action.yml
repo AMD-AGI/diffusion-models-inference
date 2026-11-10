@@ -18,6 +18,10 @@ inputs:
     description: 'Force full retuning (delete existing tuning databases before tuning)'
     required: false
     default: 'false'
+  brr_priority:
+    description: 'brr scheduling priority: low, normal, or high (defaults to low)'
+    required: false
+    default: 'low'
   disable_brr:
     description: 'Disable brr'
     required: false
@@ -33,6 +37,7 @@ runs:
         FORCE_RETUNING: ${{ inputs.force_retuning }}
         DOCKER_IMAGE: ${{ inputs.image }}
         DISABLE_BRR: ${{ inputs.disable_brr }}
+        BRR_PRIORITY: ${{ inputs.brr_priority }}
         WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
       run: ${{ github.action_path }}/scripts/run-tuning.sh
     
