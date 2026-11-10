@@ -574,11 +574,16 @@ jobs:
           cache_scope: ${{ inputs.cache_scope }}
           export: 'false'
 
+      # Pushed to a candidate in the private cache repository; the Trivy
+      # scan step below promotes it to IMAGE_TAG after it passes.
       - name: Build final tuned image
+        id: build
         env:
           BUILDKIT_PROGRESS: plain
           WORKING_IMAGE: ${{ steps.metadata.outputs.working_image }}
           IMAGE_TAG: ${{ steps.metadata.outputs.staging_image_with_tag }}
+          CANDIDATE_REPO: ${{ env.BUILDCACHE_IMAGE }}
+          CANDIDATE_TAG: cand-${{ github.run_id }}-${{ github.run_attempt }}-final
           DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
           CACHE_FROM_FLAGS: ${{ steps.final_cache.outputs.cache_from_flags }}
         run: |
@@ -592,14 +597,31 @@ jobs:
             BUILD_ARGS+=(--build-arg "${build_arg}")
           done <<< "${DOCKER_BUILD_ARGS}"
 
+          CANDIDATE_IMAGE="${CANDIDATE_REPO}:${CANDIDATE_TAG}-${IMAGE_TAG##*:}"
+
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
             -f docker/Dockerfile.ci \
             ${CACHE_FROM_FLAGS} \
             "${BUILD_ARGS[@]}" \
-            -t "${IMAGE_TAG}" \
+            --metadata-file "${RUNNER_TEMP}/final-build-metadata.json" \
+            -t "${CANDIDATE_IMAGE}" \
             --push \
             .
+
+          DIGEST=$(jq -er '."containerimage.digest"' "${RUNNER_TEMP}/final-build-metadata.json")
+          TARGETS=$(jq -cn --arg source "${CANDIDATE_REPO}@${DIGEST}" --arg dest "${IMAGE_TAG}" \
+            '[{name: "final tuned image", source: $source, image_scan: true, promote: [$dest]}]')
+          # Kept in a file: GitHub drops job outputs that contain the Docker
+          # Hub organization, which is stored as a secret.
+          mkdir -p "${RUNNER_TEMP}/secret-scan-targets"
+          printf '%s\n' "${TARGETS}" > "${RUNNER_TEMP}/secret-scan-targets/targets.json"
+
+      - name: Trivy scan and promote
+        uses: ./.github/actions/secret-scan
+        with:
+          targets_file: ${{ runner.temp }}/secret-scan-targets/targets.json
+          scan_id: final
       
       - name: Cleanup
         if: always()

@@ -4,8 +4,9 @@
 
 set -euo pipefail
 
-# Clean orphaned core registry-cache tags. The registry cache is deliberately
-# managed independently from local BuildKit cache.
+# Clean orphaned core registry-cache tags and stale secret-scan candidate tags
+# (cand-*). The registry cache is deliberately managed independently from local
+# BuildKit cache. Other tags, such as nv-buildcache*, are never touched.
 
 : "${CACHE_IMAGE_NAME:?CACHE_IMAGE_NAME is required}"
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
@@ -158,7 +159,9 @@ while IFS= read -r tag_record; do
   tag_name=$(jq -r '.name // empty' <<< "$tag_record")
   last_updated=$(jq -r '.last_updated // empty' <<< "$tag_record")
 
-  [[ "$tag_name" == core-* ]] || continue
+  # Candidates are only needed until their secret-scan job passes or is
+  # rerun, so every cand-* tag older than the grace period is removable.
+  [[ "$tag_name" == core-* || "$tag_name" == cand-* ]] || continue
   [[ -n "${protected_tags[$tag_name]+x}" ]] && continue
 
   orphan_count=$((orphan_count + 1))
@@ -202,7 +205,7 @@ while IFS= read -r tag_record; do
 done < "$tags_file"
 
 {
-  echo "### Core registry-cache cleanup"
+  echo "### Core registry-cache and secret-scan candidate cleanup"
   echo
   echo "- Mode: \`${DRY_RUN}\`"
   echo "- Repository: \`${CACHE_IMAGE_NAME}\`"
