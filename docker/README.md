@@ -63,10 +63,10 @@ docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 
 # Override with another coherent wheel stack
 docker build -f docker/Dockerfile.ci --target final \
-    --build-arg ROCM_WHEEL_VERSION=10.3.0a20261104 \
-    --build-arg PYTORCH_WHEEL_VERSION=2.16.0a0+rocm10.3.0a20261104 \
-    --build-arg PYTORCH_VISION_WHEEL_VERSION=0.30.0a0+rocm10.3.0a20261104 \
-    --build-arg PYTORCH_AUDIO_WHEEL_VERSION=2.11.1+rocm10.3.0a20261104 \
+    --build-arg ROCM_WHEEL_VERSION=10.3.0a20261110 \
+    --build-arg PYTORCH_WHEEL_VERSION=2.14.0+rocm10.3.0a20261110 \
+    --build-arg PYTORCH_VISION_WHEEL_VERSION=0.29.0+rocm10.3.0a20261110 \
+    --build-arg PYTORCH_AUDIO_WHEEL_VERSION=2.11.0.3+rocm10.3.0a20261110 \
     -t pytorch-xdit-wheels .
 ```
 
@@ -75,6 +75,22 @@ line, then its newest complete Python 3.12 Linux stack, and passes all four
 version arguments. ROCm can publish ahead of PyTorch; the workflow therefore
 follows PyTorch's exact ROCm dependency instead of independently choosing the
 newest `rocm` package.
+
+### xDiT patches
+
+`Dockerfile.ci` applies these patches to its pinned xDiT checkout:
+
+- `xfuser_ltx25_disable_gc_during_inference.patch` disables cyclic garbage
+  collection during LTX-2.5 inference and profiling, restoring its prior state
+  afterward. This behavior is still absent from the pinned upstream commit.
+- `xfuser_minimax_h3_offline_loading.patch` vendors
+  [xDiT PR #955](https://github.com/xdit-project/xDiT/pull/955), including its CPU
+  regression tests, to support MiniMax-H3 component loading with
+  `HF_HUB_OFFLINE=1`. Remove it once the pinned commit includes that PR.
+
+The CUDA Dockerfile also uses `xfuser_runner_utils.patch` and
+`xfuser_flux.patch`; their changes are still absent from both xDiT pins. The
+Flux patch uses context that applies to both commits.
 
 ### amd-smi Python bindings
 
