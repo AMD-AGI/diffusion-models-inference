@@ -289,9 +289,11 @@ def _download_model(model: str, revision: Optional[str] = None, dry_run: bool = 
     Attempts to download a model from HuggingFace Hub. Skips download if already cached.
     """
     logger.info(f"Downloading model: {model}")
+    previous_umask = os.umask(0o022)
     try:
         cache_dir_or_dry_run_info = snapshot_download(repo_id=model, revision=revision, dry_run=dry_run)
     finally:
+        os.umask(previous_umask)
         # tqdm progress bars from huggingface_hub leave the cursor on a partially
         # written stderr line (no trailing '\n'), which causes the next log
         # record to render on the same line. Flush a newline so subsequent
