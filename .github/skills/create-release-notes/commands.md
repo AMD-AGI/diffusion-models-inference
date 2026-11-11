@@ -78,7 +78,6 @@ gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
 | PYTORCH_COMMIT | pytorch/pytorch |
 | PYTORCH_VISION_COMMIT | pytorch/vision |
 | PYTORCH_AUDIO_COMMIT | pytorch/audio |
-| PYTORCH_CODEC_COMMIT | meta-pytorch/torchcodec |
 | AITER_COMMIT | ROCm/aiter |
 | LONGCONTEXTATTENTION_COMMIT | feifeibear/long-context-attention |
 | DIFFUSERS_COMMIT | huggingface/diffusers |

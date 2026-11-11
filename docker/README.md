@@ -58,8 +58,8 @@ archives those packages install.
 
 `amdrocm-developer-tools` pulls the profiler, emulator, and debugger. It does
 not depend on `amdrocm-core`. `torch_build_base` fetches TheRock.
-`build_triton` and `build_pytorch` compile in series, then `build_vision`,
-`build_audio`, and `build_codec` compile in parallel. `build_torch_stack`
+`build_triton` and `build_pytorch` compile in series, then `build_vision`
+and `build_audio` compile in parallel. `build_torch_stack`
 gathers those wheels. `core` installs the wheels built by `build_torch_stack`.
 `build_mori` builds the MORI wheel from `rocm_devel` without UMBP, and `core`
 installs it after AITER; MORI provides the symmetric memory behind AITER's
