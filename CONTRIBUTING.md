@@ -17,7 +17,7 @@ according to the [security policy](SECURITY.md), not through a public issue.
 | `src/` | Python tools — `distrituner`, `miopen_convolution`, `sweep_tooling` |
 | `data/` | MIOpen and hipBLASLt tuning databases and workload definitions |
 | `patches/` | Patches applied to upstream projects (xFuser, Dynamo, etc.) |
-| `.ci/` | CI benchmark runner scripts and quality checks |
+| `.ci/` | CI benchmark runner scripts and validation tools |
 | `integrations/` | External integration tooling (e.g. MAD) |
 | `assets/` | Documentation and reference data |
 
@@ -174,8 +174,7 @@ and benchmark runs on supported hardware. The release path from staging to the p
 
 1. Add a benchmark YAML config to `benchmark_configs/<runner>/`
 2. Add MIOpen workload definitions to `data/miopen/workloads/` if applicable
-3. Add reference outputs for quality validation
-4. Update CI scripts in `.ci/` if the new workload needs to be included in automated runs
+3. Update CI scripts in `.ci/` if the new workload needs to be included in automated runs
 
 ### Adding or updating tuning data
 

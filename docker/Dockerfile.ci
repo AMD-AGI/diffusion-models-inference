@@ -32,7 +32,6 @@ ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
 ARG XDIT_COMMIT="1a40661fffd215b08c0e9a3ff934c37f152f9052"
-ARG ARBITER_COMMIT="252b0301d072f9d6ea895e32f6898fed951cf295"
 
 FROM ${BASE_IMAGE} AS base
 ARG DEBIAN_FRONTEND=noninteractive
@@ -404,7 +403,6 @@ ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
-ARG ARBITER_COMMIT
 
 # setup
 WORKDIR /app/external
@@ -428,23 +426,6 @@ RUN git clone https://github.com/huggingface/diffusers.git && \
     pip install --no-cache-dir "ftfy"
 # install torchao
 RUN pip install --no-cache-dir "torchao==0.18.0"
-# install arbiter
-RUN git clone https://github.com/fal-ai/arbiter.git && \
-    cd arbiter && \
-    git reset --hard ${ARBITER_COMMIT} && \
-    # too strict torch version, drop dependency
-    sed -i '/numpy/d' pyproject.toml && \
-    # the requested pyiqa version depends on transformers==4.37.2 which we cannot use
-    sed -i '/pyiqa/d' pyproject.toml && \
-    # numba dependency is not used
-    sed -i '/numba/d' pyproject.toml && \
-    # facexlib is not used
-    sed -i '/facexlib/d' pyproject.toml && \
-    # drop llvmlite
-    sed -i '/llvmlite/d' pyproject.toml && \
-    # to be sure, pin numpy and transformers to their current versions
-    pip freeze | grep -E 'numpy|transformers' > constraints.txt && \
-    pip install --no-cache-dir -c constraints.txt -e .
 # install distvae
 RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
@@ -495,7 +476,6 @@ RUN if [ -d /app/xDiT/.ci/configs ]; then \
       cp -a /app/xDiT/.ci/configs /app/.ci/benchmark_configs_xdit; \
     fi
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
-COPY .ci/quality_check.py /app/.ci/quality_check.py
 # use shared MIOpen databases
 COPY ./data/miopen/userdb /miopen_userdb
 ENV MIOPEN_USER_DB_PATH="/miopen_userdb"

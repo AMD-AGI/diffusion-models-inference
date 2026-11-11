@@ -185,7 +185,6 @@ COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY .ci/determinism_report.py /app/.ci/determinism_report.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
 COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
-COPY .ci/quality_check.py /app/.ci/quality_check.py
 
 # Generate third-party license evidence from the final filesystem, retaining
 # source evidence for the LGPL-only ffmpeg build stage.
