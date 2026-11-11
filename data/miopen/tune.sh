@@ -73,7 +73,7 @@ if ! python miopen_tuner.py "$ROOTDIR/drivercmd_filtered.txt" \
     exit 1
 fi
 
-# concatenate results
+# merge results by convolution key
 tuningdirs=("$WORKDIR"/tuning/device*/)
 
 if [ ! -d "${tuningdirs[0]}" ]; then
@@ -84,11 +84,40 @@ fi
 filename=$(basename "$(find "${tuningdirs[0]}" -type f -name "*.udb.txt" | head -n 1)")
 filename="${filename%.*.*}"
 
-echo "Concatenating results with existing databases $filename"
-cat "$WORKDIR"/tuning/device*/"$filename".udb.txt >> "$MIOPEN_USER_DB_PATH/$filename.udb.txt"
-sort -u "$MIOPEN_USER_DB_PATH/$filename.udb.txt" -o "$MIOPEN_USER_DB_PATH/$filename.udb.txt"
-cat "$WORKDIR"/tuning/device*/"$filename".ufdb.txt >> "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt"
-sort -u "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt" -o "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt"
+echo "Merging tuned results with existing databases $filename"
+if ! python - "$MIOPEN_USER_DB_PATH" "$WORKDIR/tuning" "$filename" <<'PYTHON'
+import sys
+from pathlib import Path
+
+userdb_dir, tuning_dir = map(Path, sys.argv[1:3])
+filename = sys.argv[3]
+for suffix in ("udb.txt", "ufdb.txt"):
+    destination = userdb_dir / f"{filename}.{suffix}"
+    tuned_files = sorted(tuning_dir.glob(f"device*/{filename}.{suffix}"))
+    if not tuned_files:
+        raise RuntimeError(f"No tuned database files found for {filename}.{suffix}")
+
+    # Existing records are read first. New records replace the complete payload
+    # for their key; the last device file in sorted order wins if devices overlap.
+    records = {}
+    sources = ([destination] if destination.exists() else []) + tuned_files
+    for source in sources:
+        for line in source.read_text().splitlines():
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            key, separator, value = line.partition("=")
+            if not separator or not key or not value:
+                raise ValueError(f"Malformed database record in {source}: {line}")
+            records[key] = value
+
+    temporary = destination.with_name(destination.name + ".tmp")
+    temporary.write_text("".join(f"{key}={records[key]}\n" for key in sorted(records)))
+    temporary.replace(destination)
+PYTHON
+then
+    echo "MIOpen database merge failed"
+    exit 1
+fi
 
 # signal success to the host
 touch "$ROOTDIR/.tuning_successful"
