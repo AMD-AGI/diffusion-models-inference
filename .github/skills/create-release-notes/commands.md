@@ -83,7 +83,6 @@ gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
 | DIFFUSERS_COMMIT | huggingface/diffusers |
 | DISTVAE_COMMIT | xdit-project/DistVAE |
 | XDIT_COMMIT | xdit-project/xDiT |
-| ARBITER_COMMIT | fal-ai/arbiter |
 
 ## Release notes template
 
