@@ -49,6 +49,7 @@ docker run \
   -e GITHUB_WORKSPACE \
   "$DOCKER_IMAGE" \
   bash -c '
+    umask 000
     "$@" bash "$ROOTDIR/data/miopen/tune.sh";
     STATUS=$?
     source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh";

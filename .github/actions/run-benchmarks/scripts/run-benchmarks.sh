@@ -108,6 +108,7 @@ RESOLVE_GFX_TAG='
 
 # shellcheck disable=SC2016
 RUN_BENCHMARKS='
+    umask 000
     python3 /app/.ci/run.py $FLAGS "$@" \
       --results-directory "$BENCHMARK_OUTPUT_DIR" \
       --csv-output-path "$BENCHMARK_OUTPUT_DIR/results.csv" \
