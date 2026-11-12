@@ -22,7 +22,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux_kontext.default.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [hopper, h100, h200]
   model: black-forest-labs/FLUX.1-Kontext-dev
   runner: xdit
   args:
@@ -42,7 +42,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux_kontext.default.blackwell
-  tags: [lucid, blackwell, b200, b300]
+  tags: [blackwell, b200, b300]
   model: black-forest-labs/FLUX.1-Kontext-dev
   runner: xdit
   args:
