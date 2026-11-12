@@ -63,10 +63,10 @@ docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 
 # Override with another coherent wheel stack
 docker build -f docker/Dockerfile.ci --target final \
-    --build-arg ROCM_WHEEL_VERSION=10.3.0a20261110 \
-    --build-arg PYTORCH_WHEEL_VERSION=2.14.0+rocm10.3.0a20261110 \
-    --build-arg PYTORCH_VISION_WHEEL_VERSION=0.29.0+rocm10.3.0a20261110 \
-    --build-arg PYTORCH_AUDIO_WHEEL_VERSION=2.11.0.3+rocm10.3.0a20261110 \
+    --build-arg ROCM_WHEEL_VERSION=10.3.0a20261111 \
+    --build-arg PYTORCH_WHEEL_VERSION=2.14.0+rocm10.3.0a20261111 \
+    --build-arg PYTORCH_VISION_WHEEL_VERSION=0.29.0+rocm10.3.0a20261111 \
+    --build-arg PYTORCH_AUDIO_WHEEL_VERSION=2.11.0.3+rocm10.3.0a20261111 \
     -t pytorch-xdit-wheels .
 ```
 
