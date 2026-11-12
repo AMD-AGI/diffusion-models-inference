@@ -28,6 +28,9 @@ fi
 if [ "$FORCE_RETUNING" = "true" ]; then
   args+=(--force-retuning)
 fi
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  args+=(--github-annotations)
+fi
 if [ -n "${MIOPEN_TUNING_DEVICES:-}" ]; then
   args+=(--devices "$MIOPEN_TUNING_DEVICES")
 fi
