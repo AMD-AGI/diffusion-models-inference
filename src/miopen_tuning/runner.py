@@ -1,0 +1,194 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Run MIOpen tuning from workload files to a validated user DB."""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .databases import FIND_SUFFIX, PERF_SUFFIX, DatabaseIdentity, diff_pairs, load_pair, merge_pairs, validate_pair
+from .executor import TuningTask, device_ids, execute_tasks
+from .identity import Identity, collect_identity
+from .planner import build_plan, tuning_commands
+from .workloads import load_workloads
+
+
+@dataclass(frozen=True)
+class RunOptions:
+    output_dir: Path
+    workloads: list[Path]
+    db_dir: Path
+    prefix_map: Path
+    miopendriver: str | None = None
+    identity_path: Path | None = None
+    devices: str | None = None
+    force_retuning: bool = False
+    install_db: bool = False
+    find_mode: str = "1"
+    find_enforce: str = "3"
+    debug_conv_direct: str | None = None
+    log_profile: str = "standard"
+    timeout: int = 7200
+    image: str = ""
+    image_digest: str = ""
+
+
+def _write_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+
+
+def _identity(options: RunOptions) -> dict[str, Any]:
+    if options.identity_path:
+        return json.loads(options.identity_path.read_text())
+    return collect_identity(
+        driver=options.miopendriver,
+        prefix_map_path=options.prefix_map,
+        image=options.image,
+        image_digest=options.image_digest,
+    ).to_dict()
+
+
+def _copy_pair(source: Path, destination: Path, identity: DatabaseIdentity) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    for suffix in (FIND_SUFFIX, PERF_SUFFIX):
+        path = identity.path(source, suffix)
+        if path.is_file():
+            shutil.copy2(path, identity.path(destination, suffix))
+
+
+def _missing_after_tuning(results: list[Any], merged: Path, identity: DatabaseIdentity) -> list[dict[str, Any]]:
+    pair = load_pair(merged, identity)
+    find_records = pair[FIND_SUFFIX].records if pair[FIND_SUFFIX] else {}
+    perf_records = pair[PERF_SUFFIX].records if pair[PERF_SUFFIX] else {}
+    missing = []
+    for result in results:
+        if not result.succeeded:
+            continue
+        absent = []
+        if result.task.problem["find_db_key"] not in find_records:
+            absent.append("find DB record")
+        if result.task.problem["perf_db_key"] not in perf_records:
+            absent.append("performance DB record")
+        if absent:
+            missing.append({"command_id": result.task.command_id, "missing": absent})
+    return missing
+
+
+def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
+    options.output_dir.mkdir(parents=True, exist_ok=True)
+    identity_values = _identity(options)
+    _write_json(options.output_dir / "identity.json", identity_values)
+    identity = DatabaseIdentity(
+        identity_values["db_prefix"], identity_values["miopen_version"], identity_values["miopen_build"]
+    )
+    errors: list[str] = []
+
+    workloads = load_workloads(options.workloads, Path.cwd())
+    base_db = options.db_dir
+    planning_db = options.output_dir / "db" / "empty" if options.force_retuning else base_db
+    planning_db.mkdir(parents=True, exist_ok=True)
+    plan = build_plan(workloads, planning_db, identity)
+    _write_json(options.output_dir / "plan.json", plan)
+    (options.output_dir / "commands.txt").write_text("".join(f"{command}\n" for command in tuning_commands(plan)))
+    if plan["counts"]["reject"]:
+        errors.append(f"{plan['counts']['reject']} workload commands were rejected")
+
+    results = []
+    if not errors and plan["counts"]["tune"]:
+        driver = identity_values.get("driver_path") or options.miopendriver
+        if not driver:
+            raise ValueError("MIOpenDriver path is required")
+        environment = {
+            "MIOPEN_FIND_MODE": options.find_mode,
+            "MIOPEN_FIND_ENFORCE": options.find_enforce,
+        }
+        if options.debug_conv_direct not in (None, ""):
+            environment["MIOPEN_DEBUG_CONV_DIRECT"] = options.debug_conv_direct
+        tasks = [
+            TuningTask(entry["command_id"], entry["command"], entry)
+            for entry in plan["entries"]
+            if entry["action"] == "tune"
+        ]
+        results = execute_tasks(
+            tasks,
+            devices=device_ids(options.devices or os.environ.get("HIP_VISIBLE_DEVICES", "0")),
+            driver=driver,
+            run_directory=options.output_dir,
+            environment=environment,
+            log_profile=options.log_profile,
+            timeout=options.timeout,
+        )
+    failed = [result for result in results if not result.succeeded]
+    if failed:
+        errors.append(f"{len(failed)} MIOpen tuning commands failed")
+
+    db_base = options.output_dir / "db" / "base"
+    merged = options.output_dir / "db" / "merged"
+    if not options.force_retuning:
+        _copy_pair(base_db, db_base, identity)
+    tuned_dirs = sorted(path for path in (options.output_dir / "db" / "tuned").glob("device-*") if path.is_dir())
+    if results:
+        db_diff = merge_pairs(None if options.force_retuning else db_base, tuned_dirs, merged, identity)
+    else:
+        _copy_pair(db_base, merged, identity)
+        db_diff = diff_pairs(db_base, merged, identity)
+    validation = validate_pair(merged, identity, require_files=bool(results) or not options.force_retuning)
+    if not validation["valid"]:
+        errors.append("Merged MIOpen DB is invalid")
+    missing = _missing_after_tuning(results, merged, identity)
+    if missing:
+        errors.append(f"{len(missing)} successful tuning commands are missing DB records")
+    if options.install_db and not errors:
+        _copy_pair(merged, options.db_dir, identity)
+
+    tuning_results = [
+        {
+            "command_id": result.task.command_id,
+            "command": result.task.command,
+            "sources": result.task.problem["sources"],
+            "device_id": result.device_id,
+            "exit_code": result.process.exit_code,
+            "timed_out": result.process.timed_out,
+            "succeeded": result.succeeded,
+            "duration_ms": round(result.process.duration_ms, 3),
+            "log_dir": str(result.process.log_dir.relative_to(options.output_dir)),
+            "selected_solver": result.process.summary.get("selected_solver"),
+        }
+        for result in results
+    ]
+    report = {
+        "schema_version": 1,
+        "status": "failed" if errors else "passed",
+        "errors": errors,
+        "identity": identity_values,
+        "db_identity": identity.__dict__,
+        "workloads": plan["workloads"],
+        "plan": plan,
+        "tuning": {
+            "succeeded": sum(entry["succeeded"] for entry in tuning_results),
+            "failed": sum(not entry["succeeded"] for entry in tuning_results),
+            "results": tuning_results,
+        },
+        "db": {
+            "base": str(db_base),
+            "merged": str(merged),
+            "files": [str(identity.path(merged, suffix)) for suffix in (FIND_SUFFIX, PERF_SUFFIX)],
+            "diff": db_diff,
+            "validation": validation,
+            "missing_after_tuning": missing,
+            "installed": options.install_db and not errors,
+        },
+    }
+    _write_json(options.output_dir / "report.json", report)
+    return (1 if errors else 0), report
+
+
+def identity_from_dict(values: dict[str, Any]) -> Identity:
+    return Identity(**values)

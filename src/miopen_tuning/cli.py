@@ -13,6 +13,7 @@ from typing import Any
 from .databases import DatabaseError, DatabaseIdentity, diff_pairs, merge_pairs, validate_pair
 from .identity import collect_identity
 from .planner import build_plan, tuning_commands
+from .runner import RunOptions, run_tuning
 from .workloads import load_workloads
 
 
@@ -109,6 +110,43 @@ def _db_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run(args: argparse.Namespace) -> int:
+    exit_code, report = run_tuning(
+        RunOptions(
+            output_dir=args.output_dir,
+            workloads=args.workloads,
+            db_dir=args.db_dir,
+            prefix_map=args.prefix_map,
+            miopendriver=args.miopendriver,
+            identity_path=args.identity,
+            devices=args.devices,
+            force_retuning=args.force_retuning,
+            install_db=args.install_db,
+            find_mode=args.find_mode,
+            find_enforce=args.find_enforce,
+            debug_conv_direct=args.debug_conv_direct,
+            log_profile=args.log_profile,
+            timeout=args.timeout,
+            image=args.image,
+            image_digest=args.image_digest,
+        )
+    )
+    print(
+        json.dumps(
+            {
+                "status": report["status"],
+                "plan": report["plan"]["counts"],
+                "tuning": {key: report["tuning"][key] for key in ("succeeded", "failed")},
+                "report": str(args.output_dir / "report.json"),
+            },
+            sort_keys=True,
+        )
+    )
+    for error in report["errors"]:
+        print(f"error: {error}")
+    return exit_code
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m miopen_tuning")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -161,6 +199,25 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--output", type=Path)
     _add_identity_arguments(diff)
     diff.set_defaults(handler=_db_diff)
+
+    run = commands.add_parser("run", help="Plan, tune, merge, validate, and report")
+    run.add_argument("--output-dir", type=Path, required=True)
+    run.add_argument("--workloads", nargs="+", type=Path, default=[Path("data/miopen/workloads")])
+    run.add_argument("--db-dir", type=Path, default=Path("data/miopen/userdb"))
+    run.add_argument("--prefix-map", type=Path, default=Path("data/miopen/prefixes.txt"))
+    run.add_argument("--identity", type=Path)
+    run.add_argument("--miopendriver")
+    run.add_argument("--devices")
+    run.add_argument("--force-retuning", action="store_true")
+    run.add_argument("--install-db", action="store_true")
+    run.add_argument("--find-mode", default="1")
+    run.add_argument("--find-enforce", default="3")
+    run.add_argument("--debug-conv-direct", default=None)
+    run.add_argument("--log-profile", choices=["off", "standard", "diagnostic"], default="standard")
+    run.add_argument("--timeout", type=int, default=7200)
+    run.add_argument("--image", default="")
+    run.add_argument("--image-digest", default="")
+    run.set_defaults(handler=_run)
     return parser
 
 
