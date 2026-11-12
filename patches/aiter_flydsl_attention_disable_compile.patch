@@ -1,8 +1,7 @@
 diff --git a/aiter/ops/flydsl/fmha_kernels.py b/aiter/ops/flydsl/fmha_kernels.py
-index fe060fd..c43497e 100644
 --- a/aiter/ops/flydsl/fmha_kernels.py
 +++ b/aiter/ops/flydsl/fmha_kernels.py
-@@ -656,6 +656,8 @@ def _fp8_gfx950_supported(
+@@ -662,6 +662,8 @@
      )
  
  
@@ -11,8 +10,8 @@ index fe060fd..c43497e 100644
  def flydsl_flash_attn_varlen_fwd(
      q: torch.Tensor,
      k: torch.Tensor,
-@@ -807,6 +809,8 @@ def flydsl_flash_attn_varlen_fwd(
-     return None
+@@ -971,6 +973,8 @@
+     )
  
  
 +# Keep host-side FlyDSL/MLIR construction outside Dynamo so its context survives.
@@ -21,10 +20,9 @@ index fe060fd..c43497e 100644
      q: torch.Tensor,
      k: torch.Tensor,
 diff --git a/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a16w16_m32x8.py b/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a16w16_m32x8.py
-index b167562..0b0b353 100644
 --- a/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a16w16_m32x8.py
 +++ b/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a16w16_m32x8.py
-@@ -2900,6 +2900,8 @@ def flash_attn_a16w16_m32x8_supported(
+@@ -3364,6 +3364,8 @@
      )
  
  
@@ -33,7 +31,7 @@ index b167562..0b0b353 100644
  def flash_attn_varlen_m32x8(
      q: torch.Tensor,
      k: torch.Tensor,
-@@ -3071,6 +3073,8 @@ def flash_attn_varlen_m32x8(
+@@ -3742,6 +3744,8 @@
      return out
  
  
@@ -43,10 +41,9 @@ index b167562..0b0b353 100644
      q: torch.Tensor,
      k: torch.Tensor,
 diff --git a/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a8w8_m32x8.py b/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a8w8_m32x8.py
-index a33ae7e..bb48006 100644
 --- a/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a8w8_m32x8.py
 +++ b/aiter/ops/flydsl/kernels/fmha_gfx1250/fmha_fwd_prefill_a8w8_m32x8.py
-@@ -3060,6 +3060,8 @@ def flash_attn_a8w8_m32x8_supported(
+@@ -3468,6 +3468,8 @@
      )
  
  
@@ -55,7 +52,7 @@ index a33ae7e..bb48006 100644
  def flash_attn_varlen_a8w8_m32x8(
      q: torch.Tensor,
      k: torch.Tensor,
-@@ -3260,6 +3262,8 @@ def flash_attn_varlen_a8w8_m32x8(
+@@ -3902,6 +3904,8 @@
      return out
  
  
