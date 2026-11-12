@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: flux.usp
-  tags: [release, mad, lucid, instinct, gfx942, gfx950, nightly]
+  tags: [release, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -21,7 +21,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux.usp.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [hopper, h100, h200]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -40,7 +40,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux.usp.blackwell
-  tags: [lucid, blackwell, b200, b300]
+  tags: [blackwell, b200, b300]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -59,7 +59,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux.single_gpu
-  tags: [release, instinct, gfx942, gfx950, nightly]
+  tags: [release, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -113,7 +113,7 @@
     attention_backend: cudnn
 
 - name: flux.usp_2k
-  tags: [release, mad, lucid, instinct, gfx942, gfx950]
+  tags: [release, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -132,7 +132,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux.usp_2k.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [hopper, h100, h200]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
@@ -151,7 +151,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux.usp_2k.blackwell
-  tags: [lucid, blackwell, b200, b300]
+  tags: [blackwell, b200, b300]
   model: black-forest-labs/FLUX.1-dev
   runner: xdit
   args:
