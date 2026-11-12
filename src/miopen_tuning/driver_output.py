@@ -49,6 +49,8 @@ def _json_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "algorithm": performance.get("algorithm"),
                 "solution": performance.get("solution"),
                 "solver": solver_name(str(performance.get("solution") or "")),
+                "db_key": performance.get("db_key"),
+                "perf_db_key": performance.get("perf_db_key"),
                 "average_time_ms": results.get("average_time_ms"),
             }
         )
@@ -124,6 +126,8 @@ def parse_line(line: str, *, source: str, line_number: int) -> list[dict[str, An
     lowered = stripped.lower()
     if "error" in lowered and not any(event["event"] == "performance_record" for event in events):
         events.append({"event": "error", "message": stripped})
+    elif "warning:" in lowered and "-wunused-command-line-argument" in lowered:
+        events.append({"event": "compiler_warning", "message": stripped})
     elif "warning" in lowered:
         events.append({"event": "warning", "message": stripped})
 
@@ -149,9 +153,12 @@ def summarize_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "event_count": 0,
         "solutions": [],
         "selected_solver": None,
+        "db_keys": [],
+        "perf_db_keys": [],
         "timings_ms": [],
         "errors": 0,
         "warnings": 0,
+        "compiler_warnings": 0,
     }
     for event in events:
         summary["event_count"] += 1
@@ -159,10 +166,17 @@ def summarize_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         if kind in {"solution", "performance_record"} and event.get("solver"):
             summary["solutions"].append(event["solver"])
             summary["selected_solver"] = event["solver"]
+        if kind == "performance_record":
+            for field, target in (("db_key", "db_keys"), ("perf_db_key", "perf_db_keys")):
+                value = event.get(field)
+                if value and value not in summary[target]:
+                    summary[target].append(value)
         elif kind == "timing":
             summary["timings_ms"].append(event["time_ms"])
         elif kind == "error":
             summary["errors"] += 1
         elif kind == "warning":
             summary["warnings"] += 1
+        elif kind == "compiler_warning":
+            summary["compiler_warnings"] += 1
     return summary
