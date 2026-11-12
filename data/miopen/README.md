@@ -1,31 +1,26 @@
 # MIOpen user database
 
-Public `amdsiloai/pytorch-xdit` images need buildin MIOpen user databases for reaching
+Public `amdsiloai/pytorch-xdit` images need built-in MIOpen user databases for reaching
 maximal benchmark performance on selected example workloads. Here you find instructions
 for generating these user databases as well as pre-created databases to be used with
 the public images.
 
 ## Use
 
-Point
-
-```
-MIOPEN_USER_DB_PATH
-```
-
-environment variable to the directory cotaining the user database.
+Point the `MIOPEN_USER_DB_PATH` environment variable to the directory containing
+the user database.
 
 ## Generate
 
 From the repository root, run
 
-```
+```sh
 docker build -f docker/Dockerfile[.ci] -t pytorch_xdit_core --target core .
 ```
 
-to build the base image with the default build arguments. For the repository root, run
+to build the base image with the default build arguments. From the repository root, run
 
-````
+```sh
 docker run \
     --cap-add=SYS_PTRACE \
     --security-opt seccomp=unconfined --privileged \
@@ -79,3 +74,35 @@ Collection is disabled by default when `.ci/run.py` is invoked directly. To
 enable it for an interactive run, set
 `CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS=1`. The values `true`, `yes`, and
 `on` are also accepted, case-insensitively.
+
+## Test the tuning tools
+
+The MIOpen tuning tools have CPU-only tests that run without a GPU, ROCm image,
+or MIOpen installation:
+
+```sh
+python -m pip install pytest tqdm
+PYTHONPATH=src:.ci python -m pytest -q \
+  src/miopen_convolution/tests \
+  src/distrituner/tests \
+  src/miopen_tuning/tests \
+  .ci/tests/test_miopen_driver_commands.py
+```
+
+## Check MIOpen behavior
+
+GPU contract tests check MIOpen behavior that the tuning tools depend on. Run
+them inside the ROCm image being tested:
+
+```sh
+MIOPEN_CONTRACT_TESTS=1 \
+MIOPEN_CONTRACT_ARTIFACTS=/tmp/miopen-contracts \
+PYTHONPATH=src \
+python -m unittest -v miopen_tuning.tests.miopen.test_miopen_contracts
+```
+
+The artifact directory contains readable `stdout.log` and `stderr.log` files,
+parsed `events.jsonl`, metadata, tuned DBs, and image identity. It must be a new
+or empty directory; the tests refuse to overwrite existing files. The manual
+`MIOpen contracts` GitHub workflow runs the same tests and uploads that
+directory.
