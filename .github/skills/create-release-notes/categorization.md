@@ -84,7 +84,7 @@ Always excluded unless the PR also changes the Dockerfile (in which case, catego
 under Docker / Environment instead).
 File patterns:
 - `data/miopen/` — MIOpen user databases
-- `src/miopen_convolution/` — MIOpen convolution code
+- `src/miopen_tuning/` — MIOpen tuning tools
 - `src/miopen-install/` — MIOpen installation scripts
 
 ## Edge Cases

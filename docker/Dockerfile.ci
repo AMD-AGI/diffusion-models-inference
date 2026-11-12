@@ -463,7 +463,6 @@ COPY assets/data /app/data
 COPY assets/docs/README.md /app/README.md
 COPY .ci/run.py /app/.ci/run.py
 COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
-COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY src/miopen_tuning /app/.ci/miopen_tuning
 COPY .ci/determinism_report.py /app/.ci/determinism_report.py
 COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/

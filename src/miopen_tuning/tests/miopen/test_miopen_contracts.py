@@ -18,7 +18,7 @@ import unittest
 from dataclasses import dataclass
 from pathlib import Path
 
-from miopen_convolution import MIOpenConvolution
+from miopen_tuning.problem import MIOpenConvolution
 from miopen_tuning.identity import collect_identity, expected_db_version_token
 from miopen_tuning.logs import append_index, run_logged
 

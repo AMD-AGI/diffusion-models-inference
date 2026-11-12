@@ -22,7 +22,13 @@ import pandas as pd
 
 from huggingface_hub import snapshot_download, scan_cache_dir, DryRunFileInfo
 from memory_sampler import MemorySampler
-from miopen_driver_commands import MIOpenDriverCommandCollector, env_enabled
+try:
+    from miopen_tuning.collection import MIOpenDriverCommandCollector, env_enabled
+except ModuleNotFoundError as exc:
+    if exc.name != "miopen_tuning":
+        raise
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from miopen_tuning.collection import MIOpenDriverCommandCollector, env_enabled
 import determinism_report
 
 
