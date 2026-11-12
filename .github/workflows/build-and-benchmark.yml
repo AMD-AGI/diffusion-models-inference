@@ -437,6 +437,11 @@ jobs:
         uses: ./.github/actions/record-image-versions
         with:
           image: ${{ steps.metadata.outputs.working_image }}
+
+      - name: Check runtime image
+        env:
+          IMAGE: ${{ steps.metadata.outputs.working_image }}
+        run: .github/scripts/check-runtime-image.sh "$IMAGE"
       
       - name: Upload version artifacts
         uses: actions/upload-artifact@v7
