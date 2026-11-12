@@ -22,7 +22,7 @@ import pandas as pd
 
 from huggingface_hub import snapshot_download, scan_cache_dir, DryRunFileInfo
 from memory_sampler import MemorySampler
-from miopen_driver_commands import MIOpenDriverCommandCollector, env_enabled
+from miopen_tuning.collection import MIOpenDriverCommandCollector, env_enabled
 import determinism_report
 
 
