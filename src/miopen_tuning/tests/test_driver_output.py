@@ -53,6 +53,24 @@ class DriverOutputTest(unittest.TestCase):
 
         self.assertEqual([event["event"] for event in events], ["solver_considered", "db_record_loaded", "kernel_selected"])
 
+    def test_summary_tracks_perf_db_loads_searches_and_workspace(self):
+        summary = summarize_events(
+            self.events(
+                "MIOpen: Info [GetValues] loaded-key=SolverA:config\n"
+                "MIOpen: Info [GetValues] absent-key=SolverB:<values not found>\n"
+                "MIOpen: Info [FindSolutionImpl] Search Started: absent-key : SolverB, enforce: SEARCH(3)\n"
+                "MIOpen: Warning [IsEnoughWorkspace] [EvaluateInvokers] Solver <GemmFwdRest>, "
+                "workspace required: 84648960, provided ptr: 0x79aa32c00000 size: 31141888\n"
+            )
+        )
+
+        self.assertEqual(summary["loaded_perf_db_keys"], ["loaded-key"])
+        self.assertEqual(summary["searched_perf_db_keys"], ["absent-key"])
+        self.assertEqual(
+            summary["insufficient_workspace"],
+            [{"solver": "GemmFwdRest", "required_bytes": 84648960, "provided_bytes": 31141888}],
+        )
+
     def test_summary_tracks_selection_errors_and_warnings(self):
         summary = summarize_events(
             self.events(

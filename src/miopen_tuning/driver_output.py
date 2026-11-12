@@ -22,7 +22,12 @@ _SOLUTION_RE = re.compile(
 _CANDIDATE_RE = re.compile(r"\]\s+(?P<solver>[^:\s]+):\s+Candidate Selection selected:\s+(?P<config>.+?)\s*$")
 _HEURISTIC_RE = re.compile(r"Hard-coded heuristics selected kernel:\s+(?P<config>.+?)(?:\s+at index:\s+\d+)?\s*$")
 _GET_VALUES_RE = re.compile(r"\[GetValues\]\s+(?P<key>\S+)=(?P<solver>[^:\s]+):(?P<config>.+?)\s*$")
+_VALUES_NOT_FOUND = "<values not found>"
 _FIND_SOLUTION_RE = re.compile(r"\[FindSolutionImpl\]\s+(?P<solver>[A-Za-z]\w*)")
+_SEARCH_STARTED_RE = re.compile(r"\[FindSolutionImpl\]\s+Search Started:\s+(?P<key>\S+)\s+:\s+(?P<solver>[A-Za-z]\w*)")
+_WORKSPACE_RE = re.compile(
+    r"\[IsEnoughWorkspace\].*Solver <(?P<solver>[^>]+)>, workspace required: (?P<required>\d+).*size: (?P<provided>\d+)"
+)
 _RECORD_MISSING_RE = re.compile(r"record not found for:\s+(?P<solver>[A-Za-z]\w*)")
 _CHOSEN_RE = re.compile(r"Chosen Algorithm:\s*(?P<solver>[^,]+?)\s*,")
 
@@ -109,10 +114,25 @@ def parse_line(line: str, *, source: str, line_number: int) -> list[dict[str, An
         events.append({"event": "kernel_selected", "selection": "heuristic", "config": match.group("config")})
     match = _GET_VALUES_RE.search(text)
     if match:
-        events.append({"event": "db_record_loaded", **match.groupdict()})
-    match = _FIND_SOLUTION_RE.search(text)
+        kind = "db_record_absent" if match.group("config") == _VALUES_NOT_FOUND else "db_record_loaded"
+        events.append({"event": kind, **match.groupdict()})
+    match = _SEARCH_STARTED_RE.search(text)
     if match:
-        events.append({"event": "solver_considered", "solver": match.group("solver")})
+        events.append({"event": "search_started", **match.groupdict()})
+    else:
+        match = _FIND_SOLUTION_RE.search(text)
+        if match:
+            events.append({"event": "solver_considered", "solver": match.group("solver")})
+    match = _WORKSPACE_RE.search(text)
+    if match:
+        events.append(
+            {
+                "event": "insufficient_workspace",
+                "solver": match.group("solver"),
+                "required_bytes": int(match.group("required")),
+                "provided_bytes": int(match.group("provided")),
+            }
+        )
     match = _RECORD_MISSING_RE.search(text)
     if match:
         events.append({"event": "db_record_missing", "solver": match.group("solver")})
@@ -155,6 +175,9 @@ def summarize_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "selected_solver": None,
         "db_keys": [],
         "perf_db_keys": [],
+        "loaded_perf_db_keys": [],
+        "searched_perf_db_keys": [],
+        "insufficient_workspace": [],
         "timings_ms": [],
         "errors": 0,
         "warnings": 0,
@@ -173,6 +196,14 @@ def summarize_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
                     summary[target].append(value)
         elif kind == "timing":
             summary["timings_ms"].append(event["time_ms"])
+        elif kind in {"db_record_loaded", "search_started"}:
+            target = "loaded_perf_db_keys" if kind == "db_record_loaded" else "searched_perf_db_keys"
+            if event["key"] not in summary[target]:
+                summary[target].append(event["key"])
+        elif kind == "insufficient_workspace":
+            entry = {name: event[name] for name in ("solver", "required_bytes", "provided_bytes")}
+            if entry not in summary["insufficient_workspace"]:
+                summary["insufficient_workspace"].append(entry)
         elif kind == "error":
             summary["errors"] += 1
         elif kind == "warning":
