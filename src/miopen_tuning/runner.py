@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ from .databases import FIND_SUFFIX, PERF_SUFFIX, DatabaseIdentity, diff_pairs, l
 from .executor import TuningTask, device_ids, execute_tasks
 from .identity import Identity, collect_identity
 from .planner import build_plan, tuning_commands
+from .report import annotations, report_markdown, summary_markdown
 from .workloads import load_workloads
 
 
@@ -30,6 +33,7 @@ class RunOptions:
     devices: str | None = None
     force_retuning: bool = False
     install_db: bool = False
+    run_contracts: bool = True
     find_mode: str = "1"
     find_enforce: str = "3"
     debug_conv_direct: str | None = None
@@ -53,6 +57,38 @@ def _identity(options: RunOptions) -> dict[str, Any]:
         image=options.image,
         image_digest=options.image_digest,
     ).to_dict()
+
+
+def _run_contracts(options: RunOptions) -> dict[str, Any]:
+    if not options.run_contracts:
+        return {"status": "skipped", "exit_code": None, "log": None}
+    contracts_dir = options.output_dir / "contracts"
+    contracts_dir.mkdir(parents=True, exist_ok=True)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "MIOPEN_CONTRACT_TESTS": "1",
+            "MIOPEN_CONTRACT_ARTIFACTS": str(contracts_dir / "artifacts"),
+            "MIOPEN_CONTRACT_IMAGE": options.image,
+            "MIOPEN_CONTRACT_IMAGE_DIGEST": options.image_digest,
+            "MIOPEN_CONTRACT_LOG_PROFILE": options.log_profile,
+        }
+    )
+    if options.miopendriver:
+        environment["MIOPEN_DRIVER"] = options.miopendriver
+    devices = options.devices or environment.get("HIP_VISIBLE_DEVICES", "")
+    if devices:
+        environment["HIP_VISIBLE_DEVICES"] = device_ids(devices)[0]
+    log_path = contracts_dir / "test-output.log"
+    with log_path.open("w") as log:
+        process = subprocess.run(
+            [sys.executable, "-m", "unittest", "-v", "miopen_tuning.tests.miopen.test_miopen_contracts"],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            env=environment,
+            check=False,
+        )
+    return {"status": "passed" if process.returncode == 0 else "failed", "exit_code": process.returncode, "log": str(log_path.relative_to(options.output_dir))}
 
 
 def _copy_pair(source: Path, destination: Path, identity: DatabaseIdentity) -> None:
@@ -88,7 +124,10 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
     identity = DatabaseIdentity(
         identity_values["db_prefix"], identity_values["miopen_version"], identity_values["miopen_build"]
     )
+    contracts = _run_contracts(options)
     errors: list[str] = []
+    if contracts["status"] == "failed":
+        errors.append(f"MIOpen contract tests failed; see {contracts['log']}")
 
     workloads = load_workloads(options.workloads, Path.cwd())
     base_db = options.db_dir
@@ -169,6 +208,7 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
         "errors": errors,
         "identity": identity_values,
         "db_identity": identity.__dict__,
+        "contracts": contracts,
         "workloads": plan["workloads"],
         "plan": plan,
         "tuning": {
@@ -187,6 +227,9 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
         },
     }
     _write_json(options.output_dir / "report.json", report)
+    (options.output_dir / "summary.md").write_text(summary_markdown(report))
+    (options.output_dir / "report.md").write_text(report_markdown(report))
+    (options.output_dir / "annotations.txt").write_text("".join(f"{line}\n" for line in annotations(report)))
     return (1 if errors else 0), report
 
 

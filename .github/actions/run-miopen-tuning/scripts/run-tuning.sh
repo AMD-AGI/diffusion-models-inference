@@ -15,7 +15,7 @@ source "${SCRIPT_DIR}/../../../scripts/container-name.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../../../scripts/with-brr.sh"
 
-rm -f .tuning_successful
+rm -rf .tuning_successful .miopen_db_prefix miopen-run
 RUNNER_WORK_ROOT=${RUNNER_WORK_ROOT:-/home/runner/_work}
 [[ "$GITHUB_WORKSPACE" == "$RUNNER_WORK_ROOT/"* ]] ||
   { echo "GITHUB_WORKSPACE is outside $RUNNER_WORK_ROOT" >&2; exit 1; }
@@ -44,6 +44,9 @@ docker run \
   -e MIOPEN_USER_DB_PATH="$GITHUB_WORKSPACE/data/miopen/userdb" \
   -e MIOPEN_FIND_MODE="1" \
   -e MIOPEN_FIND_ENFORCE="3" \
+  -e MIOPEN_TUNING_OUTPUT_DIR="$GITHUB_WORKSPACE/miopen-run" \
+  -e MIOPEN_TUNING_IMAGE="$DOCKER_IMAGE" \
+  -e GITHUB_ACTIONS \
   -e HOST_UID="$(id -u)" \
   -e HOST_GID="$(id -g)" \
   -e GITHUB_WORKSPACE \

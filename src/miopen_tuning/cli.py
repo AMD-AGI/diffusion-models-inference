@@ -122,6 +122,7 @@ def _run(args: argparse.Namespace) -> int:
             devices=args.devices,
             force_retuning=args.force_retuning,
             install_db=args.install_db,
+            run_contracts=not args.skip_contracts,
             find_mode=args.find_mode,
             find_enforce=args.find_enforce,
             debug_conv_direct=args.debug_conv_direct,
@@ -131,19 +132,11 @@ def _run(args: argparse.Namespace) -> int:
             image_digest=args.image_digest,
         )
     )
-    print(
-        json.dumps(
-            {
-                "status": report["status"],
-                "plan": report["plan"]["counts"],
-                "tuning": {key: report["tuning"][key] for key in ("succeeded", "failed")},
-                "report": str(args.output_dir / "report.json"),
-            },
-            sort_keys=True,
-        )
-    )
-    for error in report["errors"]:
-        print(f"error: {error}")
+    print((args.output_dir / "summary.md").read_text(), end="")
+    if args.github_annotations:
+        print((args.output_dir / "annotations.txt").read_text(), end="")
+    if report["status"] == "passed":
+        print(f"MIOpen tuning report: {args.output_dir / 'report.md'}")
     return exit_code
 
 
@@ -210,6 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--devices")
     run.add_argument("--force-retuning", action="store_true")
     run.add_argument("--install-db", action="store_true")
+    run.add_argument("--skip-contracts", action="store_true")
     run.add_argument("--find-mode", default="1")
     run.add_argument("--find-enforce", default="3")
     run.add_argument("--debug-conv-direct", default=None)
@@ -217,6 +211,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--timeout", type=int, default=7200)
     run.add_argument("--image", default="")
     run.add_argument("--image-digest", default="")
+    run.add_argument("--github-annotations", action="store_true")
     run.set_defaults(handler=_run)
     return parser
 

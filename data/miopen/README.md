@@ -161,3 +161,14 @@ The runner combines workload files, tunes each problem once, writes readable
 logs for each command, merges tuned records by key, validates the exact DB pair,
 and writes `report.json`. It installs the merged DB only when every command
 succeeds and every successful command has both DB records.
+
+## CI tuning reports
+
+CI runs MIOpen contract tests before tuning. Each architecture uploads two
+artifacts:
+
+- `<run-number>-miopen-<architecture>` contains only the validated `.udb.txt`
+  and `.ufdb.txt` files for the target MIOpen version.
+- `miopen-report-<run-number>-miopen-<architecture>` contains the complete run
+  directory, including readable MIOpen logs, parsed events, plans, DB diffs,
+  `report.md`, and `summary.md`.
