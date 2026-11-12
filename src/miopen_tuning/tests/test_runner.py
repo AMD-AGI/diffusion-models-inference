@@ -88,6 +88,7 @@ class RunnerTest(unittest.TestCase):
             "identity_path": self.identity,
             "devices": "0,1",
             "install_db": True,
+            "run_contracts": False,
             "timeout": 30,
         }
         values.update(overrides)
@@ -109,7 +110,10 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(len(read_records(IDENTITY.path(self.db_dir, "ufdb.txt")).records), 2)
         log = self.root / "run" / report["tuning"]["results"][0]["log_dir"] / "stderr.log"
         self.assertIn("\n", log.read_text())
-        self.assertTrue((self.root / "run" / "report.json").is_file())
+        summary = (self.root / "run" / "summary.md").read_text()
+        self.assertIn("| Find DB changes | 2 added, 0 replaced, 0 removed |", summary)
+        self.assertIn("| Perf DB changes | 2 added, 0 replaced, 0 removed |", summary)
+        self.assertTrue((self.root / "run" / "report.md").is_file())
 
     def test_failures_are_reported_after_all_commands_finish(self):
         workloads = self.root / "workloads.txt"
