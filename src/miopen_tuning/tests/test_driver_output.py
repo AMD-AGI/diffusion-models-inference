@@ -31,12 +31,18 @@ class DriverOutputTest(unittest.TestCase):
         events = self.events(
             '{"performance":{"direction":"forward","algorithm":5,'
             '"solution":"ConvAsmImplicitGemmGTCDynamicFwdXdlopsNHWC",'
+            '"db_key":"find-key","perf_db_key":"perf-key",'
             '"results":{"average_time_ms":0.25}}}\n'
         )
 
         self.assertEqual(events[0]["event"], "performance_record")
         self.assertEqual(events[0]["solver"], "ConvAsmImplicitGemmGTCDynamicFwdXdlopsNHWC")
+        self.assertEqual(events[0]["db_key"], "find-key")
+        self.assertEqual(events[0]["perf_db_key"], "perf-key")
         self.assertEqual(events[0]["average_time_ms"], 0.25)
+        summary = summarize_events(events)
+        self.assertEqual(summary["db_keys"], ["find-key"])
+        self.assertEqual(summary["perf_db_keys"], ["perf-key"])
 
     def test_parses_db_and_kernel_logs(self):
         events = self.events(
@@ -53,12 +59,14 @@ class DriverOutputTest(unittest.TestCase):
                 "MIOpen Forward Conv. Algorithm: 5, Solution: 1/A\n"
                 "MIOpen Forward Conv. Algorithm: 6, Solution: 2/B\n"
                 "Warning: slow\n"
+                "warning: argument unused during compilation: '-dD' [-Wunused-command-line-argument]\n"
                 "MIOpen Error: failed\n"
             )
         )
 
         self.assertEqual(summary["selected_solver"], "B")
         self.assertEqual(summary["warnings"], 1)
+        self.assertEqual(summary["compiler_warnings"], 1)
         self.assertEqual(summary["errors"], 1)
 
 

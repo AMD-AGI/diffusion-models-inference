@@ -24,7 +24,11 @@ class LogsTest(unittest.TestCase):
                 [sys.executable, "-c", script],
                 command_id="probe",
                 log_dir=root / "logs" / "probe",
-                environment={"MIOPEN_USER_DB_PATH": str(root / "db")},
+                environment={
+                    "HIP_VISIBLE_DEVICES": "3",
+                    "MIOPEN_CONTRACT_TESTS": "1",
+                    "MIOPEN_USER_DB_PATH": str(root / "db"),
+                },
                 log_profile="standard",
                 timeout=10,
                 phase="tune",
@@ -35,6 +39,8 @@ class LogsTest(unittest.TestCase):
             metadata = json.loads((result.log_dir / "metadata.json").read_text())
             self.assertEqual(metadata["exit_code"], 0)
             self.assertEqual(metadata["environment"]["MIOPEN_LOG_LEVEL"], "5")
+            self.assertNotIn("MIOPEN_CONTRACT_TESTS", metadata["environment"])
+            self.assertEqual(metadata["gpu_id"], "3")
             self.assertEqual(metadata["summary"]["selected_solver"], "SolverA")
             self.assertTrue(all(entry["sha256"] for entry in metadata["files"]))
             events = [json.loads(line) for line in (result.log_dir / "events.jsonl").read_text().splitlines()]

@@ -70,7 +70,11 @@ def file_entry(path: Path, base: Path) -> dict[str, Any]:
 
 
 def relevant_environment(environment: dict[str, str]) -> dict[str, str]:
-    return {key: value for key, value in sorted(environment.items()) if key.startswith(MIOPEN_ENV_PREFIXES)}
+    return {
+        key: value
+        for key, value in sorted(environment.items())
+        if key.startswith(MIOPEN_ENV_PREFIXES) and not key.startswith("MIOPEN_CONTRACT_")
+    }
 
 
 def run_logged(
@@ -129,7 +133,7 @@ def run_logged(
         "schema_version": LOG_SCHEMA_VERSION,
         "command_id": command_id,
         "command": shlex.join(command),
-        "gpu_id": gpu_id,
+        "gpu_id": gpu_id or process_environment.get("HIP_VISIBLE_DEVICES", ""),
         "started_at": started_at,
         "ended_at": utc_now(),
         "duration_ms": round(duration_ms, 3),
@@ -159,6 +163,7 @@ def append_index(index_path: Path, result: ProcessResult, root: Path) -> None:
         "event_count": result.summary.get("event_count"),
         "errors": result.summary.get("errors"),
         "warnings": result.summary.get("warnings"),
+        "compiler_warnings": result.summary.get("compiler_warnings"),
     }
     with index_path.open("a") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
