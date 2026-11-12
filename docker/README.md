@@ -32,16 +32,12 @@ benchmark config choice.
 
 ### ROCm nightly packages
 
-`Dockerfile.ci` supports two generations of TheRock nightly deb repositories:
-
-| `ROCM_PACKAGE_REPOSITORY` | Package index | `ROCM_DEB_SERIES` |
-| --- | --- | --- |
-| `legacy` (default) | [Legacy multi-arch index](https://rocm.nightlies.amd.com/packages-multi-arch/deb/) | Required and defaults to `10.1` |
-| `native` | [Ubuntu 24.04 native index](https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/) | Derived from the snapshot's `amdrocm-runtime-dev` metadata |
-
-The default `ROCM_RELEASE_ID` remains on the legacy index. Select the repository
-explicitly when overriding it; release IDs are not assumed to be portable
-between indexes. The scheduled nightly workflow selects `native`.
+`Dockerfile.ci` installs TheRock nightly debs from the
+[Ubuntu 24.04 native index](https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/).
+`ROCM_RELEASE_ID` pins the snapshot and defaults to `20261108-42427827092`.
+The package series is derived from the snapshot's `amdrocm-runtime-dev`
+metadata. The scheduled nightly workflow selects the latest snapshot from
+this same index.
 `ROCM_GFX_TARGETS` controls which architecture-specific package shards are
 installed. `PYTORCH_ROCM_ARCH` controls the architectures built into PyTorch
 and related wheels; it defaults to `ROCM_GFX_TARGETS` but can be overridden
@@ -67,12 +63,11 @@ intranode attention A2A.
 `deps` installs rocprofiler-compute's Python requirements.
 
 ```sh
-# pinned legacy snapshot
+# pinned native Ubuntu 24.04 snapshot
 docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 
-# native Ubuntu 24.04 snapshot
+# override the native Ubuntu 24.04 snapshot
 docker build -f docker/Dockerfile.ci --target final \
-    --build-arg ROCM_PACKAGE_REPOSITORY=native \
     --build-arg ROCM_RELEASE_ID=20261013-38325106112 \
     -t pytorch-xdit-native .
 ```

@@ -60,7 +60,6 @@ jobs:
       cache_scope: 'nightly-rocm'
       benchmark_flags: "--tag nightly"
       docker_build_args: |
-        ROCM_PACKAGE_REPOSITORY=native
         ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
