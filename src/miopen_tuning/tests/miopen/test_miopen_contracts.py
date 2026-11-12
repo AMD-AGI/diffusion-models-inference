@@ -200,6 +200,15 @@ class MIOpenContractTest(unittest.TestCase):
                 self.assertEqual(len(keys), 1, keys)
                 self.assertEqual(MIOpenConvolution.from_db_key(keys[0]), probe.problem)
 
+    def test_performance_log_reports_written_db_keys(self):
+        for probe in self.probes:
+            with self.subTest(probe=probe.command_id):
+                find_keys = set(records(db_files(probe.db_dir, "ufdb.txt")[0]))
+                performance_keys = set(records(db_files(probe.db_dir, "udb.txt")[0]))
+                self.assertEqual(set(probe.result.summary["db_keys"]), find_keys, probe.result.log_dir)
+                self.assertTrue(set(probe.result.summary["perf_db_keys"]).issubset(performance_keys), probe.result.log_dir)
+                self.assertTrue(probe.result.summary["perf_db_keys"], probe.result.log_dir)
+
     def test_tuned_db_is_used_without_db_changes(self):
         for probe in self.probes:
             with self.subTest(probe=probe.command_id):
@@ -209,6 +218,7 @@ class MIOpenContractTest(unittest.TestCase):
                 result = self._read(probe, read_db, "tuned")
                 self.assertEqual(result.exit_code, 0, result.log_dir)
                 self.assertEqual(db_hashes(read_db), before)
+                self.assertEqual(result.summary["db_keys"], list(records(db_files(read_db, "ufdb.txt")[0])))
                 find_record = next(iter(records(db_files(read_db, "ufdb.txt")[0]).values()))
                 self.assertIn(result.summary["selected_solver"], find_solvers(find_record), result.log_dir)
 
