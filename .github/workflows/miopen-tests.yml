@@ -13,11 +13,13 @@ on:
       - '.github/actions/check-miopen-changes/**'
       - '.github/actions/create-miopen-db-branch/**'
       - '.github/actions/run-miopen-tuning/**'
+      - '.github/workflows/miopen-contracts.yml'
       - '.github/workflows/miopen-tests.yml'
       - '.github/workflows/miopen-tune-reusable.yml'
       - 'data/miopen/**'
       - 'src/distrituner/**'
       - 'src/miopen_convolution/**'
+      - 'src/miopen_tuning/**'
 
 permissions:
   contents: read
@@ -43,4 +45,5 @@ jobs:
           python -m pytest -q \
             src/miopen_convolution/tests \
             src/distrituner/tests \
+            src/miopen_tuning/tests \
             .ci/tests/test_miopen_driver_commands.py

@@ -1,0 +1,167 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: MIOpen contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'ROCm image to test'
+        required: true
+        type: string
+      runner:
+        description: 'GPU runner label'
+        required: true
+        type: string
+      log_profile:
+        description: 'MIOpen log profile used for tuning probes'
+        required: false
+        type: choice
+        default: standard
+        options:
+          - standard
+          - diagnostic
+      brr_priority:
+        description: 'brr scheduling priority'
+        required: false
+        type: choice
+        default: low
+        options:
+          - low
+          - normal
+          - high
+      disable_brr:
+        description: 'Disable brr'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: MIOpen contracts
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 180
+    env:
+      DOCKER_IMAGE: ${{ inputs.image }}
+      ARTIFACT_DIR: ${{ github.workspace }}/miopen-contracts
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      - name: Pull image
+        run: docker pull "$DOCKER_IMAGE"
+
+      - name: Record image identity
+        run: |
+          set -euo pipefail
+          source .github/scripts/container-name.sh
+          mkdir -p "$ARTIFACT_DIR"
+          image_digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$DOCKER_IMAGE" 2>/dev/null || true)
+          docker run --rm \
+            --name "$(container_name miopen-identity)" \
+            --mount type=bind,src="$GITHUB_WORKSPACE",dst="$GITHUB_WORKSPACE" \
+            -w "$GITHUB_WORKSPACE" \
+            -e PYTHONPATH="$GITHUB_WORKSPACE/src" \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            -e GITHUB_WORKSPACE \
+            "$DOCKER_IMAGE" \
+            bash -c '
+              python -m miopen_tuning identity \
+                --image "$1" \
+                --image-digest "$2" \
+                --output "$3/image-identity.json"
+              status=$?
+              source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh"
+              exit "$status"
+            ' -- "$DOCKER_IMAGE" "$image_digest" "$ARTIFACT_DIR"
+
+      - name: Run MIOpen contracts
+        env:
+          BRR_GPU_REQUEST: '1'
+          BRR_PRIORITY: ${{ inputs.brr_priority }}
+          DISABLE_BRR: ${{ inputs.disable_brr }}
+          LOG_PROFILE: ${{ inputs.log_profile }}
+          WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
+        run: |
+          set -euo pipefail
+          source .github/scripts/container-name.sh
+          source .github/scripts/with-brr.sh
+          prepare_brr_container
+          image_digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$DOCKER_IMAGE" 2>/dev/null || true)
+          docker run --rm \
+            --name "$(container_name miopen-contracts)" \
+            --security-opt seccomp=unconfined \
+            --device=/dev/kfd \
+            --device=/dev/dri \
+            --group-add video \
+            --mount type=bind,src="$GITHUB_WORKSPACE",dst="$GITHUB_WORKSPACE" \
+            "${BRR_DOCKER_ARGS[@]}" \
+            -w "$GITHUB_WORKSPACE" \
+            -e PYTHONPATH="$GITHUB_WORKSPACE/src" \
+            -e MIOPEN_CONTRACT_TESTS=1 \
+            -e MIOPEN_CONTRACT_ARTIFACTS="$ARTIFACT_DIR/run" \
+            -e MIOPEN_CONTRACT_LOG_PROFILE="$LOG_PROFILE" \
+            -e MIOPEN_CONTRACT_IMAGE="$DOCKER_IMAGE" \
+            -e MIOPEN_CONTRACT_IMAGE_DIGEST="$image_digest" \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            -e GITHUB_WORKSPACE \
+            "$DOCKER_IMAGE" \
+            bash -c '
+              umask 000
+              "$@" python -m unittest -v miopen_tuning.tests.miopen.test_miopen_contracts \
+                > "$MIOPEN_CONTRACT_ARTIFACTS.unittest.log" 2>&1
+              status=$?
+              cat "$MIOPEN_CONTRACT_ARTIFACTS.unittest.log"
+              source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh"
+              exit "$status"
+            ' -- "${BRR_CONTAINER_LAUNCH[@]}"
+
+      - name: Summarize contract run
+        if: always()
+        run: |
+          {
+            echo "## MIOpen contracts"
+            echo
+            echo "Image: \`$DOCKER_IMAGE\`"
+            if [ -f "$ARTIFACT_DIR/run/identity.json" ]; then
+              echo
+              echo '```json'
+              cat "$ARTIFACT_DIR/run/identity.json"
+              echo '```'
+            fi
+            if [ -f "$ARTIFACT_DIR/run.unittest.log" ]; then
+              echo
+              echo '```text'
+              tail -n 80 "$ARTIFACT_DIR/run.unittest.log"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload contract artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: miopen-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: miopen-contracts/
+          if-no-files-found: warn
+
+      - name: Image cleanup
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-workspace
+        with:
+          images: ${{ inputs.image }}
+          containers: 'miopen-identity miopen-contracts'
+          skip_workspace_cleanup: 'true'

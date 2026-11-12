@@ -90,8 +90,26 @@ python -m pip install pytest tqdm
 PYTHONPATH=src:.ci python -m pytest -q \
   src/miopen_convolution/tests \
   src/distrituner/tests \
+  src/miopen_tuning/tests \
   .ci/tests/test_miopen_driver_commands.py
 ```
 
 Tests marked as expected failures document known defects. When a fix makes one
 of these tests pass, remove its expected-failure marker in the same change.
+
+## Check MIOpen behavior
+
+GPU contract tests check MIOpen behavior that the tuning tools depend on. Run
+them inside the ROCm image being tested:
+
+```sh
+MIOPEN_CONTRACT_TESTS=1 \
+MIOPEN_CONTRACT_ARTIFACTS=/tmp/miopen-contracts \
+PYTHONPATH=src \
+python -m unittest -v miopen_tuning.tests.miopen.test_miopen_contracts
+```
+
+The artifact directory contains readable `stdout.log` and `stderr.log` files,
+parsed `events.jsonl`, metadata, tuned DBs, and image identity. The manual
+`MIOpen contracts` GitHub workflow runs the same tests and uploads that
+directory.
