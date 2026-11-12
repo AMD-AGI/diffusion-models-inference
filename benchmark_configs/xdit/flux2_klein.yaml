@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 - name: flux2_klein.default
-  tags: [release, mad, lucid, instinct, gfx942, gfx950, nightly]
+  tags: [release, instinct, gfx942, gfx950]
   model: black-forest-labs/FLUX.2-klein-9B
   runner: xdit
   args:
@@ -20,7 +20,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux2_klein.default.hopper
-  tags: [lucid, hopper, h100, h200]
+  tags: [hopper, h100, h200]
   model: black-forest-labs/FLUX.2-klein-9B
   runner: xdit
   args:
@@ -38,7 +38,7 @@
     memory_efficient_replicated_load: true
 
 - name: flux2_klein.default.blackwell
-  tags: [lucid, blackwell, b200, b300]
+  tags: [blackwell, b200, b300]
   model: black-forest-labs/FLUX.2-klein-9B
   runner: xdit
   args:
