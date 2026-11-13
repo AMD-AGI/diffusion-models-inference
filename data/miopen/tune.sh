@@ -14,7 +14,6 @@ ROOTDIR="${ROOTDIR:-/app/diffusion-models-inference}"
 MIOPEN_USER_DB_PATH=${MIOPEN_USER_DB_PATH:-$ROOTDIR/data/miopen/userdb}
 MIOPEN_FIND_MODE=${MIOPEN_FIND_MODE:-1}
 MIOPEN_FIND_ENFORCE=${MIOPEN_FIND_ENFORCE:-4}
-MIOPEN_DEBUG_CONV_DIRECT=${MIOPEN_DEBUG_CONV_DIRECT:-0}
 
 ARCH=${ARCH:-unknown}
 FORCE_RETUNING=${FORCE_RETUNING:-false}
@@ -64,11 +63,15 @@ ln -s "$miopendriver_path" /bin/MIOpenDriver
 
 # run MIOpen tuning
 echo "Executing MIOpen tuning"
+miopen_extra_args=()
+if [[ -n "${MIOPEN_DEBUG_CONV_DIRECT:-}" ]]; then
+    miopen_extra_args+=(--miopen-debug-conv-direct "$MIOPEN_DEBUG_CONV_DIRECT")
+fi
 cd "$ROOTDIR/src/distrituner" || exit 1
 if ! python miopen_tuner.py "$ROOTDIR/drivercmd_filtered.txt" \
     --tuning-output-path "$WORKDIR/tuning" --log-dir "$WORKDIR/logs" \
     --miopen-find-mode "$MIOPEN_FIND_MODE" --miopen-find-enforce "$MIOPEN_FIND_ENFORCE" \
-    --miopen-debug-conv-direct "$MIOPEN_DEBUG_CONV_DIRECT"; then
+    "${miopen_extra_args[@]}"; then
     echo "MIOpen tuning failed"
     exit 1
 fi
