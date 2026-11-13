@@ -240,12 +240,48 @@ def safe_relative_path(name: str) -> PurePosixPath | None:
     return PurePosixPath(*parts) if parts else None
 
 
-def extract_layer(layer: Path, root: Path) -> int:
-    """Extract only regular files and directories, with sanitized paths.
+class ExtractionRoots:
+    """Places every regular file of a layer without overwriting another.
+
+    A tar can hold several entries with one path, a file where another entry
+    needs a directory, or a ".git-dir" next to a renamed ".git". The bytes of
+    every such entry still ship in the layer, so an entry whose path is taken
+    goes to the next extraction root under the same relative path instead of
+    replacing or skipping it. Each root is scanned separately, keeping
+    reported paths and path allow rules unchanged.
+    """
+
+    def __init__(self, base: Path) -> None:
+        self.base = base
+        self.roots: list[Path] = []
+        self._files: list[set[PurePosixPath]] = []
+        self._dirs: list[set[PurePosixPath]] = []
+
+    def place(self, rel: PurePosixPath) -> Path:
+        ancestors = list(rel.parents)[:-1]
+        for index in range(len(self.roots) + 1):
+            if index == len(self.roots):
+                root = self.base / str(index)
+                root.mkdir(parents=True)
+                self.roots.append(root)
+                self._files.append(set())
+                self._dirs.append(set())
+            files, dirs = self._files[index], self._dirs[index]
+            if rel in files or rel in dirs or any(parent in files for parent in ancestors):
+                continue
+            files.add(rel)
+            dirs.update(ancestors)
+            return self.roots[index] / rel
+        raise AssertionError("unreachable")
+
+
+def extract_layer(layer: Path, roots: ExtractionRoots) -> int:
+    """Extract every regular file, with sanitized paths.
 
     Links and device nodes carry no content of their own (a hardlink target is
     extracted as a file in its own right), and unprivileged extraction of them
-    would either fail or escape the root.
+    would either fail or escape the root. Directory entries carry no content
+    either; directories are created for the files placed in them.
     """
     with layer.open("rb") as handle:
         magic = handle.read(4)
@@ -259,23 +295,17 @@ def extract_layer(layer: Path, root: Path) -> int:
     files = 0
     try:
         for member in archive:
-            rel = safe_relative_path(member.name)
-            if rel is None:
-                continue
-            target = root / rel
-            if member.isdir():
-                if not target.is_dir():
-                    target.mkdir(parents=True, exist_ok=True)
-                continue
             if not member.isfile():
                 continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if target.is_dir():
+            rel = safe_relative_path(member.name)
+            if rel is None:
                 continue
             source = archive.extractfile(member)
             if source is None:
                 continue
-            with source, target.open("wb") as out:
+            target = roots.place(rel)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with source, target.open("xb") as out:
                 shutil.copyfileobj(source, out, 1 << 20)
             files += 1
     except (tarfile.TarError, EOFError, OSError, ValueError) as exc:
@@ -338,17 +368,23 @@ def scan_blob(blob: Blob, policy: Path, work: Path) -> list[Finding]:
     for path in (download_dir, scan_root):
         shutil.rmtree(path, ignore_errors=True)
         path.mkdir(parents=True)
+    reports = []
     try:
         downloaded = download_dir / "blob"
         download_blob(blob, downloaded)
         if blob.is_tar_layer:
-            log(f"    unpacked {extract_layer(downloaded, scan_root)} file(s)")
+            roots = ExtractionRoots(scan_root)
+            files = extract_layer(downloaded, roots)
             downloaded.unlink()
+            extra = f", {len(roots.roots) - 1} extra root(s) for duplicate paths" if len(roots.roots) > 1 else ""
+            log(f"    unpacked {files} file(s){extra}")
+            scan_roots = roots.roots
         else:
             # Configs, cache configs and attestations are JSON. An image config
             # carries ENV, labels and RUN history, including build arguments.
             downloaded.rename(scan_root / "blob.json")
-        report = run_trivy(scan_root, policy, work)
+            scan_roots = [scan_root]
+        reports = [run_trivy(root, policy, work) for root in scan_roots]
     finally:
         shutil.rmtree(download_dir, ignore_errors=True)
         shutil.rmtree(scan_root, ignore_errors=True)
@@ -363,6 +399,7 @@ def scan_blob(blob: Blob, policy: Path, work: Path) -> list[Finding]:
             # Trivy masks the matched secret, leaving only the line around it.
             match=(secret.get("Match") or "").strip()[:MATCH_PREVIEW_CHARS],
         )
+        for report in reports
         for result in report.get("Results") or []
         for secret in result.get("Secrets") or []
     ]
