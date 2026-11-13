@@ -24,6 +24,11 @@ on:
         required: false
         type: string
         default: 'amdsiloai/pytorch-xdit-nvidia'
+      cache_image_name:
+        description: 'Private repository holding the registry layer cache and secret scan candidates'
+        required: false
+        type: string
+        default: 'amdsiloai/pytorch-xdit-buildcache'
       platform:
         description: 'Target platform. Must be one of: linux/amd64, linux/arm64. Validated at runtime; the workflow_call schema does not support a choice type.'
         required: true
@@ -55,6 +60,10 @@ jobs:
     name: Build image
     runs-on: ${{ inputs.runner || 'build-only' }}
     timeout-minutes: 1440
+    # Everything this job pushes lands on candidate tags in the private cache
+    # repository; the Trivy scan step promotes it only after it passes.
+    env:
+      CANDIDATE_TAG: cand-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       image_with_tag: ${{ steps.set_outputs.outputs.image_with_tag }}
     steps:
@@ -112,12 +121,15 @@ jobs:
           cat /host-binfmt_misc/qemu-aarch64
       
       - name: Build NV image
+        id: build
         env:
           BUILDKIT_PROGRESS: plain
           PLATFORM: ${{ inputs.platform }}
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
-          IMAGE_NAME: ${{ inputs.image_name }}
+          CACHE_IMAGE_NAME: ${{ inputs.cache_image_name }}
           IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-nv${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
+          CANDIDATE_CACHE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-nvcache${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
           TAG_SUFFIX: ${{ inputs.image_tag_suffix }}
           FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
         run: |
@@ -134,8 +146,10 @@ jobs:
           # IMAGE_TAG carries the commit SHA, so it never exists before a build
           # of a new commit and can only seed cache when the same tag is rebuilt.
           # This per-platform ref is stable across commits and is what lets a
-          # build reuse the previous commit's layers, on any runner.
-          CACHE_REF="${IMAGE_NAME}:buildcache${TAG_SUFFIX}"
+          # build reuse the previous commit's layers, on any runner. It lives in
+          # the private cache repository, because a mode=max cache holds
+          # builder stages that never reach the published image.
+          CACHE_REF="${CACHE_IMAGE_NAME}:nv-buildcache${TAG_SUFFIX}"
           
           # The remote builder imports cache straight from the registry, so a
           # missing ref must not fail the build.
@@ -151,9 +165,10 @@ jobs:
           fi
 
           # Exported even when the cache is disabled, so that a --no-cache run
-          # repopulates the cache instead of leaving it stale. Cache blobs are
-          # the image's own layers pushed to the same repository, so the
-          # registry deduplicates them; do not re-compress them here or the
+          # repopulates the cache instead of leaving it stale. The export and
+          # the image both go to candidates that the secret scan promotes. Cache
+          # blobs are the image's own layers pushed to the same repository, so
+          # the registry deduplicates them; do not re-compress them here or the
           # digests change and dedup is lost.
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
@@ -164,14 +179,51 @@ jobs:
             ${NO_CACHE_FLAG} \
             ${EXTRA_BUILD_ARGS} \
             ${CACHE_FROM_FLAGS} \
-            --cache-to "type=registry,ref=${CACHE_REF},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true" \
-            -t "${IMAGE_TAG}" \
+            --cache-to "type=registry,ref=${CANDIDATE_CACHE},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true" \
+            --metadata-file "${RUNNER_TEMP}/nv-build-metadata.json" \
+            -t "${CANDIDATE_IMAGE}" \
             .
+
+          DIGEST=$(jq -er '."containerimage.digest"' "${RUNNER_TEMP}/nv-build-metadata.json")
+          echo "source=${CANDIDATE_IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "cache_live_ref=${CACHE_REF}" >> "$GITHUB_OUTPUT"
+
+          # ignore-error=true keeps a failed cache push from failing the build.
+          # A missing candidate leaves the live cache unchanged, so it only warns.
+          if CACHE_DIGEST=$(crane digest "${CANDIDATE_CACHE}" 2>/dev/null); then
+            echo "cache_source=${CANDIDATE_CACHE%:*}@${CACHE_DIGEST}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Cache export to ${CANDIDATE_CACHE} wrote nothing, so the live cache stays as it was. Check the 'exporting cache to registry' line above."
+          fi
       
       - name: Set outputs
         id: set_outputs
+        env:
+          IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          IMAGE_SOURCE: ${{ steps.build.outputs.source }}
+          CACHE_SOURCE: ${{ steps.build.outputs.cache_source }}
+          CACHE_LIVE_REF: ${{ steps.build.outputs.cache_live_ref }}
+          PLATFORM: ${{ inputs.platform }}
         run: |
-          echo "image_with_tag=${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}" >> $GITHUB_OUTPUT
+          TARGETS=$(jq -cn \
+            --arg platform "${PLATFORM}" \
+            --arg image "${IMAGE_SOURCE}" --arg image_dest "${IMAGE_TAG}" \
+            --arg cache "${CACHE_SOURCE}" --arg cache_dest "${CACHE_LIVE_REF}" \
+            '[
+              {name: "NV image (\($platform))", source: $image, image_scan: true, promote: [$image_dest]},
+              (select($cache != "") | {name: "NV build cache (\($platform))", source: $cache, image_scan: false, promote: [$cache_dest]})
+            ]')
+          # Kept in a file: GitHub drops job outputs that contain the Docker
+          # Hub organization, which is stored as a secret.
+          mkdir -p "${RUNNER_TEMP}/secret-scan-targets"
+          printf '%s\n' "${TARGETS}" > "${RUNNER_TEMP}/secret-scan-targets/targets.json"
+          echo "image_with_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Trivy scan and promote
+        uses: ./.github/actions/secret-scan
+        with:
+          targets_file: ${{ runner.temp }}/secret-scan-targets/targets.json
+          scan_id: nv${{ inputs.image_tag_suffix }}
       
       - name: Cleanup
         if: always()

@@ -76,6 +76,7 @@ jobs:
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
       image_tag_suffix: ${{ matrix.tag_suffix }}
       image_name: ${{ vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia' }}
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
       platform: ${{ matrix.platform }}
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
       runner: ${{ inputs.runner || vars.BUILD_RUNNER_NV || 'build-only' }}

@@ -6,9 +6,9 @@ set -euo pipefail
 
 # Resolve registry layer-cache refs for a docker buildx build.
 # Expects env vars: CACHE_IMAGE_NAME, CHANNEL, REF, CACHE_SCOPE,
-# EXTRA_CACHE_FROM, EXPORT, DISABLE_CACHE
-# Outputs: scope, cache_from_flags, cache_to_flag, export_ref,
-# export_ref_digest to GITHUB_OUTPUT
+# EXTRA_CACHE_FROM, EXPORT, EXPORT_TAG, DISABLE_CACHE
+# Outputs: scope, cache_from_flags, cache_to_flag, export_ref, live_ref to
+# GITHUB_OUTPUT
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # The helper path is resolved relative to this action at runtime.
@@ -63,16 +63,23 @@ fi
 
 CACHE_TO_FLAG=""
 EXPORT_REF=""
-EXPORT_REF_DIGEST=""
+LIVE_REF=""
 if [ "${EXPORT}" = "true" ]; then
-  EXPORT_REF="${OWN_REF}"
+  # Exports never write the scoped ref directly: a mode=max cache holds builder
+  # stages that never reach an image, so it has to pass the secret scan before
+  # the scan job promotes the candidate to the ref builds import from.
+  if [ -z "${EXPORT_TAG:-}" ]; then
+    echo "::error::export_tag is required when exporting cache"
+    exit 1
+  fi
+  EXPORT_REF="${CACHE_IMAGE_NAME}:${EXPORT_TAG}"
+  LIVE_REF="${OWN_REF}"
   # mode=max is load-bearing: the expensive work lives in builder stages that
   # never reach the final image, and mode=min cannot describe them.
-  # ignore-error keeps a failed cache push from failing the image push, so the
-  # caller compares export_ref_digest afterwards to notice that happening.
-  CACHE_TO_FLAG="--cache-to type=registry,ref=${OWN_REF},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
-  EXPORT_REF_DIGEST=$(manifest_digest "${OWN_REF}")
-  echo "Exporting cache to ${OWN_REF}"
+  # ignore-error keeps a failed cache push from failing the image push; the
+  # caller checks afterwards whether the candidate exists.
+  CACHE_TO_FLAG="--cache-to type=registry,ref=${EXPORT_REF},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
+  echo "Exporting cache to candidate ${EXPORT_REF} (live ref ${LIVE_REF})"
 fi
 
 {
@@ -80,5 +87,5 @@ fi
   echo "cache_from_flags=${CACHE_FROM_FLAGS# }"
   echo "cache_to_flag=${CACHE_TO_FLAG}"
   echo "export_ref=${EXPORT_REF}"
-  echo "export_ref_digest=${EXPORT_REF_DIGEST}"
+  echo "live_ref=${LIVE_REF}"
 } >> "$GITHUB_OUTPUT"

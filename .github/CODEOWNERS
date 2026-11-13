@@ -24,3 +24,4 @@ LICENSE                      @AMD-AGI/siloai-diffusion-inference-admin
 .github/actions/             @AMD-AGI/siloai-diffusion-inference-ci
 docker/                      @AMD-AGI/siloai-diffusion-inference-ci
 Makefile                     @AMD-AGI/siloai-diffusion-inference-ci
+.github/secret-scan/          @AMD-AGI/siloai-diffusion-inference-ci

@@ -1,0 +1,125 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Trivy Scan'
+description: >-
+  Trivy scans of registry artifacts by digest, followed by promotion of the
+  scanned digests to their destination tags. Secrets block promotion;
+  vulnerabilities and misconfigurations are reported only. Runs as steps of
+  the build job. Requires the pinned Trivy and crane binaries from the runner
+  image, and a prior Docker Hub login.
+
+inputs:
+  targets_file:
+    description: >-
+      Path of a JSON file holding a list of
+      {"name", "source": "repo@sha256:...", "image_scan": bool, "promote": ["repo:tag", ...]}.
+      A file rather than an input string, so image names never pass through
+      step or job outputs.
+    required: true
+  scan_id:
+    description: 'Identifier unique to this scan within the workflow run, used to name the report artifact'
+    required: true
+  expected_trivy_version:
+    description: 'Trivy version the runner image must provide'
+    required: false
+    default: '0.76.1'
+  policy_path:
+    description: 'Repository path of the Trivy secret config'
+    required: false
+    default: '.github/secret-scan/trivy-secret.yaml'
+  policy_ref:
+    description: >-
+      Branch the policy is read from at run time, so a rerun picks up a newly
+      merged allow rule. Defaults to the repository default branch.
+    required: false
+    default: ''
+  github_token:
+    description: 'Token with contents: read, used to fetch the policy'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check scanner tools
+      shell: bash
+      run: |
+        missing=0
+        for tool in trivy crane zstd python3; do
+          if ! command -v "$tool" >/dev/null 2>&1; then
+            echo "::error::${tool} is not installed on this runner. The runner image must provide the pinned secret scanning tools."
+            missing=1
+          fi
+        done
+        exit "$missing"
+
+    - name: Fetch secret scan policy
+      id: policy
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        POLICY_PATH: ${{ inputs.policy_path }}
+        POLICY_REF: ${{ inputs.policy_ref }}
+      run: |
+        set -euo pipefail
+        ref="${POLICY_REF}"
+        if [ -z "$ref" ]; then
+          ref=$(gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch)
+        fi
+        sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${ref}" --jq .sha)
+        policy_file="${RUNNER_TEMP}/secret-scan-policy.yaml"
+        fetch_policy() {
+          gh api -H 'Accept: application/vnd.github.raw+json' \
+            "repos/${GITHUB_REPOSITORY}/contents/${POLICY_PATH}?ref=$1" > "$policy_file" 2> "${RUNNER_TEMP}/secret-scan-policy.err"
+        }
+        if ! fetch_policy "$sha"; then
+          # Bootstrap only: before the policy exists on ${ref}, use the copy
+          # from the workflow's own commit. Any other error fails closed.
+          if ! grep -q 'HTTP 404' "${RUNNER_TEMP}/secret-scan-policy.err"; then
+            cat "${RUNNER_TEMP}/secret-scan-policy.err" >&2
+            exit 1
+          fi
+          echo "::warning::${POLICY_PATH} does not exist on ${ref}; using the copy from ${GITHUB_WORKFLOW_SHA}"
+          ref="workflow commit"
+          sha="${GITHUB_WORKFLOW_SHA}"
+          fetch_policy "$sha" || { cat "${RUNNER_TEMP}/secret-scan-policy.err" >&2; exit 1; }
+        fi
+        echo "Using ${POLICY_PATH} from ${ref} at ${sha}"
+        {
+          echo "file=${policy_file}"
+          echo "source=${POLICY_PATH}@${ref} (${sha})"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Scan artifacts with Trivy
+      shell: bash
+      env:
+        TARGETS_FILE: ${{ inputs.targets_file }}
+        EXPECTED_TRIVY_VERSION: ${{ inputs.expected_trivy_version }}
+        POLICY_FILE: ${{ steps.policy.outputs.file }}
+        POLICY_SOURCE: ${{ steps.policy.outputs.source }}
+        REPORT_DIR: ${{ runner.temp }}/trivy-reports
+      run: |
+        python3 "${GITHUB_ACTION_PATH}/scripts/secret_scan.py" scan \
+          --targets-file "${TARGETS_FILE}" \
+          --policy "${POLICY_FILE}" \
+          --policy-source "${POLICY_SOURCE}" \
+          --expected-trivy-version "${EXPECTED_TRIVY_VERSION}" \
+          --report-dir "${REPORT_DIR}" \
+          --work-dir "${RUNNER_TEMP}"
+
+    - name: Upload Trivy reports
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: trivy-reports-${{ inputs.scan_id }}-attempt-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/trivy-reports/
+        if-no-files-found: warn
+        retention-days: 30
+
+    - name: Promote scanned artifacts
+      shell: bash
+      env:
+        TARGETS_FILE: ${{ inputs.targets_file }}
+      run: |
+        python3 "${GITHUB_ACTION_PATH}/scripts/secret_scan.py" promote --targets-file "${TARGETS_FILE}"

@@ -30,6 +30,12 @@ inputs:
     description: 'Whether to emit a --cache-to flag for the scoped ref'
     required: false
     default: 'false'
+  export_tag:
+    description: >-
+      Candidate tag the export is written to instead of the scoped ref. The
+      secret scan promotes it to live_ref after it passes.
+    required: false
+    default: ''
   disable_cache:
     description: 'Skip every import; a requested export still happens'
     required: false
@@ -48,9 +54,9 @@ outputs:
   export_ref:
     description: 'Ref the build exports to, empty unless export is true'
     value: ${{ steps.resolve.outputs.export_ref }}
-  export_ref_digest:
-    description: 'Digest of the export ref before the build, empty if absent'
-    value: ${{ steps.resolve.outputs.export_ref_digest }}
+  live_ref:
+    description: 'Scoped ref builds import from, empty unless export is true'
+    value: ${{ steps.resolve.outputs.live_ref }}
 
 runs:
   using: 'composite'
@@ -65,5 +71,6 @@ runs:
         CACHE_SCOPE: ${{ inputs.cache_scope }}
         EXTRA_CACHE_FROM: ${{ inputs.extra_cache_from }}
         EXPORT: ${{ inputs.export }}
+        EXPORT_TAG: ${{ inputs.export_tag }}
         DISABLE_CACHE: ${{ inputs.disable_cache }}
       run: ${{ github.action_path }}/scripts/resolve-build-cache.sh
