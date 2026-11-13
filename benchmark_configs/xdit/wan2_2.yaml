@@ -325,12 +325,10 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    attention_backend: aiter_mxfp6_sparge
+    attention_backend: aiter_mxfp6_sol
     cross_attention_backend: aiter_bf16
     gemm_quantization: low=fp4,high=fp6
-    spargeattn_simthreshold: 0.2
-    spargeattn_cdfthreshold: 0.9
-    use_spargeattn_head_balance: true
+    solattn_beta: 0.5
     memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.hopper.h100
@@ -348,12 +346,11 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    attention_backend: flex_block_sparge
+    attention_backend: sol_attn
     cross_attention_backend: flash_3
     gemm_quantization: fp8
-    spargeattn_simthreshold: 0.2
-    spargeattn_cdfthreshold: 0.9
-    use_spargeattn_head_balance: true
+    sol_attn_thresh_type: exact
+    sol_attn_tau: 0.2
     memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.hopper.h200
@@ -371,12 +368,33 @@
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
-    attention_backend: flex_block_sparge
+    attention_backend: sol_attn
     cross_attention_backend: flash_3
     gemm_quantization: fp8
-    spargeattn_simthreshold: 0.2
-    spargeattn_cdfthreshold: 0.9
-    use_spargeattn_head_balance: true
+    sol_attn_thresh_type: exact
+    sol_attn_tau: 0.2
+    memory_efficient_replicated_load: true
+
+- name: wan2_2.quantgemm_sparseattn.blackwell
+  tags: [lucid, blackwell, b200, b300]
+  model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
+  runner: xdit
+  args:
+    prompt: Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside.
+    height: 720
+    width: 1280
+    input_images: /app/data/wan_input.jpg
+    num_frames: 81
+    ulysses_degree: 8
+    use_parallel_vae: true
+    num_iterations: 1
+    num_inference_steps: 40
+    use_torch_compile: true
+    gemm_quantization: low=fp4,high=fp8
+    attention_backend: sol_attn
+    cross_attention_backend: cudnn
+    sol_attn_thresh_type: exact
+    sol_attn_tau: 0.2
     memory_efficient_replicated_load: true
 
 - name: wan2_2_ti2v_5b.i2v.4gpu.rdna4
