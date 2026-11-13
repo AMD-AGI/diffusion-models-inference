@@ -19,6 +19,32 @@ def _diff_counts(diff: dict[str, Any]) -> tuple[int, int, int]:
     return added, replaced, removed
 
 
+def _mib(value: int) -> str:
+    return f"{value / (1024 * 1024):.1f} MiB"
+
+
+def _workspace(entry: dict[str, Any]) -> str:
+    shortfalls = entry.get("insufficient_workspace") or []
+    if not shortfalls:
+        return "none logged"
+    return "; ".join(
+        f"{item['solver']} needs {_mib(item['required_bytes'])}, got {_mib(item['provided_bytes'])}" for item in shortfalls
+    )
+
+
+def _missing_find_table(entries: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| Command ID | GPU | Selected solver | Workspace shortfall | Log | Command |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for entry in entries:
+        lines.append(
+            f"| `{entry['command_id']}` | {entry['device_id']} | {_escape(entry.get('selected_solver') or 'unknown')} | "
+            f"{_escape(_workspace(entry))} | `{entry['log_dir']}` | `{_escape(entry['command'])}` |"
+        )
+    return lines
+
+
 def summary_markdown(report: dict[str, Any]) -> str:
     identity = report["identity"]
     plan = report["plan"]["counts"]
@@ -36,12 +62,29 @@ def summary_markdown(report: dict[str, Any]) -> str:
         ("Tuning", f"{tuning['succeeded']} succeeded, {tuning['failed']} failed"),
         ("DB changes", f"{added} added, {replaced} replaced, {removed} removed"),
         ("DB check", "valid" if report["db"]["validation"]["valid"] else "invalid"),
+        ("Perf records from system DB", len(report["db"].get("perf_records_from_existing_db", []))),
+        ("Find records not written", len(report["db"].get("missing_find_records", []))),
     ]
     lines = ["## MIOpen tuning", "", "| Field | Value |", "| --- | --- |"]
     lines.extend(f"| {name} | {_escape(value)} |" for name, value in rows)
     if report["errors"]:
         lines.extend(["", "### Required actions", ""])
         lines.extend(f"- {_escape(error)}" for error in report["errors"])
+    missing_find = report["db"].get("missing_find_records", [])
+    if report.get("warnings"):
+        lines.extend(["", "### Warnings", ""])
+        lines.extend(f"- {_escape(warning)}" for warning in report["warnings"])
+    if missing_find:
+        lines.extend(
+            [
+                "",
+                "<details><summary>Problems without a find DB record (logs are in the MIOpen report artifact)</summary>",
+                "",
+                *_missing_find_table(missing_find),
+                "",
+                "</details>",
+            ]
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -76,9 +119,37 @@ def report_markdown(report: dict[str, Any]) -> str:
             f"{len(diff['removed'])} removed"
         )
     missing = report["db"].get("missing_after_tuning", [])
-    lines.extend(["", "## Missing records after successful tuning", ""])
+    lines.extend(["", "## Missing performance records after successful tuning", ""])
     if missing:
-        lines.extend(f"- `{entry['command_id']}`: {', '.join(entry['missing'])}" for entry in missing)
+        lines.extend(
+            f"- `{entry['command_id']}` (GPU {entry['device_id']}, `{entry['log_dir']}`): {', '.join(entry['missing'])}"
+            for entry in missing
+        )
+    else:
+        lines.append("None.")
+
+    missing_find = report["db"].get("missing_find_records", [])
+    lines.extend(["", "## Find records MIOpen did not write", ""])
+    if missing_find:
+        lines.extend(
+            [
+                (
+                    "MIOpen finished these finds successfully but did not store a find DB record. "
+                    "This does not fail the run; use the logs to report the issue upstream."
+                ),
+                "",
+                *_missing_find_table(missing_find),
+            ]
+        )
+    else:
+        lines.append("None.")
+
+    existing = report["db"].get("perf_records_from_existing_db", [])
+    lines.extend(["", "## Performance records served by the system DB", ""])
+    if existing:
+        lines.append("MIOpen loaded these performance records from an existing DB and did not search, as intended.")
+        lines.append("")
+        lines.extend(f"- `{entry['command_id']}`: `{entry['perf_db_key']}`" for entry in existing)
     else:
         lines.append("None.")
     return "\n".join(lines) + "\n"
@@ -86,6 +157,7 @@ def report_markdown(report: dict[str, Any]) -> str:
 
 def annotations(report: dict[str, Any]) -> list[str]:
     messages = [f"::error title=MIOpen tuning::{error}" for error in report["errors"]]
+    messages.extend(f"::warning title=MIOpen tuning::{warning}" for warning in report.get("warnings", []))
     for entry in report["plan"]["entries"]:
         if entry["action"] == "reject":
             source = entry["source"]

@@ -14,7 +14,7 @@ from .databases import DatabaseError, DatabaseIdentity, diff_pairs, merge_pairs,
 from .identity import collect_identity
 from .planner import build_plan, tuning_commands
 from .runner import RunOptions, run_tuning
-from .workloads import load_workloads
+from .workloads import import_collected_workloads, import_report_markdown, load_workloads
 
 
 def _write_json(value: Any, output: Path | None) -> None:
@@ -60,6 +60,23 @@ def _workloads_check(args: argparse.Namespace) -> int:
     report = workloads.to_dict()
     _write_json(report, args.output)
     return 1 if workloads.rejected or (args.strict_format and workloads.format_warnings) else 0
+
+
+def _workloads_import(args: argparse.Namespace) -> int:
+    try:
+        report = import_collected_workloads(
+            args.artifacts,
+            args.workloads_dir,
+            architecture=args.arch,
+            include_partial=args.include_partial,
+            write=args.write,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}")
+        return 1
+    _write_json(report, args.output)
+    print(import_report_markdown(report), end="")
+    return 1 if report["counts"]["rejected"] else 0
 
 
 def _plan(args: argparse.Namespace) -> int:
@@ -159,6 +176,14 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--output", type=Path)
     check.add_argument("--strict-format", action="store_true", help="Fail on unsorted or duplicate file lines")
     check.set_defaults(handler=_workloads_check)
+    import_command = workload_commands.add_parser("import", help="Compare or import benchmark-collected workload commands")
+    import_command.add_argument("artifacts", nargs="+", type=Path, help="Downloaded MIOpen workload artifact directories")
+    import_command.add_argument("--workloads-dir", type=Path, default=Path("data/miopen/workloads"))
+    import_command.add_argument("--arch", help="Architecture suffix, such as gfx950; inferred from artifact names by default")
+    import_command.add_argument("--include-partial", action="store_true")
+    import_command.add_argument("--write", action="store_true", help="Write changed workload files")
+    import_command.add_argument("--output", type=Path, help="Write the JSON import report")
+    import_command.set_defaults(handler=_workloads_import)
 
     plan = commands.add_parser("plan", help="Select workload problems that need tuning")
     plan.add_argument("--workloads", nargs="+", type=Path, default=[Path("data/miopen/workloads")])

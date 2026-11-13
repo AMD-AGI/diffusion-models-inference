@@ -26,10 +26,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, "/app/.ci")
-from miopen_driver_commands import MIOpenDriverCommandCollector, env_enabled
-from miopen_tuning.collection import MIOpenDriverCommandCollector as PackageCollector
+from miopen_tuning.collection import MIOpenDriverCommandCollector, env_enabled
 
-assert MIOpenDriverCommandCollector is PackageCollector
 assert not env_enabled(os.environ.get("CI_RUN_PY_COLLECT_MIOPEN_DRIVER_COMMANDS", "0"))
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)

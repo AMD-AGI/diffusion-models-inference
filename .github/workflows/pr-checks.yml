@@ -38,7 +38,7 @@ jobs:
 
           py_files=$(echo "$all_changed" | grep '\.py$' || true)
           yml_files=$(echo "$all_changed" | grep '\.ya\?ml$' | grep -v '^data/hipblaslt/' || true)
-          spdx_files=$(echo "$all_changed" | grep -E '^data/hipblaslt/.*\.yaml$|^data/miopen/resolve_prefix\.sh$' || true)
+          spdx_files=$(echo "$all_changed" | grep -E '^data/hipblaslt/.*\.yaml$' || true)
 
           {
             echo "python=$( [ -n "$py_files" ] && echo true || echo false )"

@@ -18,9 +18,17 @@ class RuntimePackagingTest(unittest.TestCase):
                 continue
             checked.append(dockerfile.name)
             with self.subTest(dockerfile=dockerfile.name):
-                self.assertIn("COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py", text)
+                if dockerfile.name == "Dockerfile.rdna4":
+                    self.assertIn("COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py", text)
+                else:
+                    self.assertNotIn(".ci/miopen_driver_commands.py", text)
                 self.assertIn("COPY src/miopen_tuning /app/.ci/miopen_tuning", text)
         self.assertEqual(len(checked), 8)
+
+    def test_run_py_imports_collector_from_package(self):
+        text = (ROOT / ".ci" / "run.py").read_text()
+        self.assertIn("from miopen_tuning.collection import MIOpenDriverCommandCollector, env_enabled", text)
+        self.assertNotIn("from miopen_driver_commands import", text)
 
 
 if __name__ == "__main__":

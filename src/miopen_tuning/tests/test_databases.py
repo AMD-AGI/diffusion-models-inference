@@ -101,6 +101,21 @@ class DatabaseTest(unittest.TestCase):
         with self.assertRaises(DatabaseError):
             merge_pairs(None, [first, second], self.root / "output", IDENTITY)
 
+    def test_merge_without_tuned_files_raises_unless_allowed(self):
+        base = self.root / "base"
+        empty = self.root / "tuned"
+        output = self.root / "output"
+        self.write_pair(base, f"{FIND_KEY}=old\n", f"{PERF_KEY}=old\n")
+        empty.mkdir()
+
+        with self.assertRaises(DatabaseError):
+            merge_pairs(base, [empty], output, IDENTITY)
+
+        report = merge_pairs(base, [empty], output, IDENTITY, allow_no_tuned_files=True)
+
+        self.assertEqual(read_records(IDENTITY.path(output, "ufdb.txt")).records, {FIND_KEY: "old"})
+        self.assertEqual(report["ufdb.txt"], {"added": [], "removed": [], "replaced": []})
+
     def test_merge_failure_leaves_existing_output_unchanged(self):
         output = self.root / "output"
         tuned = self.root / "tuned"

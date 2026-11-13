@@ -3,7 +3,7 @@
 
 import unittest
 
-from miopen_convolution import MIOpenConvolution
+from miopen_tuning.problem import MIOpenConvolution
 
 
 class TestMIOpenConvolution(unittest.TestCase):

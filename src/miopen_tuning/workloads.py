@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -156,3 +158,119 @@ def load_workloads(paths: Iterable[Path], root: Path | None = None) -> WorkloadS
             else:
                 problems[find_key] = WorkloadProblem(command_id(find_key), command, problem, find_key, perf_key, [source])
     return WorkloadSet([str(path) for path in files], problems, rejected, command_count, duplicate_count, format_warnings)
+
+
+_ARCH_RE = re.compile(r"gfx[0-9a-z]+")
+
+
+def infer_architecture(path: Path) -> str:
+    match = _ARCH_RE.search(path.name)
+    if not match:
+        raise ValueError(f"Cannot infer architecture from {path}; use --arch")
+    return match.group(0)
+
+
+def _commands(path: Path) -> list[str]:
+    if not path.is_file():
+        return []
+    return [line.strip() for line in path.read_text().splitlines() if line.strip() and not line.strip().startswith("#")]
+
+
+def target_workload_path(workloads_dir: Path, name: str, architecture: str) -> Path:
+    architecture_path = workloads_dir / f"{name}.{architecture}.txt"
+    if architecture_path.exists():
+        return architecture_path
+    return workloads_dir / f"{name}.txt"
+
+
+def import_collected_workloads(
+    artifact_dirs: Iterable[Path],
+    workloads_dir: Path,
+    *,
+    architecture: str | None = None,
+    include_partial: bool = False,
+    write: bool = False,
+) -> dict[str, Any]:
+    imports: list[dict[str, Any]] = []
+    writes: dict[Path, set[str]] = {}
+    for artifact_dir in artifact_dirs:
+        arch = architecture or infer_architecture(artifact_dir)
+        manifest_path = artifact_dir / "manifest.json"
+        if not manifest_path.is_file():
+            raise ValueError(f"Missing workload collection manifest: {manifest_path}")
+        manifest = json.loads(manifest_path.read_text())
+        for workload in manifest.get("workloads", []):
+            name = workload.get("name")
+            file_name = workload.get("file")
+            entry: dict[str, Any] = {
+                "artifact": str(artifact_dir),
+                "architecture": arch,
+                "workload": name,
+                "benchmark_status": workload.get("benchmark_status"),
+                "collection_status": workload.get("collection_status"),
+                "source": file_name,
+                "target": None,
+                "status": "skipped",
+                "added": [],
+                "removed": [],
+                "unchanged": 0,
+                "rejected": [],
+                "reasons": [],
+            }
+            imports.append(entry)
+            if not name or not file_name:
+                entry["reasons"].append("no collected command file")
+                continue
+            partial = file_name.endswith(".partial.txt") or workload.get("benchmark_status") not in {"succeeded", "process_succeeded"}
+            if partial and not include_partial:
+                entry["status"] = "flagged"
+                entry["reasons"].append("collected from a failed or incomplete benchmark")
+                continue
+            source = artifact_dir / file_name
+            target = target_workload_path(workloads_dir, name, arch)
+            entry["target"] = str(target)
+            valid: set[str] = set()
+            for line_number, command in enumerate(_commands(source), 1):
+                try:
+                    validate_command(command)
+                except (ValueError, IndexError) as exc:
+                    entry["rejected"].append({"line": line_number, "command": command, "error": str(exc)})
+                else:
+                    valid.add(command)
+            if entry["rejected"]:
+                entry["status"] = "rejected"
+                entry["reasons"].append("collected file contains invalid commands")
+                continue
+            existing = set(_commands(target))
+            entry["added"] = sorted(valid - existing)
+            entry["removed"] = sorted(existing - valid)
+            entry["unchanged"] = len(valid & existing)
+            entry["status"] = "changed" if entry["added"] or entry["removed"] else "unchanged"
+            if target in writes and writes[target] != valid:
+                raise ValueError(f"Conflicting collected commands for {target}")
+            writes[target] = valid
+    if write:
+        for target, commands in writes.items():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("".join(f"{command}\n" for command in sorted(commands)))
+    counts = {
+        status: sum(entry["status"] == status for entry in imports)
+        for status in ("changed", "unchanged", "flagged", "rejected", "skipped")
+    }
+    return {"written": write, "counts": counts, "imports": imports}
+
+
+def import_report_markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "## MIOpen workload import",
+        "",
+        "| Architecture | Workload | Status | Added | Removed | Unchanged | Target |",
+        "| --- | --- | --- | ---: | ---: | ---: | --- |",
+    ]
+    for entry in report["imports"]:
+        target = entry["target"] or ""
+        lines.append(
+            f"| {entry['architecture']} | {entry['workload']} | {entry['status']} | "
+            f"{len(entry['added'])} | {len(entry['removed'])} | {entry['unchanged']} | `{target}` |"
+        )
+    return "\n".join(lines) + "\n"

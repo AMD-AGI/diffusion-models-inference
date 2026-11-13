@@ -20,7 +20,6 @@ on:
       - '.github/workflows/miopen-tune-reusable.yml'
       - 'data/miopen/**'
       - 'src/distrituner/**'
-      - 'src/miopen_convolution/**'
       - 'src/miopen_tuning/**'
 
 permissions:
@@ -42,10 +41,9 @@ jobs:
 
       - name: Run MIOpen CPU tests
         env:
-          PYTHONPATH: src:.ci
+          PYTHONPATH: src
         run: |
           python -m pytest -q \
-            src/miopen_convolution/tests \
             src/distrituner/tests \
             src/miopen_tuning/tests \
             .ci/tests/test_miopen_driver_commands.py

@@ -14,7 +14,7 @@ according to the [security policy](SECURITY.md), not through a public issue.
 |---|---|
 | `benchmark_configs/` | YAML benchmark configurations organized by runner (`xdit`, `sgld`, `omni`) |
 | `docker/` | Dockerfiles for different targets (ROCm, CUDA, RDNA4, SGL-D, vLLM-Omni) |
-| `src/` | Python tools — `distrituner`, `miopen_convolution`, `sweep_tooling` |
+| `src/` | Python tools — `distrituner`, `miopen_tuning`, `sweep_tooling` |
 | `data/` | MIOpen and hipBLASLt tuning databases and workload definitions |
 | `patches/` | Patches applied to upstream projects (xFuser, Dynamo, etc.) |
 | `.ci/` | CI benchmark runner scripts and validation tools |

@@ -59,21 +59,30 @@ Each artifact contains:
 
 - `<workload>.txt` for a benchmark process that exited successfully.
 - `<workload>.partial.txt` for commands captured before a benchmark process
-  exited unsuccessfully. Review and rename these files before adding them to
-  `data/miopen/workloads`.
+  exited unsuccessfully. The import command flags these files by default.
 - `manifest.json`, which records every selected workload, its benchmark and
   collection statuses, its unique command count, and its output filename.
   Workloads that emitted no commands have no text file but remain in the
   manifest.
 
 Commands are de-duplicated within each workload and sorted. They are not
-de-duplicated across workloads or architecture artifacts because `tune.sh`
-handles that when it prepares the tuning input.
+de-duplicated across workloads or architecture artifacts because the tuning
+planner handles that while keeping each workload source.
 
-Successful text files can be copied directly into `data/miopen/workloads`.
-Workloads without an architecture suffix can appear in more than one
-architecture artifact; compare those files before choosing the repository
-version.
+Compare downloaded artifacts with the repository workload files:
+
+```sh
+PYTHONPATH=src python -m miopen_tuning workloads import \
+  /tmp/123-miopen-workloads-gfx950 \
+  --output /tmp/miopen-workload-import.json
+```
+
+The report lists added, removed, and unchanged commands for each workload and
+architecture. It flags `.partial.txt` files and rejects invalid commands. Add
+`--write` to update the matching workload files. When a file named
+`<workload>.<architecture>.txt` already exists, the import updates that file;
+otherwise it updates `<workload>.txt`. Use `--include-partial` only after
+reviewing commands from failed benchmark runs.
 
 Collection is disabled by default when `.ci/run.py` is invoked directly. To
 enable it for an interactive run, set
@@ -88,7 +97,6 @@ or MIOpen installation:
 ```sh
 python -m pip install pytest tqdm
 PYTHONPATH=src:.ci python -m pytest -q \
-  src/miopen_convolution/tests \
   src/distrituner/tests \
   src/miopen_tuning/tests \
   .ci/tests/test_miopen_driver_commands.py
@@ -144,6 +152,15 @@ PYTHONPATH=src python -m miopen_tuning plan \
 
 `python -m miopen_tuning identity --output identity.json` records these values
 from an image, and the commands accept `--identity identity.json`.
+
+Some problems never get a user performance record. With
+`MIOPEN_FIND_ENFORCE=3`, MIOpen does not search a problem whose performance
+record is already in the system DB shipped with ROCm, so it writes nothing to
+the user DB. These problems are planned for tuning on every run and appear in
+`find_without_perf` from `db check --require-complete`. The re-run is short
+because MIOpen loads the system record instead of searching. The tools do not
+store which problems the system DB covers, since that changes with each ROCm
+release.
 
 ## Run local tuning
 
