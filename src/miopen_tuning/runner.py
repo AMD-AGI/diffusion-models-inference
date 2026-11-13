@@ -63,7 +63,10 @@ def _run_contracts(options: RunOptions) -> dict[str, Any]:
     if not options.run_contracts:
         return {"status": "skipped", "exit_code": None, "log": None}
     contracts_dir = options.output_dir / "contracts"
-    contracts_dir.mkdir(parents=True, exist_ok=True)
+    # The contract tests refuse a non-empty artifact directory. This directory belongs to
+    # the run, so results from an earlier run with the same output directory are replaced.
+    shutil.rmtree(contracts_dir, ignore_errors=True)
+    contracts_dir.mkdir(parents=True)
     environment = os.environ.copy()
     environment.update(
         {

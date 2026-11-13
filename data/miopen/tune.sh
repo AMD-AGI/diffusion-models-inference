@@ -36,21 +36,13 @@ if [ -n "${MIOPEN_TUNING_DEVICES:-}" ]; then
   args+=(--devices "$MIOPEN_TUNING_DEVICES")
 fi
 
-rm -f "$ROOTDIR/.tuning_successful" "$ROOTDIR/.miopen_db_prefix"
+rm -f "$ROOTDIR/.tuning_successful"
 (
   cd "$ROOTDIR" || exit 1
   PYTHONPATH="$ROOTDIR/src${PYTHONPATH:+:$PYTHONPATH}" python -m miopen_tuning run "${args[@]}"
 )
 status=$?
 
-if [ -f "$MIOPEN_TUNING_OUTPUT_DIR/identity.json" ]; then
-  python - "$MIOPEN_TUNING_OUTPUT_DIR/identity.json" > "$ROOTDIR/.miopen_db_prefix" <<'PY'
-import json
-import sys
-
-print(json.load(open(sys.argv[1]))["db_prefix"])
-PY
-fi
 if [ "$status" -eq 0 ]; then
   touch "$ROOTDIR/.tuning_successful"
 fi
