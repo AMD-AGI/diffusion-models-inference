@@ -12,10 +12,10 @@ inputs:
     description: 'GPU tag from matrix (e.g., gfx942, mi300, gfx950)'
     required: true
   artifact_name:
-    description: 'Full artifact name for upload'
+    description: 'Full artifact name for the validated MIOpen DB files'
     required: true
   force_retuning:
-    description: 'Force full retuning (delete existing tuning databases before tuning)'
+    description: 'Tune every workload problem from an empty DB'
     required: false
     default: 'false'
   brr_priority:
@@ -31,6 +31,7 @@ runs:
   using: composite
   steps:
     - name: Run MIOpen tuning
+      id: tune
       shell: bash
       env:
         ARCH: ${{ inputs.arch }}
@@ -40,28 +41,52 @@ runs:
         BRR_PRIORITY: ${{ inputs.brr_priority }}
         WITH_BRR: ${{ github.workspace }}/.github/scripts/with-brr.sh
       run: ${{ github.action_path }}/scripts/run-tuning.sh
-    
-    - name: Resolve DB prefix
-      id: db-prefix
+
+    - name: Write MIOpen tuning summary
+      if: always()
       shell: bash
       run: |
-        if [ -f .miopen_db_prefix ]; then
-          echo "prefix=$(cat .miopen_db_prefix)" >> $GITHUB_OUTPUT
+        if [ -f miopen-run/summary.md ]; then
+          cat miopen-run/summary.md >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "::warning::No DB prefix resolved, falling back to arch glob"
-          echo "prefix=${{ inputs.arch }}" >> $GITHUB_OUTPUT
+          echo "## MIOpen tuning" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "No report was produced." >> "$GITHUB_STEP_SUMMARY"
         fi
 
-    - name: Upload MIOpen tuning results
-      uses: actions/upload-artifact@v6
+    - name: Upload MIOpen tuning report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: miopen-report-${{ inputs.artifact_name }}
+        path: miopen-run/
+        if-no-files-found: warn
+
+    - name: Resolve validated MIOpen DB files
+      id: db-files
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import json
+        from pathlib import Path
+
+        report = json.loads(Path("miopen-run/report.json").read_text())
+        if report["status"] != "passed":
+            raise SystemExit("MIOpen tuning report did not pass")
+        paths = [Path(path) for path in report["db"]["files"]]
+        missing = [str(path) for path in paths if not path.is_file()]
+        if missing:
+            raise SystemExit(f"Validated DB files are missing: {missing}")
+        print("paths<<EOF")
+        for path in paths:
+            print(path.relative_to(Path.cwd()))
+        print("EOF")
+        PY
+
+    - name: Upload validated MIOpen DB files
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact_name }}
-        path: data/miopen/userdb/${{ steps.db-prefix.outputs.prefix }}*
-    
-    - name: Upload driver commands
-      uses: actions/upload-artifact@v6
-      with:
-        name: drivercmd-${{ inputs.arch }}
-        path: |
-          drivercmd.txt
-          drivercmd_filtered.txt
+        path: ${{ steps.db-files.outputs.paths }}
+        if-no-files-found: error
