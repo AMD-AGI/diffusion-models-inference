@@ -40,7 +40,7 @@ outputs:
     description: 'Image used for tuning, benchmarking, and as the build-final cache source'
     value: ${{ steps.parse.outputs.working_image }}
   base_image:
-    description: 'Raw base_image input (if specified)'
+    description: 'Effective base image for this run'
     value: ${{ steps.parse.outputs.base_image }}
   git_branch:
     description: 'Git branch name'
