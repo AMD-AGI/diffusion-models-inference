@@ -2,96 +2,53 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# setup identities
-HOST_GID=${HOST_GID:-$(id -g)}
-HOST_UID=${HOST_UID:-$(id -u)}
+set -uo pipefail
 
-# set repository root directory
 WORKDIR=$(pwd)
 ROOTDIR="${ROOTDIR:-/app/diffusion-models-inference}"
-
-# set MIOpen ENVs
 MIOPEN_USER_DB_PATH=${MIOPEN_USER_DB_PATH:-$ROOTDIR/data/miopen/userdb}
 MIOPEN_FIND_MODE=${MIOPEN_FIND_MODE:-1}
-MIOPEN_FIND_ENFORCE=${MIOPEN_FIND_ENFORCE:-4}
-
-ARCH=${ARCH:-unknown}
+MIOPEN_FIND_ENFORCE=${MIOPEN_FIND_ENFORCE:-3}
+MIOPEN_TUNING_OUTPUT_DIR=${MIOPEN_TUNING_OUTPUT_DIR:-$WORKDIR/miopen-run}
 FORCE_RETUNING=${FORCE_RETUNING:-false}
 
-DB_PREFIX=$("$ROOTDIR/data/miopen/resolve_prefix.sh")
-if [ -n "$DB_PREFIX" ]; then
-    echo "Detected MIOpen DB prefix: $DB_PREFIX"
-    echo "$DB_PREFIX" > "$ROOTDIR/.miopen_db_prefix"
-else
-    echo "Could not resolve MIOpen DB prefix from rocminfo, tuning will run from scratch"
+args=(
+  --output-dir "$MIOPEN_TUNING_OUTPUT_DIR"
+  --workloads "$ROOTDIR/data/miopen/workloads"
+  --db-dir "$MIOPEN_USER_DB_PATH"
+  --prefix-map "$ROOTDIR/data/miopen/prefixes.txt"
+  --install-db
+  --find-mode "$MIOPEN_FIND_MODE"
+  --find-enforce "$MIOPEN_FIND_ENFORCE"
+  --image "${MIOPEN_TUNING_IMAGE:-}"
+  --image-digest "${MIOPEN_TUNING_IMAGE_DIGEST:-}"
+)
+if [ -n "${MIOPEN_DEBUG_CONV_DIRECT:-}" ]; then
+  args+=(--debug-conv-direct "$MIOPEN_DEBUG_CONV_DIRECT")
+fi
+if [ "$FORCE_RETUNING" = "true" ]; then
+  args+=(--force-retuning)
+fi
+if [ -n "${MIOPEN_TUNING_DEVICES:-}" ]; then
+  args+=(--devices "$MIOPEN_TUNING_DEVICES")
 fi
 
-if [ "$FORCE_RETUNING" = "true" ] && [ -n "$DB_PREFIX" ]; then
-    echo "Force retuning enabled, removing existing tuning databases"
-    echo "Removing database files matching: ${DB_PREFIX}*.{udb,ufdb}.txt"
-    rm -f -- "${MIOPEN_USER_DB_PATH}/${DB_PREFIX}"*.udb.txt
-    rm -f -- "${MIOPEN_USER_DB_PATH}/${DB_PREFIX}"*.ufdb.txt
-    echo "Removed existing tuning databases"
+rm -f "$ROOTDIR/.tuning_successful" "$ROOTDIR/.miopen_db_prefix"
+(
+  cd "$ROOTDIR" || exit 1
+  PYTHONPATH="$ROOTDIR/src${PYTHONPATH:+:$PYTHONPATH}" python -m miopen_tuning run "${args[@]}"
+)
+status=$?
+
+if [ -f "$MIOPEN_TUNING_OUTPUT_DIR/identity.json" ]; then
+  python - "$MIOPEN_TUNING_OUTPUT_DIR/identity.json" > "$ROOTDIR/.miopen_db_prefix" <<'PY'
+import json
+import sys
+
+print(json.load(open(sys.argv[1]))["db_prefix"])
+PY
 fi
-
-# glob, concatenate and retain unique MIOpen driver commands
-echo "Extracting workload MIOpenDriver calls"
-sed -s "\$a\\" "$ROOTDIR"/data/miopen/workloads/*.txt | uniq -u | sort -u > "$ROOTDIR/drivercmd.txt"
-
-# filter out already-tuned commands
-echo "Filtering already-tuned commands"
-python "$ROOTDIR/src/miopen_convolution/filter_tuned_commands.py" \
-    "$ROOTDIR/drivercmd.txt" \
-    "$ROOTDIR/drivercmd_filtered.txt" \
-    --db-path "$MIOPEN_USER_DB_PATH" \
-    --db-prefix "$DB_PREFIX"
-
-echo "$(wc -l < "$ROOTDIR/drivercmd_filtered.txt") commands need tuning"
-
-# find MIOpenDriver executable
-echo "Searching for MIOpenDriver executable"
-miopendriver_path=$(find / -type f -name MIOpenDriver -executable 2> /dev/null | head -n 1)
-
-if [ -z "$miopendriver_path" ]; then
-    echo "Executable MIOpenDriver not found."
-    exit 1
+if [ "$status" -eq 0 ]; then
+  touch "$ROOTDIR/.tuning_successful"
 fi
-
-# create a symbolic link to /bin
-echo "Creating a symbolic link to MIOpenDriver"
-ln -s "$miopendriver_path" /bin/MIOpenDriver
-
-# run MIOpen tuning
-echo "Executing MIOpen tuning"
-miopen_extra_args=()
-if [[ -n "${MIOPEN_DEBUG_CONV_DIRECT:-}" ]]; then
-    miopen_extra_args+=(--miopen-debug-conv-direct "$MIOPEN_DEBUG_CONV_DIRECT")
-fi
-cd "$ROOTDIR/src/distrituner" || exit 1
-if ! python miopen_tuner.py "$ROOTDIR/drivercmd_filtered.txt" \
-    --tuning-output-path "$WORKDIR/tuning" --log-dir "$WORKDIR/logs" \
-    --miopen-find-mode "$MIOPEN_FIND_MODE" --miopen-find-enforce "$MIOPEN_FIND_ENFORCE" \
-    "${miopen_extra_args[@]}"; then
-    echo "MIOpen tuning failed"
-    exit 1
-fi
-
-# concatenate results
-tuningdirs=("$WORKDIR"/tuning/device*/)
-
-if [ ! -d "${tuningdirs[0]}" ]; then
-  echo "Tuning directories not found"
-  exit 1
-fi
-
-filename=$(basename "$(find "${tuningdirs[0]}" -type f -name "*.udb.txt" | head -n 1)")
-filename="${filename%.*.*}"
-
-echo "Concatenating results with existing databases $filename"
-cat "$WORKDIR"/tuning/device*/"$filename".udb.txt >> "$MIOPEN_USER_DB_PATH/$filename.udb.txt"
-sort -u "$MIOPEN_USER_DB_PATH/$filename.udb.txt" -o "$MIOPEN_USER_DB_PATH/$filename.udb.txt"
-cat "$WORKDIR"/tuning/device*/"$filename".ufdb.txt >> "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt"
-sort -u "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt" -o "$MIOPEN_USER_DB_PATH/$filename.ufdb.txt"
-
-# signal success to the host
-touch "$ROOTDIR/.tuning_successful"
+exit "$status"

@@ -144,3 +144,20 @@ PYTHONPATH=src python -m miopen_tuning plan \
 
 `python -m miopen_tuning identity --output identity.json` records these values
 from an image, and the commands accept `--identity identity.json`.
+
+## Run local tuning
+
+`data/miopen/tune.sh` wraps the Python tuning runner. The runner can also be
+called directly from the repository root:
+
+```sh
+HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+PYTHONPATH=src python -m miopen_tuning run \
+  --output-dir /tmp/miopen-run \
+  --install-db
+```
+
+The runner combines workload files, tunes each problem once, writes readable
+logs for each command, merges tuned records by key, validates the exact DB pair,
+and writes `report.json`. It installs the merged DB only when every command
+succeeds and every successful command has both DB records.
