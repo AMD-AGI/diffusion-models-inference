@@ -28,4 +28,4 @@ repos:
         name: Check SPDX headers
         entry: .ci/check_spdx_headers.sh
         language: script
-        files: ^data/hipblaslt/.*\.yaml$|^data/miopen/resolve_prefix\.sh$
+        files: ^data/hipblaslt/.*\.yaml$
