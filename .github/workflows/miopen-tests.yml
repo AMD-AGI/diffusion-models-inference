@@ -1,0 +1,46 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: MIOpen tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.ci/miopen_driver_commands.py'
+      - '.ci/run.py'
+      - '.ci/tests/test_miopen_driver_commands.py'
+      - '.github/actions/check-miopen-changes/**'
+      - '.github/actions/create-miopen-db-branch/**'
+      - '.github/actions/run-miopen-tuning/**'
+      - '.github/workflows/miopen-tests.yml'
+      - '.github/workflows/miopen-tune-reusable.yml'
+      - 'data/miopen/**'
+      - 'src/distrituner/**'
+      - 'src/miopen_convolution/**'
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-tests:
+    name: MIOpen CPU tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: python -m pip install pytest tqdm
+
+      - name: Run MIOpen CPU tests
+        env:
+          PYTHONPATH: src:.ci
+        run: |
+          python -m pytest -q \
+            src/miopen_convolution/tests \
+            src/distrituner/tests \
+            .ci/tests/test_miopen_driver_commands.py
