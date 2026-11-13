@@ -102,22 +102,51 @@ def _copy_pair(source: Path, destination: Path, identity: DatabaseIdentity) -> N
             shutil.copy2(path, identity.path(destination, suffix))
 
 
-def _missing_after_tuning(results: list[Any], merged: Path, identity: DatabaseIdentity) -> list[dict[str, Any]]:
+def _check_records_after_tuning(
+    results: list[Any], merged: Path, identity: DatabaseIdentity, run_directory: Path
+) -> dict[str, list[dict[str, Any]]]:
+    """Classify records that successful tuning commands did not add to the merged user DB.
+
+    A missing performance record is expected when MIOpen loaded that exact key from an
+    existing (system) performance DB and did not search: with MIOPEN_FIND_ENFORCE=3 it
+    only tunes solvers without a record. Any other missing performance record blocks.
+
+    A missing find record is reported as a warning: MIOpen completed the find but did not
+    write the record, which is an upstream MIOpen issue rather than a tuning failure.
+    """
     pair = load_pair(merged, identity)
     find_records = pair[FIND_SUFFIX].records if pair[FIND_SUFFIX] else {}
     perf_records = pair[PERF_SUFFIX].records if pair[PERF_SUFFIX] else {}
-    missing = []
+    checks: dict[str, list[dict[str, Any]]] = {"missing": [], "missing_find": [], "perf_from_existing_db": []}
     for result in results:
         if not result.succeeded:
             continue
-        absent = []
-        if result.task.problem["find_db_key"] not in find_records:
-            absent.append("find DB record")
-        if result.task.problem["perf_db_key"] not in perf_records:
-            absent.append("performance DB record")
-        if absent:
-            missing.append({"command_id": result.task.command_id, "missing": absent})
-    return missing
+        summary = result.process.summary
+        details = {
+            "command_id": result.task.command_id,
+            "command": result.task.command,
+            "device_id": result.device_id,
+            "log_dir": str(result.process.log_dir.relative_to(run_directory)),
+        }
+        find_key = result.task.problem["find_db_key"]
+        perf_key = result.task.problem["perf_db_key"]
+        if find_key not in find_records:
+            checks["missing_find"].append(
+                details
+                | {
+                    "find_db_key": find_key,
+                    "selected_solver": summary.get("selected_solver"),
+                    "insufficient_workspace": summary.get("insufficient_workspace", []),
+                }
+            )
+        if perf_key not in perf_records:
+            loaded = perf_key in summary.get("loaded_perf_db_keys", [])
+            searched = perf_key in summary.get("searched_perf_db_keys", [])
+            if loaded and not searched:
+                checks["perf_from_existing_db"].append(details | {"perf_db_key": perf_key})
+            else:
+                checks["missing"].append(details | {"perf_db_key": perf_key, "missing": ["performance DB record"]})
+    return checks
 
 
 def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
@@ -129,6 +158,7 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
     )
     contracts = _run_contracts(options)
     errors: list[str] = []
+    warnings: list[str] = []
     if contracts["status"] == "failed":
         errors.append(f"MIOpen contract tests failed; see {contracts['log']}")
 
@@ -184,9 +214,15 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
     validation = validate_pair(merged, identity, require_files=bool(results) or not options.force_retuning)
     if not validation["valid"]:
         errors.append("Merged MIOpen DB is invalid")
-    missing = _missing_after_tuning(results, merged, identity)
+    record_checks = _check_records_after_tuning(results, merged, identity, options.output_dir)
+    missing = record_checks["missing"]
     if missing:
-        errors.append(f"{len(missing)} successful tuning commands are missing DB records")
+        errors.append(f"{len(missing)} successful tuning commands are missing performance DB records")
+    if record_checks["missing_find"]:
+        warnings.append(
+            f"MIOpen wrote no find DB record for {len(record_checks['missing_find'])} successfully tuned problems; "
+            "see the MIOpen tuning report for commands and logs"
+        )
     if options.install_db and not errors:
         _copy_pair(merged, options.db_dir, identity)
 
@@ -209,6 +245,7 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
         "schema_version": 1,
         "status": "failed" if errors else "passed",
         "errors": errors,
+        "warnings": warnings,
         "identity": identity_values,
         "db_identity": identity.__dict__,
         "contracts": contracts,
@@ -226,6 +263,8 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
             "diff": db_diff,
             "validation": validation,
             "missing_after_tuning": missing,
+            "missing_find_records": record_checks["missing_find"],
+            "perf_records_from_existing_db": record_checks["perf_from_existing_db"],
             "installed": options.install_db and not errors,
         },
     }
