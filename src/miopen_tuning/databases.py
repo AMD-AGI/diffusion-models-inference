@@ -183,7 +183,16 @@ def merge_pairs(
     tuned_directories: Iterable[Path],
     output_directory: Path,
     identity: DatabaseIdentity,
+    *,
+    allow_no_tuned_files: bool = False,
 ) -> dict[str, Any]:
+    """Merge tuned DB pairs into the base pair by record key and write the result.
+
+    Without tuned files the merge raises, since a standalone merge is then likely given the
+    wrong directories. The tuning runner sets ``allow_no_tuned_files`` because MIOpen can
+    legitimately write nothing (failed commands, or records served by the system DB); the
+    output is then the base pair, and the runner's own checks decide the outcome.
+    """
     base = load_pair(base_directory, identity) if base_directory else {suffix: None for suffix in SUFFIXES}
     merged: dict[str, dict[str, str]] = {
         suffix: dict(base[suffix].records) if base[suffix] else {} for suffix in SUFFIXES
@@ -206,7 +215,7 @@ def merge_pairs(
                     )
                 tuned_values[suffix][key] = (value, record_file.path)
                 merged[suffix][key] = value
-    if tuned_files == 0:
+    if tuned_files == 0 and not allow_no_tuned_files:
         raise DatabaseError(f"No tuned DB files found for {identity.stem}")
 
     temporary_files: list[tuple[Path, Path]] = []
