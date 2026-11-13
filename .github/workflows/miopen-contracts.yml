@@ -61,31 +61,6 @@ jobs:
       - name: Pull image
         run: docker pull "$DOCKER_IMAGE"
 
-      - name: Record image identity
-        run: |
-          set -euo pipefail
-          source .github/scripts/container-name.sh
-          mkdir -p "$ARTIFACT_DIR"
-          image_digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$DOCKER_IMAGE" 2>/dev/null || true)
-          docker run --rm \
-            --name "$(container_name miopen-identity)" \
-            --mount type=bind,src="$GITHUB_WORKSPACE",dst="$GITHUB_WORKSPACE" \
-            -w "$GITHUB_WORKSPACE" \
-            -e PYTHONPATH="$GITHUB_WORKSPACE/src" \
-            -e HOST_UID="$(id -u)" \
-            -e HOST_GID="$(id -g)" \
-            -e GITHUB_WORKSPACE \
-            "$DOCKER_IMAGE" \
-            bash -c '
-              python -m miopen_tuning identity \
-                --image "$1" \
-                --image-digest "$2" \
-                --output "$3/image-identity.json"
-              status=$?
-              source "$GITHUB_WORKSPACE/scripts/fix-workspace-permissions.sh"
-              exit "$status"
-            ' -- "$DOCKER_IMAGE" "$image_digest" "$ARTIFACT_DIR"
-
       - name: Run MIOpen contracts
         env:
           BRR_GPU_REQUEST: '1'
@@ -98,6 +73,8 @@ jobs:
           source .github/scripts/container-name.sh
           source .github/scripts/with-brr.sh
           prepare_brr_container
+          # The contract run records image, MIOpen, and device identity in run/identity.json.
+          mkdir -p "$ARTIFACT_DIR"
           image_digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$DOCKER_IMAGE" 2>/dev/null || true)
           docker run --rm \
             --name "$(container_name miopen-contracts)" \
@@ -163,5 +140,5 @@ jobs:
         uses: ./.github/actions/cleanup-workspace
         with:
           images: ${{ inputs.image }}
-          containers: 'miopen-identity miopen-contracts'
+          containers: 'miopen-contracts'
           skip_workspace_cleanup: 'true'
