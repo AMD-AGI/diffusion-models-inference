@@ -114,3 +114,33 @@ parsed `events.jsonl`, metadata, tuned DBs, and image identity. It must be a new
 or empty directory; the tests refuse to overwrite existing files. The manual
 `MIOpen contracts` GitHub workflow runs the same tests and uploads that
 directory.
+
+## Check workloads and databases
+
+Validate every workload command and report duplicate sources:
+
+```sh
+PYTHONPATH=src python -m miopen_tuning workloads check
+```
+
+Database checks use one exact file pair named from the target device prefix and
+MIOpen version, such as `gfx950100.HIP.3_6_3_37f616f6.udb.txt` and
+`gfx950100.HIP.3_6_3_37f616f6.ufdb.txt`. A workload problem is already tuned
+only when both files contain its records:
+
+```sh
+PYTHONPATH=src python -m miopen_tuning db check \
+  --db-prefix gfx950100 \
+  --miopen-version 3.6.3 \
+  --miopen-build 37f616f6 \
+  --workloads data/miopen/workloads
+
+PYTHONPATH=src python -m miopen_tuning plan \
+  --db-prefix gfx950100 \
+  --miopen-version 3.6.3 \
+  --miopen-build 37f616f6 \
+  --output-dir /tmp/miopen-plan
+```
+
+`python -m miopen_tuning identity --output identity.json` records these values
+from an image, and the commands accept `--identity identity.json`.

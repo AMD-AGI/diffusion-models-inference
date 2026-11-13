@@ -10,6 +10,8 @@ on:
       - '.ci/miopen_driver_commands.py'
       - '.ci/run.py'
       - '.ci/tests/test_miopen_driver_commands.py'
+      - '.github/scripts/check-runtime-image.sh'
+      - 'docker/Dockerfile*'
       - '.github/actions/check-miopen-changes/**'
       - '.github/actions/create-miopen-db-branch/**'
       - '.github/actions/run-miopen-tuning/**'

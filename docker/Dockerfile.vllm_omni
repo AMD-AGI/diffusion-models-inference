@@ -71,6 +71,7 @@ RUN rm -fr /app/.ci/*
 COPY .ci/run.py /app/.ci/run.py
 COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
 COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
+COPY src/miopen_tuning /app/.ci/miopen_tuning
 COPY .ci/determinism_report.py /app/.ci/determinism_report.py
 COPY .ci/integrations/vllm_omni/online_runner.py /app/.ci/online_runner.py
 COPY benchmark_configs/omni/ /app/.ci/benchmark_configs/
