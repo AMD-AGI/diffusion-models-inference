@@ -100,6 +100,13 @@ class MIOpenContractTest(unittest.TestCase):
             cls.temporary_directory = tempfile.TemporaryDirectory(prefix="miopen-contracts-")
             cls.artifacts = Path(cls.temporary_directory.name)
         cls.cache = Path(tempfile.mkdtemp(prefix="miopen-contract-cache-"))
+        # These tests check that tuning writes user DB records. With MIOPEN_FIND_ENFORCE=3,
+        # MIOpen does not search a problem whose performance record exists in the system DB,
+        # so it writes no user record for it. A ROCm release that ships records for a probe
+        # shape would then fail these tests even though MIOpen behaves as the tuning tools
+        # expect. Pointing MIOpen at an empty system DB keeps the probes independent of the
+        # system DB contents; test_probes_do_not_load_system_db_records checks that it works.
+        cls.system_db = Path(tempfile.mkdtemp(prefix="miopen-contract-system-db-"))
         cls.timeout = int(os.environ.get("MIOPEN_CONTRACT_TIMEOUT", "1800"))
         cls.log_profile = os.environ.get("MIOPEN_CONTRACT_LOG_PROFILE", "standard")
         cls.find_mode = os.environ.get("MIOPEN_CONTRACT_FIND_MODE", "1")
@@ -116,6 +123,7 @@ class MIOpenContractTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.cache, ignore_errors=True)
+        shutil.rmtree(cls.system_db, ignore_errors=True)
         if cls.temporary_directory is not None:
             cls.temporary_directory.cleanup()
 
@@ -140,6 +148,7 @@ class MIOpenContractTest(unittest.TestCase):
                 environment={
                     "MIOPEN_USER_DB_PATH": str(db_dir),
                     "MIOPEN_CUSTOM_CACHE_DIR": str(cls.cache),
+                    "MIOPEN_SYSTEM_DB_PATH": str(cls.system_db),
                     "MIOPEN_FIND_MODE": cls.find_mode,
                     "MIOPEN_FIND_ENFORCE": cls.find_enforce,
                 },
@@ -159,6 +168,7 @@ class MIOpenContractTest(unittest.TestCase):
             environment={
                 "MIOPEN_USER_DB_PATH": str(db_dir),
                 "MIOPEN_CUSTOM_CACHE_DIR": str(self.cache),
+                "MIOPEN_SYSTEM_DB_PATH": str(self.system_db),
             },
             log_profile=log_profile or self.log_profile,
             timeout=self.timeout,
@@ -175,6 +185,14 @@ class MIOpenContractTest(unittest.TestCase):
         for probe in self.probes:
             with self.subTest(probe=probe.command_id):
                 self.assertEqual(probe.result.exit_code, 0, probe.result.log_dir)
+
+    def test_probes_do_not_load_system_db_records(self):
+        # The user DB is empty while probes tune, so any loaded performance record came
+        # from the system DB and MIOPEN_SYSTEM_DB_PATH did not take effect.
+        for probe in self.probes:
+            with self.subTest(probe=probe.command_id):
+                self.assertEqual(probe.result.summary["loaded_perf_db_keys"], [], probe.result.log_dir)
+                self.assertTrue(probe.result.summary["searched_perf_db_keys"], probe.result.log_dir)
 
     def test_tuning_writes_find_and_performance_dbs(self):
         for probe in self.probes:

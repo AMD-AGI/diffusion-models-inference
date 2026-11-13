@@ -153,6 +153,15 @@ PYTHONPATH=src python -m miopen_tuning plan \
 `python -m miopen_tuning identity --output identity.json` records these values
 from an image, and the commands accept `--identity identity.json`.
 
+Some problems never get a user performance record. With
+`MIOPEN_FIND_ENFORCE=3`, MIOpen does not search a problem whose performance
+record is already in the system DB shipped with ROCm, so it writes nothing to
+the user DB. These problems are planned for tuning on every run and appear in
+`find_without_perf` from `db check --require-complete`. The re-run is short
+because MIOpen loads the system record instead of searching. The tools do not
+store which problems the system DB covers, since that changes with each ROCm
+release.
+
 ## Run local tuning
 
 `data/miopen/tune.sh` wraps the Python tuning runner. The runner can also be

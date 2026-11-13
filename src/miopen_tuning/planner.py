@@ -18,6 +18,10 @@ def build_plan(workloads: WorkloadSet, db_directory: Path, identity: DatabaseIde
     perf_records = pair[PERF_SUFFIX].records if pair[PERF_SUFFIX] else {}
     entries: list[dict[str, Any]] = []
     for problem in workloads.problems.values():
+        # A problem whose performance record comes from the system DB never gets a user
+        # record (MIOpen does not search it with MIOPEN_FIND_ENFORCE=3), so it is planned
+        # again on every run. That re-run is short, and storing which problems the system DB
+        # covers would go stale when ROCm updates the system DB.
         missing = []
         if pair[FIND_SUFFIX] is None:
             missing.append("find DB file")
