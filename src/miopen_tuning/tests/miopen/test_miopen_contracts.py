@@ -92,9 +92,10 @@ class MIOpenContractTest(unittest.TestCase):
         cls.temporary_directory = None
         if artifact_root:
             cls.artifacts = Path(artifact_root)
-            if cls.artifacts.exists():
-                shutil.rmtree(cls.artifacts)
-            cls.artifacts.mkdir(parents=True)
+            # Never delete a caller's directory: a mistyped path could point at real data.
+            if cls.artifacts.exists() and (not cls.artifacts.is_dir() or any(cls.artifacts.iterdir())):
+                raise RuntimeError(f"MIOPEN_CONTRACT_ARTIFACTS must name a new or empty directory: {cls.artifacts}")
+            cls.artifacts.mkdir(parents=True, exist_ok=True)
         else:
             cls.temporary_directory = tempfile.TemporaryDirectory(prefix="miopen-contracts-")
             cls.artifacts = Path(cls.temporary_directory.name)

@@ -110,6 +110,7 @@ python -m unittest -v miopen_tuning.tests.miopen.test_miopen_contracts
 ```
 
 The artifact directory contains readable `stdout.log` and `stderr.log` files,
-parsed `events.jsonl`, metadata, tuned DBs, and image identity. The manual
+parsed `events.jsonl`, metadata, tuned DBs, and image identity. It must be a new
+or empty directory; the tests refuse to overwrite existing files. The manual
 `MIOpen contracts` GitHub workflow runs the same tests and uploads that
 directory.
