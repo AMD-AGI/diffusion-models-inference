@@ -207,7 +207,9 @@ def run_tuning(options: RunOptions) -> tuple[int, dict[str, Any]]:
         _copy_pair(base_db, db_base, identity)
     tuned_dirs = sorted(path for path in (options.output_dir / "db" / "tuned").glob("device-*") if path.is_dir())
     if results:
-        db_diff = merge_pairs(None if options.force_retuning else db_base, tuned_dirs, merged, identity)
+        db_diff = merge_pairs(
+            None if options.force_retuning else db_base, tuned_dirs, merged, identity, allow_no_tuned_files=True
+        )
     else:
         _copy_pair(db_base, merged, identity)
         db_diff = diff_pairs(db_base, merged, identity)
