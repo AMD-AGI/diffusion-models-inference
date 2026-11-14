@@ -136,7 +136,6 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xfuser_runner_utils.patch && \
-    git apply /patches/xfuser_flux.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 
