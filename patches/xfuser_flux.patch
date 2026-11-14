@@ -1,8 +1,8 @@
 diff --git a/xfuser/model_executor/models/runner_models/flux.py b/xfuser/model_executor/models/runner_models/flux.py
-index 9f6a495..63f97df 100644
+index 1c8037c..dcdaec3 100644
 --- a/xfuser/model_executor/models/runner_models/flux.py
 +++ b/xfuser/model_executor/models/runner_models/flux.py
-@@ -388,17 +388,17 @@ class xFuserFlux2Model(xFuserModel):
+@@ -374,17 +374,17 @@ class xFuserFlux2Model(xFuserModel):
      def _post_load_and_state_initialization(self, input_args: dict) -> None:
          super()._post_load_and_state_initialization(input_args)
  
@@ -19,5 +19,5 @@ index 9f6a495..63f97df 100644
              return True
          return False
  
-     def _validate_config(self, config) -> None:
-         super()._validate_config(config)
+     def _load_model(self) -> DiffusionPipeline:
+         if self.config.pipefusion_parallel_degree > 1:
