@@ -183,10 +183,24 @@ if [ "$TOTAL" -eq 0 ]; then
 fi
 echo "Resolved $TOTAL experiment(s); running each as its own brr job." >&2
 
-# run.py's two model-cache flags are mutually exclusive and the plan already
-# decided which one each experiment needs, so drop any inherited flag first.
-BASE_FLAGS=${EFFECTIVE_BENCHMARK_FLAGS//--no-clear-model-cache/}
-BASE_FLAGS=${BASE_FLAGS//--clear-model-cache/}
+# The plan already resolved the name selection and model-cache policy. Remove
+# those inherited options before adding the current experiment's values.
+read -r -d '' -a INHERITED_FLAGS < <(printf '%s\0' "$EFFECTIVE_BENCHMARK_FLAGS")
+BASE_FLAG_WORDS=()
+for ((i = 0; i < ${#INHERITED_FLAGS[@]}; i++)); do
+  case "${INHERITED_FLAGS[i]}" in
+    --name)
+      i=$((i + 1))
+      if [ "$i" -ge "${#INHERITED_FLAGS[@]}" ]; then
+        echo "::error::--name requires a value." >&2
+        exit 1
+      fi
+      ;;
+    --name=*|--clear-model-cache|--no-clear-model-cache) ;;
+    *) BASE_FLAG_WORDS+=("${INHERITED_FLAGS[i]}") ;;
+  esac
+done
+BASE_FLAGS="${BASE_FLAG_WORDS[*]}"
 
 FAILED=0
 INDEX=0
