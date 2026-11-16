@@ -50,12 +50,17 @@ An error in the `trivy image` check is a warning only.
 - **Real secret:** do not allowlist it. Revoke and rotate it, remove it from
   the build, and rerun the whole workflow. The candidate tag only lives in the
   private cache repository and is deleted by the cache cleanup workflow.
-- **Secret false positive:** add the narrowest possible allow rule to
-  [`trivy-secret.yaml`](trivy-secret.yaml) and merge it to the default branch.
-  Then use **Re-run failed jobs** on the failed run. This reruns the build
-  job, which rebuilds (mostly from the registry cache) to new candidate tags
-  and scans them with the new rule, because the scan always reads the policy
-  from the default branch.
+- **Secret false positive:** these should only come from third-party
+  content, such as test keys or documentation examples in an upstream
+  package. Our own code and build files should never need an exception; fix
+  them instead. For an upstream false positive, add the narrowest possible
+  allow rule to
+  [`trivy-secret.yaml`](trivy-secret.yaml) and push it to the branch that ran
+  the build. Then use **Re-run failed jobs**. The build job uses the latest
+  policy from that branch, rebuilds (mostly from the registry cache) to new
+  candidate tags, and scans them with the updated rule. Since the branch
+  policy also gates promotion, review policy changes carefully before running
+  a build that publishes images.
 - **Vulnerability or misconfiguration finding:** reported as a warning and in
   the uploaded Trivy reports; it does not fail the job. Review it and
   remediate what is in our control.

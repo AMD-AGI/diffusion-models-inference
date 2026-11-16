@@ -622,6 +622,7 @@ jobs:
         with:
           targets_file: ${{ runner.temp }}/secret-scan-targets/targets.json
           scan_id: final
+          policy_ref: ${{ github.ref_name }}
       
       - name: Cleanup
         if: always()

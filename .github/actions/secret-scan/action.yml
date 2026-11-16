@@ -30,8 +30,9 @@ inputs:
     default: '.github/secret-scan/trivy-secret.yaml'
   policy_ref:
     description: >-
-      Branch the policy is read from at run time, so a rerun picks up a newly
-      merged allow rule. Defaults to the repository default branch.
+      Branch or commit the policy is read from at run time. Defaults to the
+      repository default branch. Build workflows pass their triggering branch,
+      so branch policy changes can affect scans and promotion before merging.
     required: false
     default: ''
   github_token:
