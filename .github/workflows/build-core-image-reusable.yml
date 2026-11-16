@@ -24,6 +24,21 @@ on:
         required: false
         type: string
         default: 'amdsiloai/pytorch-xdit-staging'
+      dockerfile:
+        description: 'Dockerfile used for the core and untuned builds'
+        required: false
+        type: string
+        default: 'docker/Dockerfile.ci'
+      build_target:
+        description: 'Build target for the core image; empty builds the final stage'
+        required: false
+        type: string
+        default: 'core'
+      cache_channel:
+        description: 'Image-specific prefix for cache tags, candidates, and scan artifacts'
+        required: false
+        type: string
+        default: 'core'
       cache_image_name:
         description: 'Repository holding the registry layer cache tags'
         required: false
@@ -135,12 +150,12 @@ jobs:
         uses: ./.github/actions/resolve-build-cache
         with:
           cache_image_name: ${{ inputs.cache_image_name }}
-          channel: 'core'
+          channel: ${{ inputs.cache_channel }}
           ref: ${{ inputs.git_ref }}
           cache_scope: ${{ inputs.cache_scope }}
           extra_cache_from: ${{ steps.images.outputs.cache_source }}
           export: ${{ inputs.export_docker_cache }}
-          export_tag: ${{ env.CANDIDATE_TAG }}-corecache-${{ inputs.image_tag }}
+          export_tag: ${{ env.CANDIDATE_TAG }}-${{ inputs.cache_channel }}cache-${{ inputs.image_tag }}
           disable_cache: ${{ inputs.disable_docker_cache }}
 
       - name: Build core image
@@ -150,7 +165,9 @@ jobs:
           BUILDKIT_PROGRESS: plain
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
-          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-core-${{ inputs.image_tag }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_TARGET: ${{ inputs.build_target }}
+          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ inputs.cache_channel }}-${{ inputs.image_tag }}
           CACHE_FROM_FLAGS: ${{ steps.core_cache.outputs.cache_from_flags }}
           CACHE_TO_FLAG: ${{ steps.core_cache.outputs.cache_to_flag }}
           EXPORT_CACHE: ${{ inputs.export_docker_cache }}
@@ -179,13 +196,18 @@ jobs:
             NO_CACHE_FLAG="--no-cache"
           fi
 
+          TARGET_ARGS=()
+          if [ -n "${BUILD_TARGET}" ]; then
+            TARGET_ARGS=(--target "${BUILD_TARGET}")
+          fi
+
           # The export runs even under --no-cache, which makes a disabled-cache
           # run the way to replace a stale cache rather than something the cache
           # needs protecting from.
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
-            -f docker/Dockerfile.ci \
-            --target core \
+            -f "${DOCKERFILE}" \
+            "${TARGET_ARGS[@]}" \
             --pull \
             --push \
             ${NO_CACHE_FLAG} \
@@ -228,7 +250,7 @@ jobs:
         uses: ./.github/actions/resolve-build-cache
         with:
           cache_image_name: ${{ inputs.cache_image_name }}
-          channel: 'core'
+          channel: ${{ inputs.cache_channel }}
           ref: ${{ inputs.git_ref }}
           cache_scope: ${{ inputs.cache_scope }}
           extra_cache_from: ${{ steps.images.outputs.cache_source }} ${{ steps.core_cache.outputs.export_ref }}
@@ -240,6 +262,7 @@ jobs:
         env:
           BUILDKIT_PROGRESS: plain
           DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
           CACHE_FROM_FLAGS: ${{ steps.untuned_cache.outputs.cache_from_flags }}
           CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-untuned-${{ inputs.image_tag }}
         run: |
@@ -255,7 +278,7 @@ jobs:
 
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
-            -f docker/Dockerfile.ci \
+            -f "${DOCKERFILE}" \
             --push \
             ${CACHE_FROM_FLAGS} \
             "${BUILD_ARGS[@]}" \
@@ -275,15 +298,17 @@ jobs:
           UNTUNED_SOURCE: ${{ steps.build_untuned.outputs.source }}
           CACHE_SOURCE: ${{ steps.check_cache.outputs.source }}
           CACHE_LIVE_REF: ${{ steps.core_cache.outputs.live_ref }}
+          CHANNEL: ${{ inputs.cache_channel }}
         run: |
           TARGETS=$(jq -cn \
+            --arg channel "${CHANNEL}" \
             --arg core "${CORE_SOURCE}" --arg core_dest "${CORE_IMAGE}" \
             --arg untuned "${UNTUNED_SOURCE}" --arg untuned_dest "${STAGING_IMAGE}" \
             --arg cache "${CACHE_SOURCE}" --arg cache_dest "${CACHE_LIVE_REF}" \
             '[
-              (select($core != "") | {name: "core image", source: $core, image_scan: true, promote: [$core_dest]}),
+              (select($core != "") | {name: "\($channel) image", source: $core, image_scan: true, promote: [$core_dest]}),
               (select($untuned != "") | {name: "untuned image", source: $untuned, image_scan: true, promote: [$untuned_dest]}),
-              (select($cache != "") | {name: "core build cache", source: $cache, image_scan: false, promote: [$cache_dest]})
+              (select($cache != "") | {name: "\($channel) build cache", source: $cache, image_scan: false, promote: [$cache_dest]})
             ]')
           # Kept in a file: GitHub drops job outputs that contain the Docker
           # Hub organization, which is stored as a secret.

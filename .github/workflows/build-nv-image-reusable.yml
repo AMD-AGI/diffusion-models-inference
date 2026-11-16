@@ -24,6 +24,21 @@ on:
         required: false
         type: string
         default: 'amdsiloai/pytorch-xdit-nvidia'
+      dockerfile:
+        description: 'Dockerfile to build'
+        required: false
+        type: string
+        default: 'docker/Dockerfile.cuda'
+      cache_channel:
+        description: 'Image-specific prefix for cache tags, candidates, and scan artifacts'
+        required: false
+        type: string
+        default: 'nv'
+      docker_build_args:
+        description: 'Newline-separated Docker build arguments in KEY=VALUE form'
+        required: false
+        type: string
+        default: ''
       cache_image_name:
         description: 'Private repository holding the registry layer cache and secret scan candidates'
         required: false
@@ -100,7 +115,7 @@ jobs:
       # host's nproc; the value is injected as a --build-arg only for the
       # arm64 (QEMU) build below.
       - name: Detect build host parallelism
-        if: ${{ inputs.platform == 'linux/arm64' }}
+        if: ${{ inputs.platform == 'linux/arm64' && inputs.dockerfile == 'docker/Dockerfile.cuda' }}
         id: cores
         shell: bash
         run: |
@@ -127,9 +142,12 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           CACHE_IMAGE_NAME: ${{ inputs.cache_image_name }}
+          CACHE_CHANNEL: ${{ inputs.cache_channel }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
           IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
-          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-nv${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
-          CANDIDATE_CACHE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-nvcache${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
+          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ inputs.cache_channel }}${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
+          CANDIDATE_CACHE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ inputs.cache_channel }}cache${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
           TAG_SUFFIX: ${{ inputs.image_tag_suffix }}
           FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
         run: |
@@ -138,10 +156,19 @@ jobs:
             NO_CACHE_FLAG="--no-cache"
           fi
           
-          EXTRA_BUILD_ARGS=""
+          BUILD_ARGS=()
           if [ "${PLATFORM}" = "linux/arm64" ] && [ -n "${FLASH_ATTN_NPROC}" ]; then
-            EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}"
+            BUILD_ARGS+=(--build-arg "FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}")
           fi
+
+          while IFS= read -r build_arg; do
+            [[ -z "${build_arg}" ]] && continue
+            if [[ ! "${build_arg}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]] || [[ "${build_arg}" == *$'\r'* ]]; then
+              echo "::error::Invalid Docker build argument syntax"
+              exit 1
+            fi
+            BUILD_ARGS+=(--build-arg "${build_arg}")
+          done <<< "${DOCKER_BUILD_ARGS}"
           
           # IMAGE_TAG carries the commit SHA, so it never exists before a build
           # of a new commit and can only seed cache when the same tag is rebuilt.
@@ -149,7 +176,7 @@ jobs:
           # build reuse the previous commit's layers, on any runner. It lives in
           # the private cache repository, because a mode=max cache holds
           # builder stages that never reach the published image.
-          CACHE_REF="${CACHE_IMAGE_NAME}:nv-buildcache${TAG_SUFFIX}"
+          CACHE_REF="${CACHE_IMAGE_NAME}:${CACHE_CHANNEL}-buildcache${TAG_SUFFIX}"
           
           # The remote builder imports cache straight from the registry, so a
           # missing ref must not fail the build.
@@ -172,12 +199,12 @@ jobs:
           # digests change and dedup is lost.
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
-            -f docker/Dockerfile.cuda \
+            -f "${DOCKERFILE}" \
             --platform "${PLATFORM}" \
             --pull \
             --push \
             ${NO_CACHE_FLAG} \
-            ${EXTRA_BUILD_ARGS} \
+            "${BUILD_ARGS[@]}" \
             ${CACHE_FROM_FLAGS} \
             --cache-to "type=registry,ref=${CANDIDATE_CACHE},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true" \
             --metadata-file "${RUNNER_TEMP}/nv-build-metadata.json" \

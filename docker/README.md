@@ -3,11 +3,48 @@
 - `Dockerfile.cuda` docker file for CUDA images
 - `Dockerfile.rdna4` docker file for RDNA4 AMD images
 - `Dockerfile.sgld` SGL-D image based on `amdsiloai/pytorch-xdit`
+- `Dockerfile.sgld.cuda` SGL-D image for CUDA based on `lmsysorg/sglang`
 - `Dockerfile.sgld_lmsys` SGL-D image based on `lmsysorg/sglang-rocm` with CI scripts from xDiT
 - `Dockerfile.vllm_omni` vLLM-Omni image for ROCm based on `amdsiloai/pytorch-xdit`
 - `Dockerfile.vllm_omni.cuda` vLLM-Omni image for CUDA based on `vllm/vllm-openai`
 
 ## How-tos
+
+### Build SGL-D and vLLM-Omni images in CI
+
+These workflows run on pushes to `main` with the same path exclusions as the
+xDiT build workflows, and can also be started with `workflow_dispatch`:
+
+| Workflow | Dockerfile | Image variable (default repository) |
+| --- | --- | --- |
+| [build-sgld-image.yml](../.github/workflows/build-sgld-image.yml) | `Dockerfile.sgld` | `SGLD_IMAGE` (`amdsiloai/pytorch-sgld`) |
+| [build-vllm-omni-image.yml](../.github/workflows/build-vllm-omni-image.yml) | `Dockerfile.vllm_omni` | `VLLM_OMNI_IMAGE` (`amdsiloai/pytorch-vllm-omni`) |
+| [build-sgld-nv-image.yml](../.github/workflows/build-sgld-nv-image.yml) | `Dockerfile.sgld.cuda` | `SGLD_NV_IMAGE` (`amdsiloai/pytorch-sgld-nvidia`) |
+| [build-vllm-omni-nv-image.yml](../.github/workflows/build-vllm-omni-nv-image.yml) | `Dockerfile.vllm_omni.cuda` | `VLLM_OMNI_NV_IMAGE` (`amdsiloai/pytorch-vllm-omni-nvidia`) |
+
+The tag defaults to the short commit SHA; override it with the `tag` input.
+
+The ROCm workflows reuse `build-core-image-reusable.yml` with their own
+`dockerfile`, an empty `build_target` (final stage), and no untuned image.
+Like the core build, their layer cache is scoped to the branch (override with
+`cache_scope`) and is exported on pushes or when `export_docker_cache` is set.
+The CUDA workflows reuse `build-nv-image-reusable.yml`; they build `-amd64`
+and `-arm64` tags, then assemble a multi-architecture manifest at the
+unsuffixed tag.
+
+Both reusable workflows build private candidates, scan them with Trivy, and
+promote them only after scanning passes. Each image has its own cache channel;
+the existing xDiT defaults are unchanged. They use `BUILDCACHE_IMAGE` and the
+existing `DOCKERHUB_ORGANIZATION` / `DOCKERHUB_OAT` secrets.
+
+The `runner` input overrides `BUILD_RUNNER` (ROCm) or `BUILD_RUNNER_NV`
+(CUDA), falling back to `build-only`. CUDA arm64 builds require the same
+pre-registered QEMU handler as the xDiT NV workflow.
+Use `disable_docker_cache` for a clean build. Set `docker_build_args` to
+newline-separated `KEY=VALUE` entries to override Dockerfile arguments, for
+example `BASE_IMAGE=amdsiloai/pytorch-xdit:<tag>` or a dependency commit.
+The ROCm workflows use their Dockerfiles' prebuilt base images; they do not
+rebuild the xDiT core or trigger MIOpen tuning.
 
 ### PR benchmark configurations from xDiT
 
