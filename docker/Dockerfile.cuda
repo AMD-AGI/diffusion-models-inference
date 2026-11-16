@@ -17,12 +17,14 @@ ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
 ARG XDIT_COMMIT="8d7467a5b53849b7b6e0fa7366b65d7b445a28ac"
 ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
 ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
+ARG SANA_COMMIT="cf67a3acad7511acb85053e56a05e5dd24c82ba0"
 
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.10-py3
 FROM ${BASE_IMAGE} AS core
 ARG FLASHATTENTION_COMMIT
 ARG FLEX_BLOCK_ATTENTION_COMMIT
 ARG MSLK_COMMIT
+ARG SANA_COMMIT
 ENV PIP_NO_CACHE_DIR=1
 
 # For ImportError: libGL.so.1: cannot open shared object file on nvcr.io/nvidia/pytorch:25.06-py3
@@ -89,6 +91,12 @@ RUN --mount=type=bind,source=patches/flex_block_attn_setup.patch,target=/patches
         python setup.py install && \
         cd .. && rm -rf flex-block-attn; \
     fi
+
+# install sana sol_attn
+RUN git clone https://github.com/NVlabs/sana.git && \
+    cd sana && \
+    git reset --hard ${SANA_COMMIT} && \
+    python -m pip install -e techniques/sparse_backends
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
