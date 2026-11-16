@@ -52,7 +52,7 @@ to generate the user database.
 
 The Build and Benchmark workflow enables command-only MIOpen logging for every
 benchmark run. It uploads one artifact per architecture named
-`<run-number>-miopen-workloads-<architecture>`. Full MIOpen API logging is not
+`<run-number>-collected-miopen-workloads-<architecture>`. Full MIOpen API logging is not
 enabled.
 
 Each artifact contains:
