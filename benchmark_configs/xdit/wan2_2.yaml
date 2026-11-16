@@ -342,7 +342,7 @@
     input_images: /app/data/wan_input.jpg
     num_frames: 81
     ulysses_degree: 8
-    use_parallel_vae: true
+    use_parallel_vae: false
     num_iterations: 1
     num_inference_steps: 40
     use_torch_compile: true
@@ -350,7 +350,7 @@
     cross_attention_backend: flash_3
     gemm_quantization: fp8
     sol_attn_thresh_type: exact
-    sol_attn_tau: 0.2
+    sol_attn_tau: 0.5
     memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.hopper.h200
@@ -372,7 +372,7 @@
     cross_attention_backend: flash_3
     gemm_quantization: fp8
     sol_attn_thresh_type: exact
-    sol_attn_tau: 0.2
+    sol_attn_tau: 0.5
     memory_efficient_replicated_load: true
 
 - name: wan2_2.quantgemm_sparseattn.blackwell
@@ -394,7 +394,7 @@
     attention_backend: sol_attn
     cross_attention_backend: cudnn
     sol_attn_thresh_type: exact
-    sol_attn_tau: 0.2
+    sol_attn_tau: 0.5
     memory_efficient_replicated_load: true
 
 - name: wan2_2_ti2v_5b.i2v.4gpu.rdna4
