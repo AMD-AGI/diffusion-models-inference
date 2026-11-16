@@ -333,6 +333,7 @@ jobs:
                 "rebuild": "${{ inputs.rebuild }}",
                 "run_miopen_tuning": "${{ inputs.run_miopen_tuning }}",
                 "run_benchmarks": "${{ inputs.run_benchmarks }}",
+                "benchmark_flags": ${{ toJSON(inputs.benchmark_flags) }},
                 "build_final": "${{ inputs.build_final }}",
                 "create_miopen_db_branch": "${{ inputs.create_miopen_db_branch }}",
                 "force_retuning": "${{ inputs.force_retuning }}",
