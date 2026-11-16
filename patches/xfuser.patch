@@ -1,0 +1,186 @@
+diff --git a/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py b/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
+index 72cf534..830fde9 100644
+--- a/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
++++ b/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
+@@ -1019,6 +1019,7 @@ def test_streamed_fp8_target_does_not_skip_disjoint_target_in_component(
+             encoder=post_load_module,
+         )
+     )
++    pipe.components = {}
+     pipe.to = lambda _device: pipe
+     model = SimpleNamespace(
+         config=SimpleNamespace(
+diff --git a/tests/unit/model_executor/loading/test_offload_placement.py b/tests/unit/model_executor/loading/test_offload_placement.py
+index be2b589..bfd7767 100644
+--- a/tests/unit/model_executor/loading/test_offload_placement.py
++++ b/tests/unit/model_executor/loading/test_offload_placement.py
+@@ -105,9 +105,11 @@ def test_offload_places_only_the_runners_resident_components(monkeypatch):
+         def __init__(self, name):
+             self.name = name
+ 
+-        def to(self, device):
+-            moved.append((self.name, device))
+-            return self
++    monkeypatch.setattr(
++        placement,
++        "move_module_to_device",
++        lambda component, device: moved.append((component.name, device)),
++    )
+ 
+     def whole_pipeline_to(device):
+         raise AssertionError("an offloaded pipeline must not be moved whole")
+diff --git a/xfuser/core/utils/runner_utils.py b/xfuser/core/utils/runner_utils.py
+index 89caba4..ca121a8 100644
+--- a/xfuser/core/utils/runner_utils.py
++++ b/xfuser/core/utils/runner_utils.py
+@@ -98,7 +98,7 @@ def _get_fp8_kernel_preference():
+     under torch.compile, so we force TORCH (_scaled_mm) on Blackwell+.
+     """
+     from torchao.quantization.quantize_.common import KernelPreference
+-    if torch.cuda.is_available() and _is_cuda() and torch.cuda.get_device_capability()[0] >= 10:
++    if torch.cuda.is_available() and _is_cuda() and torch.cuda.get_device_capability()[0] >= 9:
+         return KernelPreference.TORCH
+     return KernelPreference.AUTO
+ 
+@@ -754,6 +754,51 @@ def quantize_linear_layers_to_fp4(
+             )
+ 
+ 
++def module_has_nvfp4_weights(module: torch.nn.Module) -> bool:
++    return any(
++        type(param).__name__ == "NVFP4Tensor" and type(param).__module__.startswith("torchao.")
++        for param in module.parameters()
++    )
++
++
++def move_module_to_device(module: torch.nn.Module, device) -> torch.nn.Module:
++    """``module.to(device)``, except for modules holding torchao NVFP4 weights.
++
++    ``Module.to`` cannot be used once NVFP4 weights are present: ``Module._apply`` asks every
++    parameter for ``aten._has_compatible_shallow_copy_type``, which ``NVFP4Tensor`` does not
++    implement. Such modules have each off-device parameter and buffer moved on its own instead;
++    tensors already on ``device`` are left untouched, and tied parameters stay tied.
++    """
++    if device is None:
++        return module
++    if not module_has_nvfp4_weights(module):
++        return module.to(device)
++    target = torch.device(device)
++
++    def on_target(tensor):
++        return tensor.device.type == target.type and (
++            target.index is None or tensor.device.index == target.index
++        )
++
++    moved = {}
++    for submodule in module.modules():
++        for name, param in list(submodule._parameters.items()):
++            if param is None or on_target(param):
++                continue
++            if id(param) not in moved:
++                moved[id(param)] = torch.nn.Parameter(
++                    param.detach().to(target), requires_grad=param.requires_grad
++                )
++            submodule._parameters[name] = moved[id(param)]
++        for name, buffer in list(submodule._buffers.items()):
++            if buffer is None or on_target(buffer):
++                continue
++            if id(buffer) not in moved:
++                moved[id(buffer)] = buffer.to(target)
++            submodule._buffers[name] = moved[id(buffer)]
++    return module
++
++
+ def quantize_linear_layers_to_nvfp4(
+     module_or_module_list_to_quantize: torch.nn.Module | torch.nn.ModuleList,
+     fp8_layers: tuple[str] = None,
+@@ -792,6 +837,8 @@ def quantize_linear_layers_to_nvfp4(
+     skipped_small_count = 0
+ 
+     for module in module_or_module_list_to_quantize:
++        # quantize_(device=...) would call .to(device) on the parent after converting its children.
++        move_module_to_device(module, device)
+         for fqn, submodule in module.named_modules():
+             if not isinstance(submodule, torch.nn.Linear):
+                 continue
+@@ -824,7 +871,7 @@ def quantize_linear_layers_to_nvfp4(
+                     return False
+             return True
+ 
+-        quantize_(module, config=nvfp4_config, filter_fn=nvfp4_filter_fn, device=device)
++        quantize_(module, config=nvfp4_config, filter_fn=nvfp4_filter_fn)
+ 
+         if fp8_layers or fp8_suffix_layers:
+             from torchao.quantization.granularity import PerTensor
+@@ -844,7 +891,7 @@ def quantize_linear_layers_to_nvfp4(
+                     return False
+                 return _layer_uses_fp8_override(fqn, fp8_layers, fp8_suffix_layers)
+ 
+-            quantize_(module, config=fp8_config, filter_fn=fp8_filter_fn, device=device)
++            quantize_(module, config=fp8_config, filter_fn=fp8_filter_fn)
+ 
+     log(f"  [NVFP4] Summary: {quantized_count} layers quantized to NVFP4, "
+         f"{skipped_fp8_count} overridden to FP8, {skipped_small_count} skipped (too small)")
+diff --git a/xfuser/model_executor/models/runner_models/flux.py b/xfuser/model_executor/models/runner_models/flux.py
+index 1c8037c..7bb3cd1 100644
+--- a/xfuser/model_executor/models/runner_models/flux.py
++++ b/xfuser/model_executor/models/runner_models/flux.py
+@@ -95,7 +95,7 @@ class xFuserFluxModel(xFuserModel):
+     def _get_compile_mode(self) -> str:
+         if PACKAGES_CHECKER._on_rdna4() or self.config.cache_method:
+             return "default"
+-        return "reduce-overhead"
++        return "max-autotune-no-cudagraphs"
+ 
+     def _load_model(self) -> DiffusionPipeline:
+         if self.config.pipefusion_parallel_degree > 1:
+@@ -379,7 +379,7 @@ class xFuserFlux2Model(xFuserModel):
+         # cause pathological re-captures on RDNA4.
+         if self.config.cache_method or PACKAGES_CHECKER._on_rdna4():
+             return "default"
+-        return "reduce-overhead"
++        return "max-autotune-no-cudagraphs"
+ 
+     def _get_compile_dynamic(self, input_args=None) -> Optional[bool]:
+         if self.config.pipefusion_parallel_degree > 1 and input_args and input_args.get("input_images"):
+diff --git a/xfuser/model_executor/models/runner_models/loading/placement.py b/xfuser/model_executor/models/runner_models/loading/placement.py
+index cc9c616..363fbfd 100644
+--- a/xfuser/model_executor/models/runner_models/loading/placement.py
++++ b/xfuser/model_executor/models/runner_models/loading/placement.py
+@@ -10,8 +10,15 @@ bf16 module resident on the device first; torchao swaps in tensor subclasses tha
+ device, so it converts after.
+ """
+ 
++import torch
++
+ from xfuser.core.distributed import get_world_group
+-from xfuser.core.utils.runner_utils import log, rgetattr
++from xfuser.core.utils.runner_utils import (
++    log,
++    module_has_nvfp4_weights,
++    move_module_to_device,
++    rgetattr,
++)
+ from xfuser.envs import _is_cuda
+ from .format_backends import (
+     module_path_is_covered,
+@@ -66,11 +73,17 @@ def place_pipeline_components(loader) -> None:
+         _convert_fp8_on_host(loader, adapter, local_rank, offload_requested)
+ 
+     if not offload_requested:
+-        model.pipe = model.pipe.to(f"cuda:{local_rank}")
++        modules = [c for c in model.pipe.components.values() if isinstance(c, torch.nn.Module)]
++        # The replicated fill can leave torchao NVFP4 weights, which pipe.to (Module.to) rejects.
++        if any(module_has_nvfp4_weights(module) for module in modules):
++            for module in modules:
++                move_module_to_device(module, f"cuda:{local_rank}")
++        else:
++            model.pipe = model.pipe.to(f"cuda:{local_rank}")
+     else:
+         # Before FP4/FP6 setup, which quantizes a resident component where it lies.
+         for name in model._offload_resident_components():
+-            getattr(model.pipe, name).to(f"cuda:{local_rank}")
++            move_module_to_device(getattr(model.pipe, name), f"cuda:{local_rank}")
+ 
+     if model.config.use_fp4_gemms:
+         if _is_cuda():
