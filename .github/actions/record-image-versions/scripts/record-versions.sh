@@ -29,11 +29,32 @@ mkdir -p \
   "$extract_dir/rocm-info" \
   "$extract_dir/rocm-core-info"
 
+copy_optional() {
+  local source="$1" destination="$2" error_file="$extract_dir/docker-cp-error"
+  # Docker does not provide a distinct exit code for a missing image path.
+  if docker cp "${CONTAINER_NAME}:${source}" "$destination" 2>"$error_file"; then
+    cat "$error_file" >&2
+  elif [[ "$(<"$error_file")" == "Error response from daemon: Could not find the file ${source} in container ${CONTAINER_NAME}" ]]; then
+    echo "Optional image path not found: ${source}"
+  else
+    echo "::error::Failed to copy image path ${source}" >&2
+    cat "$error_file" >&2
+    return 1
+  fi
+}
+
 docker cp "${CONTAINER_NAME}:/var/lib/dpkg/status" "$extract_dir/dpkg-status"
-docker cp "${CONTAINER_NAME}:/etc/apt/sources.list.d/." "$extract_dir/apt-sources/" || true
-docker cp "${CONTAINER_NAME}:/opt/rocm/.info/." "$extract_dir/rocm-info/" || true
-docker cp "${CONTAINER_NAME}:/opt/rocm/core/.info/." "$extract_dir/rocm-core-info/" || true
-docker cp "${CONTAINER_NAME}:/opt/rocm/share/hip/version" "$extract_dir/hip-version" || true
+copy_optional "/etc/apt/sources.list.d/." "$extract_dir/apt-sources/"
+copy_optional "/opt/rocm/.info/." "$extract_dir/rocm-info/"
+copy_optional "/opt/rocm/core/.info/." "$extract_dir/rocm-core-info/"
+copy_optional "/opt/rocm/share/hip/version" "$extract_dir/hip-version"
+
+version_files=(
+  "/opt/rocm/.info/version:$extract_dir/rocm-info/version"
+  "/opt/rocm/.info/version-dev:$extract_dir/rocm-info/version-dev"
+  "/opt/rocm/core/.info/version:$extract_dir/rocm-core-info/version"
+  "/opt/rocm/share/hip/version:$extract_dir/hip-version"
+)
 
 # TheRock debian versions encode the channel (stable X.Y.Z,
 # nightly X.Y.Z~YYYYMMDD, prerelease X.Y.Z~preN, dev X.Y.Z~devYYYYMMDD).
@@ -50,9 +71,22 @@ packages="$(awk '
   /^$/ { emit() }
   END { emit() }
 ' "$extract_dir/dpkg-status")"
+# Source-built ROCm images can provide version files without Debian packages.
 if [[ -z "${packages}" ]]; then
-  echo "(no amdrocm-* or rocm-* packages found)" >&2
-  exit 1
+  found_version=
+  for entry in "${version_files[@]}"; do
+    dest="${entry#*:}"
+    if [[ -r "$dest" && -s "$dest" ]]; then
+      found_version=1
+      break
+    fi
+  done
+  if [[ -z "$found_version" ]]; then
+    echo "::error::No ROCm packages or version files found in ${IMAGE}" >&2
+    exit 1
+  fi
+  echo "::notice::No ROCm Debian packages found; recording version files instead." >&2
+  packages="(no amdrocm-* or rocm-* packages found)"
 fi
 
 {
@@ -70,16 +104,10 @@ fi
   echo
   echo "=== ROCm version files ==="
   found=
-  version_files=(
-    "/opt/rocm/.info/version:$extract_dir/rocm-info/version"
-    "/opt/rocm/.info/version-dev:$extract_dir/rocm-info/version-dev"
-    "/opt/rocm/core/.info/version:$extract_dir/rocm-core-info/version"
-    "/opt/rocm/share/hip/version:$extract_dir/hip-version"
-  )
   for entry in "${version_files[@]}"; do
     src="${entry%%:*}"
     dest="${entry#*:}"
-    if [[ -r "$dest" ]]; then
+    if [[ -r "$dest" && -s "$dest" ]]; then
       echo "$src: $(cat "$dest")"
       found=1
     fi
