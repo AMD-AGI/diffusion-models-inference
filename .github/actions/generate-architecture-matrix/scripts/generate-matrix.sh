@@ -28,6 +28,15 @@ for TAG in "${TAGS[@]}"; do
   # only cares about the gfx identifier, if the label contains one.
   GFX_ARCH=$(echo "$TAG" | grep -oE 'gfx[0-9a-z]+' | head -1 || true)
 
+  # Fall back to mapping product names (e.g. mi325, itt-mi355) to gfx arch.
+  if [ -z "$GFX_ARCH" ]; then
+    PRODUCT=$(echo "$TAG" | grep -oiE 'mi[0-9]+' | head -1 | tr '[:upper:]' '[:lower:]' || true)
+    case "$PRODUCT" in
+      mi300|mi308|mi325) GFX_ARCH="gfx942" ;;
+      mi350|mi355) GFX_ARCH="gfx950" ;;
+    esac
+  fi
+
   if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi
   MATRIX_JSON="${MATRIX_JSON}{\"arch\":\"${TAG}\",\"runner\":\"${TAG}\",\"gfx_arch\":\"${GFX_ARCH}\",\"timeout\":${TIMEOUT}}"
   FIRST=false
