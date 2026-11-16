@@ -1,3 +1,57 @@
+diff --git a/tests/unit/core/attention/test_sol_attn.py b/tests/unit/core/attention/test_sol_attn.py
+index 22ee8b3..5e697fa 100644
+--- a/tests/unit/core/attention/test_sol_attn.py
++++ b/tests/unit/core/attention/test_sol_attn.py
+@@ -58,6 +58,15 @@ def test_sol_attn_rejects_calls_the_kernel_cannot_serve():
+     assert "varlen" in spec.rejects(q, k, v, AttnCall(varlen=packing))
+ 
+ 
++def test_sol_attn_accepts_kv_cut_to_the_declared_trailing_pad():
++    spec = _spec()
++    q, _, _ = _qkv(length=16)
++    _, k, v = _qkv(length=12)
++    assert spec.rejects(q, k, v, AttnCall(attention_kwargs={"valid_kv_len": 12})) is None
++    assert "equal query, key, and value" in spec.rejects(q, k, v, AttnCall(attention_kwargs={"valid_kv_len": 10}))
++    assert "equal query, key, and value" in spec.rejects(q, k, v, AttnCall())
++
++
+ def test_ineligible_call_falls_back_to_sdpa():
+     q, k, v = _qkv(head_dim=64, dtype=torch.float32)
+     q.normal_()
+@@ -96,3 +105,33 @@ def test_runtime_config_is_forwarded_to_kernel(monkeypatch):
+     assert received["config"] == (2.5, 0, 4, 32, 0)
+     assert out.shape == q.shape
+     assert lse is None
++
++
++def test_query_pad_is_cut_for_the_kernel_and_returned_as_zeros(monkeypatch):
++    import pytest
++
++    pytest.importorskip("sol_attn")
++    from xfuser.core.attention.backends.sol_attn import kernel
++
++    runtime_config = SimpleNamespace(
++        sol_attn_tau=0.5,
++        sol_attn_thresh_type="exact",
++        sol_attn_kv_splits="auto",
++        sol_attn_sink_tokens=0,
++        sol_attn_sink_start=None,
++    )
++    monkeypatch.setattr(kernel, "get_runtime_state", lambda: SimpleNamespace(runtime_config=runtime_config))
++    received = {}
++
++    def fake_op(query, key, value, tau, thresh_type, kv_splits, sink_tokens, sink_start):
++        received["shapes"] = (query.shape, key.shape, value.shape)
++        return query + 1
++
++    monkeypatch.setattr(kernel, "_sol_attn_op", fake_op)
++    q, _, _ = _qkv(length=16)
++    _, k, v = _qkv(length=12)
++    out, _ = kernel.sol_attention(q, k, v, AttnCall(attention_kwargs={"valid_kv_len": 12}))
++    assert received["shapes"] == ((1, 12, 2, 128),) * 3
++    assert out.shape == q.shape
++    assert torch.all(out[:, :, :12] == 1)
++    assert torch.all(out[:, :, 12:] == 0)
 diff --git a/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py b/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
 index 72cf534..830fde9 100644
 --- a/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
@@ -29,11 +83,115 @@ index be2b589..bfd7767 100644
  
      def whole_pipeline_to(device):
          raise AssertionError("an offloaded pipeline must not be moved whole")
+diff --git a/xfuser/core/attention/backends/sol_attn/kernel.py b/xfuser/core/attention/backends/sol_attn/kernel.py
+index b379a18..82b5480 100644
+--- a/xfuser/core/attention/backends/sol_attn/kernel.py
++++ b/xfuser/core/attention/backends/sol_attn/kernel.py
+@@ -1,11 +1,14 @@
+ """Sol-Attn forward.
+ 
+ USP hands backends BHSD. Sol-Attn wants contiguous BF16 BTHD with head
+-dimension 128 and equal Q, K, and V shapes. ``accepts`` refuses anything
+-else, and the spec's SDPA fallback serves those calls.
++dimension 128 and equal Q, K, and V shapes. A query longer than K/V by the
++trailing pad USP sliced off them is cut to match, and the pad rows come back
++as zeros. ``accepts`` refuses anything else, and the spec's SDPA fallback
++serves those calls.
+ """
+ 
+ import torch
++import torch.nn.functional as F
+ from sol_attn import sol_attn
+ from torch.library import custom_op
+ 
+@@ -115,6 +118,9 @@ def _sol_attn_fake(query, key, value, tau, thresh_type, kv_splits, sink_tokens,
+ 
+ 
+ def sol_attention(query, key, value, call: AttnCall):
++    query_pad = query.shape[2] - key.shape[2]
++    if query_pad:
++        query = query[:, :, : key.shape[2]]
+     q, k, v = to_bshd(query, key, value, contiguous=True)
+     runtime_config = get_runtime_state().runtime_config
+     thresh = runtime_config.sol_attn_thresh_type
+@@ -133,4 +139,7 @@ def sol_attention(query, key, value, call: AttnCall):
+         int(runtime_config.sol_attn_sink_tokens),
+         -1 if sink_start is None else int(sink_start),
+     )
+-    return from_bshd(out), None
++    out = from_bshd(out)
++    if query_pad:
++        out = F.pad(out, (0, 0, 0, query_pad))
++    return out, None
+diff --git a/xfuser/core/attention/backends/sol_attn/spec.py b/xfuser/core/attention/backends/sol_attn/spec.py
+index 8103eae..830f51a 100644
+--- a/xfuser/core/attention/backends/sol_attn/spec.py
++++ b/xfuser/core/attention/backends/sol_attn/spec.py
+@@ -6,7 +6,7 @@ from xfuser.core.attention.constraints import (
+     NO_DROPOUT,
+     NO_VARLEN,
+     NON_CAUSAL,
+-    SAME_QKV,
++    SAME_QKV_OR_TRAILING_QUERY_PAD,
+ )
+ from xfuser.core.attention.requirements import CUDA_CAPABILITY, NEVER, PLATFORM, SYMBOL
+ from xfuser.core.attention.spec import AttentionBackendType, Impl, Spec
+@@ -21,7 +21,7 @@ SPECS = [
+         AttentionBackendType.SOL_ATTN,
+         impl=Impl("kernel:sol_attention"),
+         ring=NEVER,
+-        accepts=SAME_QKV & HEAD_DIM(128) & BF16 & NON_CAUSAL & NO_DROPOUT & NO_VARLEN,
++        accepts=SAME_QKV_OR_TRAILING_QUERY_PAD & HEAD_DIM(128) & BF16 & NON_CAUSAL & NO_DROPOUT & NO_VARLEN,
+         fallback=AttentionBackendType.SDPA,
+         requires=PLATFORM("cuda") & CUDA_CAPABILITY((8, 0)) & SYMBOL(_SOL_ATTN),
+     ),
+diff --git a/xfuser/core/attention/constraints.py b/xfuser/core/attention/constraints.py
+index 6346b13..b0fe925 100644
+--- a/xfuser/core/attention/constraints.py
++++ b/xfuser/core/attention/constraints.py
+@@ -213,6 +213,30 @@ class _SameQKV(CallConstraint):
+         )
+ 
+ 
++@dataclass(frozen=True)
++class _SameQKVOrTrailingQueryPad(CallConstraint):
++    """Equal Q, K, and V shapes, or K/V already cut to a declared trailing pad.
++
++    USP slices the sequence-parallel pad off K/V by ``valid_kv_len`` but keeps
++    every query row. A kernel that needs equal lengths can still serve that
++    call by attending with the first ``valid_kv_len`` query rows only: the pad
++    rows' output is discarded when the sequence is gathered.
++    """
++
++    def unmet(self, query, key, value, call) -> Optional[str]:
++        if query.shape == key.shape == value.shape:
++            return None
++        valid_kv_len = call.attention_kwargs.get("valid_kv_len")
++        if (
++            key.shape == value.shape
++            and valid_kv_len == key.shape[2] < query.shape[2]
++            and query.shape[:2] == key.shape[:2]
++            and query.shape[3] == key.shape[3]
++        ):
++            return None
++        return SAME_QKV.unmet(query, key, value, call)
++
++
+ @dataclass(frozen=True)
+ class _HalfPrecision(CallConstraint):
+     def unmet(self, query, key, value, call) -> Optional[str]:
+@@ -231,4 +255,5 @@ TRAILING_PAD_KEYS = _TrailingPadKeys()
+ NO_DROPOUT = _NoDropout()
+ BF16 = _BFloat16()
+ SAME_QKV = _SameQKV()
++SAME_QKV_OR_TRAILING_QUERY_PAD = _SameQKVOrTrailingQueryPad()
+ HALF_PRECISION = _HalfPrecision()
 diff --git a/xfuser/core/utils/runner_utils.py b/xfuser/core/utils/runner_utils.py
-index 89caba4..ca121a8 100644
+index 89caba4..a20e52a 100644
 --- a/xfuser/core/utils/runner_utils.py
 +++ b/xfuser/core/utils/runner_utils.py
-@@ -95,10 +95,11 @@ def _get_fp8_kernel_preference():
+@@ -94,11 +94,12 @@ def resize_and_crop_image(image: Image, target_height: int, target_width: int, m
+ def _get_fp8_kernel_preference():
      """Select FP8 kernel preference based on GPU architecture.
  
 -    AUTO selects CUTLASS sm90a kernels which crash on Blackwell (sm100a)
