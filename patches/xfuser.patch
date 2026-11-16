@@ -33,8 +33,14 @@ diff --git a/xfuser/core/utils/runner_utils.py b/xfuser/core/utils/runner_utils.
 index 89caba4..ca121a8 100644
 --- a/xfuser/core/utils/runner_utils.py
 +++ b/xfuser/core/utils/runner_utils.py
-@@ -98,7 +98,7 @@ def _get_fp8_kernel_preference():
-     under torch.compile, so we force TORCH (_scaled_mm) on Blackwell+.
+@@ -95,10 +95,11 @@ def _get_fp8_kernel_preference():
+     """Select FP8 kernel preference based on GPU architecture.
+ 
+-    AUTO selects CUTLASS sm90a kernels which crash on Blackwell (sm100a)
+-    under torch.compile, so we force TORCH (_scaled_mm) on Blackwell+.
++    AUTO selects CUTLASS sm90a kernels, which crash under torch.compile on
++    Blackwell (sm100a). Hopper runs crashed unless TORCH was forced, so force
++    TORCH (_scaled_mm) from Hopper (capability 9.0, sm_90) up.
      """
      from torchao.quantization.quantize_.common import KernelPreference
 -    if torch.cuda.is_available() and _is_cuda() and torch.cuda.get_device_capability()[0] >= 10:
@@ -42,7 +48,7 @@ index 89caba4..ca121a8 100644
          return KernelPreference.TORCH
      return KernelPreference.AUTO
  
-@@ -754,6 +754,51 @@ def quantize_linear_layers_to_fp4(
+@@ -754,6 +755,51 @@ def quantize_linear_layers_to_fp4(
              )
  
  
@@ -94,7 +100,7 @@ index 89caba4..ca121a8 100644
  def quantize_linear_layers_to_nvfp4(
      module_or_module_list_to_quantize: torch.nn.Module | torch.nn.ModuleList,
      fp8_layers: tuple[str] = None,
-@@ -792,6 +837,8 @@ def quantize_linear_layers_to_nvfp4(
+@@ -792,6 +838,8 @@ def quantize_linear_layers_to_nvfp4(
      skipped_small_count = 0
  
      for module in module_or_module_list_to_quantize:
@@ -103,7 +109,7 @@ index 89caba4..ca121a8 100644
          for fqn, submodule in module.named_modules():
              if not isinstance(submodule, torch.nn.Linear):
                  continue
-@@ -824,7 +871,7 @@ def quantize_linear_layers_to_nvfp4(
+@@ -824,7 +872,7 @@ def quantize_linear_layers_to_nvfp4(
                      return False
              return True
  
@@ -112,7 +118,7 @@ index 89caba4..ca121a8 100644
  
          if fp8_layers or fp8_suffix_layers:
              from torchao.quantization.granularity import PerTensor
-@@ -844,7 +891,7 @@ def quantize_linear_layers_to_nvfp4(
+@@ -844,7 +892,7 @@ def quantize_linear_layers_to_nvfp4(
                      return False
                  return _layer_uses_fp8_override(fqn, fp8_layers, fp8_suffix_layers)
  
@@ -122,18 +128,9 @@ index 89caba4..ca121a8 100644
      log(f"  [NVFP4] Summary: {quantized_count} layers quantized to NVFP4, "
          f"{skipped_fp8_count} overridden to FP8, {skipped_small_count} skipped (too small)")
 diff --git a/xfuser/model_executor/models/runner_models/flux.py b/xfuser/model_executor/models/runner_models/flux.py
-index 1c8037c..7bb3cd1 100644
+index 1c8037c..dcdaec3 100644
 --- a/xfuser/model_executor/models/runner_models/flux.py
 +++ b/xfuser/model_executor/models/runner_models/flux.py
-@@ -95,7 +95,7 @@ class xFuserFluxModel(xFuserModel):
-     def _get_compile_mode(self) -> str:
-         if PACKAGES_CHECKER._on_rdna4() or self.config.cache_method:
-             return "default"
--        return "reduce-overhead"
-+        return "max-autotune-no-cudagraphs"
- 
-     def _load_model(self) -> DiffusionPipeline:
-         if self.config.pipefusion_parallel_degree > 1:
 @@ -379,7 +379,7 @@ class xFuserFlux2Model(xFuserModel):
          # cause pathological re-captures on RDNA4.
          if self.config.cache_method or PACKAGES_CHECKER._on_rdna4():

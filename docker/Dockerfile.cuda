@@ -127,13 +127,15 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
 # xfuser.patch:
-# - FP8: use torchao's TORCH kernels from Hopper up (sm_90+). The CUTLASS
-#   sm90 kernels crash under torch.compile on Blackwell.
+# - FP8: force torchao TORCH (_scaled_mm) from Hopper (capability 9.0, sm_90)
+#   up. AUTO's CUTLASS sm90a kernels crash under torch.compile on Blackwell,
+#   and Hopper runs crashed too unless TORCH was forced.
 # - NVFP4: move quantized modules parameter-by-parameter. Module.to fails
 #   because NVFP4Tensor has no shallow-copy hook. The placement path and its
 #   unit tests use that helper.
-# - Flux and Flux2: compile with max-autotune-no-cudagraphs instead of
-#   reduce-overhead to avoid a performance regression.
+# - Flux2 only (Flux1, Kontext and Klein are unchanged): compile with
+#   max-autotune-no-cudagraphs instead of reduce-overhead to avoid a
+#   performance regression.
     git apply /patches/xfuser.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
