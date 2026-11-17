@@ -10,21 +10,21 @@
 #
 
 # deps image arguments
-ARG FLASHATTENTION_COMMIT="fffabc3"
+ARG FLASHATTENTION_COMMIT="328dd7b5a6905c75500a9bce334ac012763409a9"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
 ARG XDIT_COMMIT="8d7467a5b53849b7b6e0fa7366b65d7b445a28ac"
-ARG SAGEATTENTION_COMMIT="d1a57a5"
 ARG MSLK_COMMIT="e14925cede32a31ffdd5abf7a9702579d268238c"
 ARG FLEX_BLOCK_ATTENTION_COMMIT="bc2ec1e"
+ARG SANA_COMMIT="cf67a3acad7511acb85053e56a05e5dd24c82ba0"
 
-ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.10-py3
 FROM ${BASE_IMAGE} AS core
 ARG FLASHATTENTION_COMMIT
 ARG FLEX_BLOCK_ATTENTION_COMMIT
 ARG MSLK_COMMIT
-ARG SAGEATTENTION_COMMIT
+ARG SANA_COMMIT
 ENV PIP_NO_CACHE_DIR=1
 
 # For ImportError: libGL.so.1: cannot open shared object file on nvcr.io/nvidia/pytorch:25.06-py3
@@ -92,12 +92,12 @@ RUN --mount=type=bind,source=patches/flex_block_attn_setup.patch,target=/patches
         cd .. && rm -rf flex-block-attn; \
     fi
 
-# install sageattention
-RUN git clone https://github.com/thu-ml/SageAttention.git && \
-    cd SageAttention && \
-    git reset --hard ${SAGEATTENTION_COMMIT} && \
-    TORCH_CUDA_ARCH_LIST="9.0" python3 setup.py install && \
-    cd .. && rm -rf SageAttention
+# install sana sol_attn
+RUN git clone https://github.com/NVlabs/sana.git && \
+    cd sana && \
+    git reset --hard ${SANA_COMMIT} && \
+    python -m pip install techniques/sparse_backends && \
+    cd .. && rm -fr sana
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
@@ -135,8 +135,21 @@ RUN --mount=type=bind,source=patches,target=/patches \
     git clone https://github.com/xdit-project/xDiT.git && \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/xfuser_runner_utils.patch && \
-    git apply /patches/xfuser_flux.patch && \
+# xfuser.patch:
+# - FP8: force torchao TORCH (_scaled_mm) from Hopper (capability 9.0, sm_90)
+#   up. AUTO's CUTLASS sm90a kernels crash under torch.compile on Blackwell,
+#   and Hopper runs crashed too unless TORCH was forced.
+# - FP8 FSDP2: handle aten.chunk and aten.narrow on Float8Tensor. Under
+#   inference_mode they stay undecomposed, so sharding would drop the scale.
+# - NVFP4: move quantized modules parameter-by-parameter. Module.to fails
+#   because NVFP4Tensor has no shallow-copy hook. The placement path and its
+#   unit tests use that helper.
+# - Flux2 only (Flux1, Kontext and Klein are unchanged): compile with
+#   max-autotune-no-cudagraphs instead of reduce-overhead to avoid a
+#   performance regression.
+# - Sol-Attn: accept a query longer than K/V by USP's trailing SP pad (cut Q
+#   to valid_kv_len, return zeros for the pad rows) instead of falling back to SDPA.
+    git apply /patches/xfuser.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
 
@@ -156,8 +169,3 @@ COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_c
 # apex causes rms_forward_affine crash in SD3.5
 # Headless OpenCV provides xDiT's video functionality without GUI/Qt payload.
 RUN pip uninstall -y apex && pip install --no-cache-dir "opencv-python-headless"
-# Temporary workaround for a PyTorch/Transformer Engine interaction where
-# int(fused_attention_backend) triggers TorchDynamo RecursionError under torch.compile.
-# Realizes with NVTE_FP8 attention backend
-RUN sed -i 's/int(fused_attention_backend)/str(fused_attention_backend)/g' \
-    /usr/local/lib/python3.12/dist-packages/transformer_engine/pytorch/attention/dot_product_attention/utils.py

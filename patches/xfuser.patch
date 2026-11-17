@@ -1,0 +1,391 @@
+diff --git a/tests/unit/core/attention/test_sol_attn.py b/tests/unit/core/attention/test_sol_attn.py
+index 22ee8b3..5e697fa 100644
+--- a/tests/unit/core/attention/test_sol_attn.py
++++ b/tests/unit/core/attention/test_sol_attn.py
+@@ -58,6 +58,15 @@ def test_sol_attn_rejects_calls_the_kernel_cannot_serve():
+     assert "varlen" in spec.rejects(q, k, v, AttnCall(varlen=packing))
+ 
+ 
++def test_sol_attn_accepts_kv_cut_to_the_declared_trailing_pad():
++    spec = _spec()
++    q, _, _ = _qkv(length=16)
++    _, k, v = _qkv(length=12)
++    assert spec.rejects(q, k, v, AttnCall(attention_kwargs={"valid_kv_len": 12})) is None
++    assert "equal query, key, and value" in spec.rejects(q, k, v, AttnCall(attention_kwargs={"valid_kv_len": 10}))
++    assert "equal query, key, and value" in spec.rejects(q, k, v, AttnCall())
++
++
+ def test_ineligible_call_falls_back_to_sdpa():
+     q, k, v = _qkv(head_dim=64, dtype=torch.float32)
+     q.normal_()
+@@ -96,3 +105,33 @@ def test_runtime_config_is_forwarded_to_kernel(monkeypatch):
+     assert received["config"] == (2.5, 0, 4, 32, 0)
+     assert out.shape == q.shape
+     assert lse is None
++
++
++def test_query_pad_is_cut_for_the_kernel_and_returned_as_zeros(monkeypatch):
++    import pytest
++
++    pytest.importorskip("sol_attn")
++    from xfuser.core.attention.backends.sol_attn import kernel
++
++    runtime_config = SimpleNamespace(
++        sol_attn_tau=0.5,
++        sol_attn_thresh_type="exact",
++        sol_attn_kv_splits="auto",
++        sol_attn_sink_tokens=0,
++        sol_attn_sink_start=None,
++    )
++    monkeypatch.setattr(kernel, "get_runtime_state", lambda: SimpleNamespace(runtime_config=runtime_config))
++    received = {}
++
++    def fake_op(query, key, value, tau, thresh_type, kv_splits, sink_tokens, sink_start):
++        received["shapes"] = (query.shape, key.shape, value.shape)
++        return query + 1
++
++    monkeypatch.setattr(kernel, "_sol_attn_op", fake_op)
++    q, _, _ = _qkv(length=16)
++    _, k, v = _qkv(length=12)
++    out, _ = kernel.sol_attention(q, k, v, AttnCall(attention_kwargs={"valid_kv_len": 12}))
++    assert received["shapes"] == ((1, 12, 2, 128),) * 3
++    assert out.shape == q.shape
++    assert torch.all(out[:, :, :12] == 1)
++    assert torch.all(out[:, :, 12:] == 0)
+diff --git a/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py b/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
+index 72cf534..830fde9 100644
+--- a/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
++++ b/tests/unit/model_executor/loading/test_fp8_blockwise_routing.py
+@@ -1019,6 +1019,7 @@ def test_streamed_fp8_target_does_not_skip_disjoint_target_in_component(
+             encoder=post_load_module,
+         )
+     )
++    pipe.components = {}
+     pipe.to = lambda _device: pipe
+     model = SimpleNamespace(
+         config=SimpleNamespace(
+diff --git a/tests/unit/model_executor/loading/test_offload_placement.py b/tests/unit/model_executor/loading/test_offload_placement.py
+index be2b589..bfd7767 100644
+--- a/tests/unit/model_executor/loading/test_offload_placement.py
++++ b/tests/unit/model_executor/loading/test_offload_placement.py
+@@ -105,9 +105,11 @@ def test_offload_places_only_the_runners_resident_components(monkeypatch):
+         def __init__(self, name):
+             self.name = name
+ 
+-        def to(self, device):
+-            moved.append((self.name, device))
+-            return self
++    monkeypatch.setattr(
++        placement,
++        "move_module_to_device",
++        lambda component, device: moved.append((component.name, device)),
++    )
+ 
+     def whole_pipeline_to(device):
+         raise AssertionError("an offloaded pipeline must not be moved whole")
+diff --git a/xfuser/core/attention/backends/sol_attn/kernel.py b/xfuser/core/attention/backends/sol_attn/kernel.py
+index b379a18..82b5480 100644
+--- a/xfuser/core/attention/backends/sol_attn/kernel.py
++++ b/xfuser/core/attention/backends/sol_attn/kernel.py
+@@ -1,11 +1,14 @@
+ """Sol-Attn forward.
+ 
+ USP hands backends BHSD. Sol-Attn wants contiguous BF16 BTHD with head
+-dimension 128 and equal Q, K, and V shapes. ``accepts`` refuses anything
+-else, and the spec's SDPA fallback serves those calls.
++dimension 128 and equal Q, K, and V shapes. A query longer than K/V by the
++trailing pad USP sliced off them is cut to match, and the pad rows come back
++as zeros. ``accepts`` refuses anything else, and the spec's SDPA fallback
++serves those calls.
+ """
+ 
+ import torch
++import torch.nn.functional as F
+ from sol_attn import sol_attn
+ from torch.library import custom_op
+ 
+@@ -115,6 +118,9 @@ def _sol_attn_fake(query, key, value, tau, thresh_type, kv_splits, sink_tokens,
+ 
+ 
+ def sol_attention(query, key, value, call: AttnCall):
++    query_pad = query.shape[2] - key.shape[2]
++    if query_pad:
++        query = query[:, :, : key.shape[2]]
+     q, k, v = to_bshd(query, key, value, contiguous=True)
+     runtime_config = get_runtime_state().runtime_config
+     thresh = runtime_config.sol_attn_thresh_type
+@@ -133,4 +139,7 @@ def sol_attention(query, key, value, call: AttnCall):
+         int(runtime_config.sol_attn_sink_tokens),
+         -1 if sink_start is None else int(sink_start),
+     )
+-    return from_bshd(out), None
++    out = from_bshd(out)
++    if query_pad:
++        out = F.pad(out, (0, 0, 0, query_pad))
++    return out, None
+diff --git a/xfuser/core/attention/backends/sol_attn/spec.py b/xfuser/core/attention/backends/sol_attn/spec.py
+index 8103eae..830f51a 100644
+--- a/xfuser/core/attention/backends/sol_attn/spec.py
++++ b/xfuser/core/attention/backends/sol_attn/spec.py
+@@ -6,7 +6,7 @@ from xfuser.core.attention.constraints import (
+     NO_DROPOUT,
+     NO_VARLEN,
+     NON_CAUSAL,
+-    SAME_QKV,
++    SAME_QKV_OR_TRAILING_QUERY_PAD,
+ )
+ from xfuser.core.attention.requirements import CUDA_CAPABILITY, NEVER, PLATFORM, SYMBOL
+ from xfuser.core.attention.spec import AttentionBackendType, Impl, Spec
+@@ -21,7 +21,7 @@ SPECS = [
+         AttentionBackendType.SOL_ATTN,
+         impl=Impl("kernel:sol_attention"),
+         ring=NEVER,
+-        accepts=SAME_QKV & HEAD_DIM(128) & BF16 & NON_CAUSAL & NO_DROPOUT & NO_VARLEN,
++        accepts=SAME_QKV_OR_TRAILING_QUERY_PAD & HEAD_DIM(128) & BF16 & NON_CAUSAL & NO_DROPOUT & NO_VARLEN,
+         fallback=AttentionBackendType.SDPA,
+         requires=PLATFORM("cuda") & CUDA_CAPABILITY((8, 0)) & SYMBOL(_SOL_ATTN),
+     ),
+diff --git a/xfuser/core/attention/constraints.py b/xfuser/core/attention/constraints.py
+index 6346b13..b0fe925 100644
+--- a/xfuser/core/attention/constraints.py
++++ b/xfuser/core/attention/constraints.py
+@@ -213,6 +213,30 @@ class _SameQKV(CallConstraint):
+         )
+ 
+ 
++@dataclass(frozen=True)
++class _SameQKVOrTrailingQueryPad(CallConstraint):
++    """Equal Q, K, and V shapes, or K/V already cut to a declared trailing pad.
++
++    USP slices the sequence-parallel pad off K/V by ``valid_kv_len`` but keeps
++    every query row. A kernel that needs equal lengths can still serve that
++    call by attending with the first ``valid_kv_len`` query rows only: the pad
++    rows' output is discarded when the sequence is gathered.
++    """
++
++    def unmet(self, query, key, value, call) -> Optional[str]:
++        if query.shape == key.shape == value.shape:
++            return None
++        valid_kv_len = call.attention_kwargs.get("valid_kv_len")
++        if (
++            key.shape == value.shape
++            and valid_kv_len == key.shape[2] < query.shape[2]
++            and query.shape[:2] == key.shape[:2]
++            and query.shape[3] == key.shape[3]
++        ):
++            return None
++        return SAME_QKV.unmet(query, key, value, call)
++
++
+ @dataclass(frozen=True)
+ class _HalfPrecision(CallConstraint):
+     def unmet(self, query, key, value, call) -> Optional[str]:
+@@ -231,4 +255,5 @@ TRAILING_PAD_KEYS = _TrailingPadKeys()
+ NO_DROPOUT = _NoDropout()
+ BF16 = _BFloat16()
+ SAME_QKV = _SameQKV()
++SAME_QKV_OR_TRAILING_QUERY_PAD = _SameQKVOrTrailingQueryPad()
+ HALF_PRECISION = _HalfPrecision()
+diff --git a/xfuser/core/utils/runner_utils.py b/xfuser/core/utils/runner_utils.py
+index 89caba4..a083601 100644
+--- a/xfuser/core/utils/runner_utils.py
++++ b/xfuser/core/utils/runner_utils.py
+@@ -94,11 +94,12 @@ def resize_and_crop_image(image: Image, target_height: int, target_width: int, m
+ def _get_fp8_kernel_preference():
+     """Select FP8 kernel preference based on GPU architecture.
+ 
+-    AUTO selects CUTLASS sm90a kernels which crash on Blackwell (sm100a)
+-    under torch.compile, so we force TORCH (_scaled_mm) on Blackwell+.
++    AUTO selects CUTLASS sm90a kernels, which crash under torch.compile on
++    Blackwell (sm100a). Hopper runs crashed unless TORCH was forced, so force
++    TORCH (_scaled_mm) from Hopper (capability 9.0, sm_90) up.
+     """
+     from torchao.quantization.quantize_.common import KernelPreference
+-    if torch.cuda.is_available() and _is_cuda() and torch.cuda.get_device_capability()[0] >= 10:
++    if torch.cuda.is_available() and _is_cuda() and torch.cuda.get_device_capability()[0] >= 9:
+         return KernelPreference.TORCH
+     return KernelPreference.AUTO
+ 
+@@ -134,8 +135,9 @@ def _patch_torchao_float8_fsdp2() -> list[str]:
+     1. Init-time aten op bugs:
+        FSDP2 calls torch.chunk which passes aten.split.Tensor with dim as a kwarg,
+        but the existing Float8Tensor handler expects 3 positional args which raises
+-       a ValueError. We fix split and add new_empty/new_zeros/copy_/view handlers for
+-       the param-management ops FSDP2 calls during _init_sharded_param.
++       a ValueError. On inference tensors torch.chunk and narrow arrive undecomposed.
++       We fix split, add chunk/narrow, and add new_empty/new_zeros/copy_/view handlers
++       for the param-management ops FSDP2 calls during _init_sharded_param.
+ 
+     2. Forward-time subclass loss:
+        FSDP2 all-gather reconstructs sharded params as plain torch.Tensors, 
+@@ -193,6 +195,28 @@ def _patch_torchao_float8_fsdp2() -> list[str]:
+     table[split_op] = _split
+     patched.append("aten.split.Tensor")
+ 
++    # aten.chunk.default: chunk decomposes to split only when autograd is active. On inference
++    # tensors (the runner loads under torch.inference_mode) FSDP2's torch.chunk reaches here
++    # undecomposed, and the fallthrough below would shard the raw qdata without its scale.
++    def _chunk(func, types, args, kwargs):
++        tensor, chunks = args[0], args[1]
++        dim = args[2] if len(args) > 2 else kwargs.get("dim", 0)
++        split_size = max(-(-tensor.size(dim) // chunks), 1)
++        return _split(split_op, types, (tensor, split_size, dim), {})
++
++    table[aten.chunk.default] = _chunk
++    patched.append("aten.chunk.default")
++
++    # aten.narrow.default: likewise undecomposed on inference tensors. FSDP2 narrows the padded
++    # shard buffer and copy_s into it, so the result must be a view sharing the buffer's qdata.
++    def _narrow(func, types, args, kwargs):
++        tensor, dim, start, length = args
++        new_qdata = aten.narrow.default(tensor.qdata, dim, start, length)
++        return _make_float8(tensor, new_qdata, list(new_qdata.shape))
++
++    table[aten.narrow.default] = _narrow
++    patched.append("aten.narrow.default")
++
+     # aten.new_empty: FSDP2 calls _chunk_with_empty which pads short chunk lists with size-0 tensors
+     def _new_empty(_, _t, args, kwargs):
+         tensor = args[0]
+@@ -303,6 +327,8 @@ _TORCHAO_FLOAT8_FSDP2_PATCHES: list[str] = []
+ _REQUIRED_TORCHAO_FLOAT8_FSDP2_PATCHES = frozenset(
+     {
+         "aten.split.Tensor",
++        "aten.chunk.default",
++        "aten.narrow.default",
+         "aten.new_empty.default",
+         "aten.new_zeros.default",
+         "aten.copy_.default",
+@@ -754,6 +780,51 @@ def quantize_linear_layers_to_fp4(
+             )
+ 
+ 
++def module_has_nvfp4_weights(module: torch.nn.Module) -> bool:
++    return any(
++        type(param).__name__ == "NVFP4Tensor" and type(param).__module__.startswith("torchao.")
++        for param in module.parameters()
++    )
++
++
++def move_module_to_device(module: torch.nn.Module, device) -> torch.nn.Module:
++    """``module.to(device)``, except for modules holding torchao NVFP4 weights.
++
++    ``Module.to`` cannot be used once NVFP4 weights are present: ``Module._apply`` asks every
++    parameter for ``aten._has_compatible_shallow_copy_type``, which ``NVFP4Tensor`` does not
++    implement. Such modules have each off-device parameter and buffer moved on its own instead;
++    tensors already on ``device`` are left untouched, and tied parameters stay tied.
++    """
++    if device is None:
++        return module
++    if not module_has_nvfp4_weights(module):
++        return module.to(device)
++    target = torch.device(device)
++
++    def on_target(tensor):
++        return tensor.device.type == target.type and (
++            target.index is None or tensor.device.index == target.index
++        )
++
++    moved = {}
++    for submodule in module.modules():
++        for name, param in list(submodule._parameters.items()):
++            if param is None or on_target(param):
++                continue
++            if id(param) not in moved:
++                moved[id(param)] = torch.nn.Parameter(
++                    param.detach().to(target), requires_grad=param.requires_grad
++                )
++            submodule._parameters[name] = moved[id(param)]
++        for name, buffer in list(submodule._buffers.items()):
++            if buffer is None or on_target(buffer):
++                continue
++            if id(buffer) not in moved:
++                moved[id(buffer)] = buffer.to(target)
++            submodule._buffers[name] = moved[id(buffer)]
++    return module
++
++
+ def quantize_linear_layers_to_nvfp4(
+     module_or_module_list_to_quantize: torch.nn.Module | torch.nn.ModuleList,
+     fp8_layers: tuple[str] = None,
+@@ -792,6 +863,8 @@ def quantize_linear_layers_to_nvfp4(
+     skipped_small_count = 0
+ 
+     for module in module_or_module_list_to_quantize:
++        # quantize_(device=...) would call .to(device) on the parent after converting its children.
++        move_module_to_device(module, device)
+         for fqn, submodule in module.named_modules():
+             if not isinstance(submodule, torch.nn.Linear):
+                 continue
+@@ -824,7 +897,7 @@ def quantize_linear_layers_to_nvfp4(
+                     return False
+             return True
+ 
+-        quantize_(module, config=nvfp4_config, filter_fn=nvfp4_filter_fn, device=device)
++        quantize_(module, config=nvfp4_config, filter_fn=nvfp4_filter_fn)
+ 
+         if fp8_layers or fp8_suffix_layers:
+             from torchao.quantization.granularity import PerTensor
+@@ -844,7 +917,7 @@ def quantize_linear_layers_to_nvfp4(
+                     return False
+                 return _layer_uses_fp8_override(fqn, fp8_layers, fp8_suffix_layers)
+ 
+-            quantize_(module, config=fp8_config, filter_fn=fp8_filter_fn, device=device)
++            quantize_(module, config=fp8_config, filter_fn=fp8_filter_fn)
+ 
+     log(f"  [NVFP4] Summary: {quantized_count} layers quantized to NVFP4, "
+         f"{skipped_fp8_count} overridden to FP8, {skipped_small_count} skipped (too small)")
+diff --git a/xfuser/model_executor/models/runner_models/flux.py b/xfuser/model_executor/models/runner_models/flux.py
+index 1c8037c..dcdaec3 100644
+--- a/xfuser/model_executor/models/runner_models/flux.py
++++ b/xfuser/model_executor/models/runner_models/flux.py
+@@ -379,7 +379,7 @@ class xFuserFlux2Model(xFuserModel):
+         # cause pathological re-captures on RDNA4.
+         if self.config.cache_method or PACKAGES_CHECKER._on_rdna4():
+             return "default"
+-        return "reduce-overhead"
++        return "max-autotune-no-cudagraphs"
+ 
+     def _get_compile_dynamic(self, input_args=None) -> Optional[bool]:
+         if self.config.pipefusion_parallel_degree > 1 and input_args and input_args.get("input_images"):
+diff --git a/xfuser/model_executor/models/runner_models/loading/placement.py b/xfuser/model_executor/models/runner_models/loading/placement.py
+index cc9c616..363fbfd 100644
+--- a/xfuser/model_executor/models/runner_models/loading/placement.py
++++ b/xfuser/model_executor/models/runner_models/loading/placement.py
+@@ -10,8 +10,15 @@ bf16 module resident on the device first; torchao swaps in tensor subclasses tha
+ device, so it converts after.
+ """
+ 
++import torch
++
+ from xfuser.core.distributed import get_world_group
+-from xfuser.core.utils.runner_utils import log, rgetattr
++from xfuser.core.utils.runner_utils import (
++    log,
++    module_has_nvfp4_weights,
++    move_module_to_device,
++    rgetattr,
++)
+ from xfuser.envs import _is_cuda
+ from .format_backends import (
+     module_path_is_covered,
+@@ -66,11 +73,17 @@ def place_pipeline_components(loader) -> None:
+         _convert_fp8_on_host(loader, adapter, local_rank, offload_requested)
+ 
+     if not offload_requested:
+-        model.pipe = model.pipe.to(f"cuda:{local_rank}")
++        modules = [c for c in model.pipe.components.values() if isinstance(c, torch.nn.Module)]
++        # The replicated fill can leave torchao NVFP4 weights, which pipe.to (Module.to) rejects.
++        if any(module_has_nvfp4_weights(module) for module in modules):
++            for module in modules:
++                move_module_to_device(module, f"cuda:{local_rank}")
++        else:
++            model.pipe = model.pipe.to(f"cuda:{local_rank}")
+     else:
+         # Before FP4/FP6 setup, which quantizes a resident component where it lies.
+         for name in model._offload_resident_components():
+-            getattr(model.pipe, name).to(f"cuda:{local_rank}")
++            move_module_to_device(getattr(model.pipe, name), f"cuda:{local_rank}")
+ 
+     if model.config.use_fp4_gemms:
+         if _is_cuda():

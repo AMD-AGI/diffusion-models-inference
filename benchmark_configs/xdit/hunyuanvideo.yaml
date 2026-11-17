@@ -44,8 +44,8 @@
     use_torch_compile: true
     attention_backend: aiter_bf16
 
-- name: hunyuanvideo.default.hopper
-  tags: [lucid, hopper, h100, h200]
+- name: hunyuanvideo.default.hopper.h200
+  tags: [lucid, hopper, h200]
   model: tencent/HunyuanVideo
   revision: refs/pr/18
   runner: xdit
