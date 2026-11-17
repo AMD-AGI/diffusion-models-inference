@@ -370,6 +370,10 @@ RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ffmpeg.conf && \
     ldconfig
 COPY docker/libkineto.conf /config/libkineto.conf
 ENV KINETO_CONFIG="/config/libkineto.conf"
+# Keep Inductor compile workers alive. Python 3.12.3 can deadlock a worker
+# when the pool forks again after quiesce (pytorch/pytorch#200848).
+# Remove when the image uses Python >= 3.12.8 or PyTorch has the fix.
+ENV TORCHINDUCTOR_QUIESCE_ASYNC_COMPILE_POOL=0
 # install aiter
 WORKDIR /app/external
 # Keep the Triton wheel we built from TRITON_COMMIT against our PyTorch; otherwise
