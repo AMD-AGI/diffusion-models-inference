@@ -272,7 +272,9 @@ RUN wget -O ffmpeg-${FFMPEG_VERSION}.tar.bz2 https://ffmpeg.org/releases/ffmpeg-
     --enable-libmp3lame \
     --enable-libopenh264 \
     --enable-libvorbis \
-    --enable-shared && \
+    --enable-shared \
+    --disable-static \
+    --disable-doc && \
     PATH="$FFMPEG_BIN_DIR:$PATH" make -j$(($(nproc)-1)) && \
     make install && \
     hash -r
