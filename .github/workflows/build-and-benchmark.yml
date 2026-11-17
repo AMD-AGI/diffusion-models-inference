@@ -229,8 +229,6 @@ jobs:
     outputs:
       any_arch_enabled: ${{ steps.check-archs.outputs.any_enabled }}
       image_tag: ${{ steps.generate_tag.outputs.tag }}
-      core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
-      staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
       should_rebuild: ${{ steps.rebuild.outputs.should_rebuild }}
     steps:
       - name: Checkout repository
