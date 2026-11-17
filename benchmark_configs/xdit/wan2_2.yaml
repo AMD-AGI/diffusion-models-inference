@@ -296,8 +296,8 @@
     sol_attn_tau: 0.5
     memory_efficient_replicated_load: true
 
-- name: wan2_2.quantgemm_sparseattn.blackwell
-  tags: [lucid, blackwell, b200, b300]
+- name: wan2_2.quantgemm_sparseattn.blackwell.b200
+  tags: [lucid, blackwell, b200]
   model: Wan-AI/Wan2.2-I2V-A14B-Diffusers
   runner: xdit
   args:
