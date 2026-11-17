@@ -138,6 +138,8 @@ RUN --mount=type=bind,source=patches,target=/patches \
 # - FP8: force torchao TORCH (_scaled_mm) from Hopper (capability 9.0, sm_90)
 #   up. AUTO's CUTLASS sm90a kernels crash under torch.compile on Blackwell,
 #   and Hopper runs crashed too unless TORCH was forced.
+# - FP8 FSDP2: handle aten.chunk and aten.narrow on Float8Tensor. Under
+#   inference_mode they stay undecomposed, so sharding would drop the scale.
 # - NVFP4: move quantized modules parameter-by-parameter. Module.to fails
 #   because NVFP4Tensor has no shallow-copy hook. The placement path and its
 #   unit tests use that helper.
