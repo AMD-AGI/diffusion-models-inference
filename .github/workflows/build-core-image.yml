@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Build SGL-D image
+name: Build core image
 on:
   push:
     branches:
@@ -15,25 +15,38 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Image tag. Short commit SHA will be used by default."
+        description: "Image tag. Short commit SHA will be used by default. Untuned image will receive an additional -temp suffix."
         required: false
         default: ""
       runner:
         description: "Runner label"
         required: false
         default: ""
+      prebuilt_core_image_tag:
+        description: "Prebuilt core image tag (build untuned only)"
+        required: false
+        default: ""
+      force_trigger_tuning:
+        description: "Force trigger automatic MIOpen tuning"
+        type: boolean
+        required: false
+        default: false
+      gpu_runners:
+        description: "Comma-separated list of GPU runner labels used for MIOpen tuning"
+        required: false
+        default: 'gfx942,gfx950'
       disable_docker_cache:
-        description: "Disable Docker cache on build"
+        description: "Disable Docker cache on core build"
         type: boolean
         required: false
         default: false
       export_docker_cache:
-        description: "Export the build cache to the registry"
+        description: "Export the core build cache to the registry"
         type: boolean
         required: false
         default: true
       cache_scope:
-        description: "Layer cache scope. Defaults to the branch name, so only builds of main touch the mainline cache."
+        description: "Layer cache scope. Defaults to the branch name, so only builds of main touch the mainline cache; set it to isolate a test build launched from main."
         required: false
         default: ""
       docker_build_args:
@@ -54,41 +67,43 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-
+      
       - name: Get short commit SHA
         id: short_sha
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
+      
       - name: Write workflow summary
         uses: ./.github/actions/write-workflow-summary
         with:
           title: 'Workflow Configuration'
           tables: |
             {
-              "SGL-D build parameters": {
-                "tag": "${{ inputs.tag || steps.short_sha.outputs.sha }}",
-                "runner": "${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}",
-                "disable_docker_cache": "${{ inputs.disable_docker_cache || 'false' }}",
+              "Core build parameters": {
+                "tag": "${{ inputs.tag }}",
+                "runner": "${{ inputs.runner || 'build-only' }}",
+                "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
+                "force_trigger_tuning": "${{ inputs.force_trigger_tuning || 'false' }}",
                 "export_docker_cache": "${{ inputs.export_docker_cache || github.event_name == 'push' }}",
+                "docker_build_args": "${{ inputs.docker_build_args }}",
                 "cache_scope": "${{ inputs.cache_scope || github.ref_name }}",
-                "docker_build_args": ${{ toJSON(inputs.docker_build_args || '') }}
+                "cache_image_name": "${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}",
+                "short_sha": "${{ steps.short_sha.outputs.sha }}"
               }
             }
 
-  build-sgld-image:
-    name: Build SGL-D image
+  build-xdit-images:
+    name: Build xDiT images
     needs: [get-short-sha]
     uses: ./.github/workflows/build-core-image-reusable.yml
     with:
       git_ref: ${{ github.ref_name }}
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
-      core_image_name: ${{ vars.SGLD_IMAGE || 'amdsiloai/pytorch-sgld' }}
-      dockerfile: docker/Dockerfile.sgld
-      build_target: ''
-      cache_channel: sgld
+      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
+      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
       cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
       cache_scope: ${{ inputs.cache_scope }}
-      build_untuned_image: false
+      prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
+      build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
       export_docker_cache: ${{ inputs.export_docker_cache || github.event_name == 'push' }}
       docker_build_args: ${{ inputs.docker_build_args }}
@@ -96,3 +111,108 @@ jobs:
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  check-changes:
+    name: Check for MIOpen changes
+    runs-on: ubuntu-latest
+    if: ${{ inputs.force_trigger_tuning != true }}
+    outputs:
+      should_trigger: ${{ steps.check.outputs.should_trigger }}
+      changed_paths: ${{ steps.check.outputs.changed_paths }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Check for MIOpen changes
+        id: check
+        uses: ./.github/actions/check-miopen-changes
+
+  tuning-matrix:
+    name: Generate tuning matrix
+    needs: [get-short-sha, check-changes, build-xdit-images]
+    runs-on: ubuntu-latest
+    if: |
+      !cancelled() &&
+      needs.build-xdit-images.result == 'success' &&
+      (
+        inputs.force_trigger_tuning == true ||
+        (github.ref_name == 'main' && needs.check-changes.outputs.should_trigger == 'true')
+      )
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Generate matrix
+        id: generate
+        uses: ./.github/actions/generate-architecture-matrix
+        with:
+          # Push events carry no inputs, so the dispatch default is repeated here.
+          gpu_runners: ${{ inputs.gpu_runners || 'gfx942,gfx950' }}
+
+      - name: Write tuning summary
+        uses: ./.github/actions/write-workflow-summary
+        with:
+          title: 'Automatic MIOpen tuning'
+          tables: |
+            {
+              "Trigger": {
+                "forced": "${{ inputs.force_trigger_tuning || 'false' }}",
+                "qualifying_paths": "${{ needs.check-changes.outputs.changed_paths }}",
+                "untuned_image": "${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}:${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}-temp",
+                "gpu_runners": "${{ inputs.gpu_runners || 'gfx942,gfx950' }}"
+              }
+            }
+          code: |
+            {
+              "Matrix Configuration": ${{ toJSON(fromJSON(steps.generate.outputs.matrix)) }}
+            }
+
+  tune:
+    name: ${{ matrix.arch }} tuning
+    needs: [get-short-sha, build-xdit-images, tuning-matrix]
+    if: ${{ !cancelled() && needs.tuning-matrix.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.tuning-matrix.outputs.matrix) }}
+    uses: ./.github/workflows/miopen-tune-reusable.yml
+    with:
+      git_ref: ${{ github.ref_name }}
+      image: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}:${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}-temp
+      arch: ${{ matrix.arch }}
+      runner: ${{ matrix.runner }}
+      timeout_minutes: ${{ matrix.timeout }}
+      artifact_name: ${{ github.run_number }}-miopen-${{ matrix.arch }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  create-miopen-branch:
+    name: Create MIOpen branch
+    needs: [tune]
+    runs-on: build-only
+    if: ${{ !cancelled() && needs.tune.result == 'success' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ github.token }}
+
+      - name: Download all MIOpen artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ github.run_number }}-miopen-*
+          merge-multiple: true
+          path: data/miopen/userdb
+
+      - name: Create MIOpen branch
+        uses: ./.github/actions/create-miopen-db-branch
+        with:
+          branch_name: miopen/${{ github.run_number }}-${{ github.run_attempt }}
+          run_number: ${{ github.run_number }}
