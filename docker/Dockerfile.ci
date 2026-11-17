@@ -345,14 +345,13 @@ FROM rocm_devel AS core
 ARG AITER_COMMIT
 RUN --mount=type=bind,from=build_torch_stack,source=/install,target=/install \
     pip install --no-cache-dir /install/*.whl
-# Runtime libs for FFmpeg, OpenBLAS-linked torch, and OpenCV/GLib.
+# Runtime libs for FFmpeg and OpenBLAS-linked torch.
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
   libass9 \
   libdav1d7 \
   libfreetype6 \
   libgfortran5 \
-  libgl1 \
   libglib2.0-0t64 \
   libgnutls30 \
   libmp3lame0 \
