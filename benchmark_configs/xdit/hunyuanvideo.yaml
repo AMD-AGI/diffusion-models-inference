@@ -44,28 +44,6 @@
     use_torch_compile: true
     attention_backend: aiter_bf16
 
-- name: hunyuanvideo.default.hopper.h100
-  tags: [lucid, hopper, h100]
-  model: tencent/HunyuanVideo
-  revision: refs/pr/18
-  runner: xdit
-  args:
-    prompt: In the large cage, two puppies were wagging their tails at each other.
-    batch_size: 1
-    height: 720
-    width: 1280
-    seed: 1168860793
-    num_frames: 129
-    num_inference_steps: 50
-    warmup_calls: 1
-    num_iterations: 1
-    ulysses_degree: 8
-    use_parallel_vae: false
-    guidance_scale: 6.0
-    use_torch_compile: true
-    attention_backend: flash_3
-    memory_efficient_replicated_load: true
-
 - name: hunyuanvideo.default.hopper.h200
   tags: [lucid, hopper, h200]
   model: tencent/HunyuanVideo
