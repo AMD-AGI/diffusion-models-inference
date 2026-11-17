@@ -187,7 +187,7 @@ index 6346b13..b0fe925 100644
 +SAME_QKV_OR_TRAILING_QUERY_PAD = _SameQKVOrTrailingQueryPad()
  HALF_PRECISION = _HalfPrecision()
 diff --git a/xfuser/core/utils/runner_utils.py b/xfuser/core/utils/runner_utils.py
-index 89caba4..a20e52a 100644
+index 89caba4..a083601 100644
 --- a/xfuser/core/utils/runner_utils.py
 +++ b/xfuser/core/utils/runner_utils.py
 @@ -94,11 +94,12 @@ def resize_and_crop_image(image: Image, target_height: int, target_width: int, m
@@ -206,7 +206,57 @@ index 89caba4..a20e52a 100644
          return KernelPreference.TORCH
      return KernelPreference.AUTO
  
-@@ -754,6 +755,51 @@ def quantize_linear_layers_to_fp4(
+@@ -134,8 +135,9 @@ def _patch_torchao_float8_fsdp2() -> list[str]:
+     1. Init-time aten op bugs:
+        FSDP2 calls torch.chunk which passes aten.split.Tensor with dim as a kwarg,
+        but the existing Float8Tensor handler expects 3 positional args which raises
+-       a ValueError. We fix split and add new_empty/new_zeros/copy_/view handlers for
+-       the param-management ops FSDP2 calls during _init_sharded_param.
++       a ValueError. On inference tensors torch.chunk and narrow arrive undecomposed.
++       We fix split, add chunk/narrow, and add new_empty/new_zeros/copy_/view handlers
++       for the param-management ops FSDP2 calls during _init_sharded_param.
+ 
+     2. Forward-time subclass loss:
+        FSDP2 all-gather reconstructs sharded params as plain torch.Tensors, 
+@@ -193,6 +195,28 @@ def _patch_torchao_float8_fsdp2() -> list[str]:
+     table[split_op] = _split
+     patched.append("aten.split.Tensor")
+ 
++    # aten.chunk.default: chunk decomposes to split only when autograd is active. On inference
++    # tensors (the runner loads under torch.inference_mode) FSDP2's torch.chunk reaches here
++    # undecomposed, and the fallthrough below would shard the raw qdata without its scale.
++    def _chunk(func, types, args, kwargs):
++        tensor, chunks = args[0], args[1]
++        dim = args[2] if len(args) > 2 else kwargs.get("dim", 0)
++        split_size = max(-(-tensor.size(dim) // chunks), 1)
++        return _split(split_op, types, (tensor, split_size, dim), {})
++
++    table[aten.chunk.default] = _chunk
++    patched.append("aten.chunk.default")
++
++    # aten.narrow.default: likewise undecomposed on inference tensors. FSDP2 narrows the padded
++    # shard buffer and copy_s into it, so the result must be a view sharing the buffer's qdata.
++    def _narrow(func, types, args, kwargs):
++        tensor, dim, start, length = args
++        new_qdata = aten.narrow.default(tensor.qdata, dim, start, length)
++        return _make_float8(tensor, new_qdata, list(new_qdata.shape))
++
++    table[aten.narrow.default] = _narrow
++    patched.append("aten.narrow.default")
++
+     # aten.new_empty: FSDP2 calls _chunk_with_empty which pads short chunk lists with size-0 tensors
+     def _new_empty(_, _t, args, kwargs):
+         tensor = args[0]
+@@ -303,6 +327,8 @@ _TORCHAO_FLOAT8_FSDP2_PATCHES: list[str] = []
+ _REQUIRED_TORCHAO_FLOAT8_FSDP2_PATCHES = frozenset(
+     {
+         "aten.split.Tensor",
++        "aten.chunk.default",
++        "aten.narrow.default",
+         "aten.new_empty.default",
+         "aten.new_zeros.default",
+         "aten.copy_.default",
+@@ -754,6 +780,51 @@ def quantize_linear_layers_to_fp4(
              )
  
  
@@ -258,7 +308,7 @@ index 89caba4..a20e52a 100644
  def quantize_linear_layers_to_nvfp4(
      module_or_module_list_to_quantize: torch.nn.Module | torch.nn.ModuleList,
      fp8_layers: tuple[str] = None,
-@@ -792,6 +838,8 @@ def quantize_linear_layers_to_nvfp4(
+@@ -792,6 +863,8 @@ def quantize_linear_layers_to_nvfp4(
      skipped_small_count = 0
  
      for module in module_or_module_list_to_quantize:
@@ -267,7 +317,7 @@ index 89caba4..a20e52a 100644
          for fqn, submodule in module.named_modules():
              if not isinstance(submodule, torch.nn.Linear):
                  continue
-@@ -824,7 +872,7 @@ def quantize_linear_layers_to_nvfp4(
+@@ -824,7 +897,7 @@ def quantize_linear_layers_to_nvfp4(
                      return False
              return True
  
@@ -276,7 +326,7 @@ index 89caba4..a20e52a 100644
  
          if fp8_layers or fp8_suffix_layers:
              from torchao.quantization.granularity import PerTensor
-@@ -844,7 +892,7 @@ def quantize_linear_layers_to_nvfp4(
+@@ -844,7 +917,7 @@ def quantize_linear_layers_to_nvfp4(
                      return False
                  return _layer_uses_fp8_override(fqn, fp8_layers, fp8_suffix_layers)
  
