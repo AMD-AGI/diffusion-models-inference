@@ -144,6 +144,8 @@ RUN --mount=type=bind,source=patches,target=/patches \
 # - Flux2 only (Flux1, Kontext and Klein are unchanged): compile with
 #   max-autotune-no-cudagraphs instead of reduce-overhead to avoid a
 #   performance regression.
+# - Sol-Attn: accept a query longer than K/V by USP's trailing SP pad (cut Q
+#   to valid_kv_len, return zeros for the pad rows) instead of falling back to SDPA.
     git apply /patches/xfuser.patch && \
     pip freeze | grep numpy > constraints.txt && \
     pip install -c constraints.txt -e .
