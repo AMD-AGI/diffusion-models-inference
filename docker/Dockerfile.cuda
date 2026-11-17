@@ -96,7 +96,8 @@ RUN --mount=type=bind,source=patches/flex_block_attn_setup.patch,target=/patches
 RUN git clone https://github.com/NVlabs/sana.git && \
     cd sana && \
     git reset --hard ${SANA_COMMIT} && \
-    python -m pip install -e techniques/sparse_backends
+    python -m pip install techniques/sparse_backends && \
+    cd .. && rm -fr sana
 
 FROM core AS deps
 ARG LONGCONTEXTATTENTION_COMMIT
