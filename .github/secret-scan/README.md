@@ -50,18 +50,61 @@ An error in the `trivy image` check is a warning only.
 - **Real secret:** do not allowlist it. Revoke and rotate it, remove it from
   the build, and rerun the whole workflow. The candidate tag only lives in the
   private cache repository and is deleted by the cache cleanup workflow.
-- **Secret false positive:** add the narrowest possible allow rule to
-  [`trivy-secret.yaml`](trivy-secret.yaml) and merge it to the default branch.
-  Then use **Re-run failed jobs** on the failed run. This reruns the build
-  job, which rebuilds (mostly from the registry cache) to new candidate tags
-  and scans them with the new rule, because the scan always reads the policy
-  from the default branch.
+- **Secret false positive:** these should only come from third-party
+  content, such as test keys or documentation examples in an upstream
+  package. Our own code and build files should never need an exception; fix
+  them instead. For an upstream false positive, add an allow rule as described
+  in [Managing exceptions](#managing-exceptions) and push it to the branch
+  that ran the build. Then use **Re-run failed jobs**. The build job uses the
+  latest policy from that branch, rebuilds (mostly from the registry cache) to
+  new candidate tags, and scans them with the updated rule. Since the branch
+  policy also gates promotion, review policy changes carefully before running
+  a build that publishes images.
 - **Vulnerability or misconfiguration finding:** reported as a warning and in
   the uploaded Trivy reports; it does not fail the job. Review it and
   remediate what is in our control.
 
 Failed candidate tags are removed by the cache cleanup workflow after its
 grace period.
+
+## Managing exceptions
+
+An allow rule hides findings from every future build, on every branch that
+contains it, including builds that publish images. Treat each one as a
+security decision, not a way to get a build through.
+
+- **Review every finding before writing a rule.** Look up the reported path
+  and layer in the job summary or `summary.json`, find the upstream source
+  of the file, and confirm what the matched value is. Only allowlist values
+  that are demonstrably not usable credentials: test fixtures, test keys,
+  documentation examples and deliberately public values. If you cannot
+  confirm that, treat the finding as a real secret.
+- **Never allowlist a genuine secret, not even temporarily or for testing.**
+  Branch builds are promoted to public tags with the branch policy, so a
+  "temporary" exception publishes the secret. If a real secret ends up in the
+  build, follow the real-secret procedure above instead.
+- **Add new findings as new rules; leave existing rules alone.** Each
+  existing rule was reviewed for the specific files or values it covers.
+  Widening one to also cover a new finding silently changes what it hides and
+  skips that review. Change or remove an existing rule only when the content
+  it covers changes or disappears.
+- **Scope each rule as precisely as possible.** Prefer an exact `regex` for
+  the known value. If a `path` rule is needed, anchor it with `^...$`,
+  escape dots, and list the exact files rather than a directory. Generalise
+  only what is known to vary between builds, such as the Python minor
+  version.
+- **Explain the rule.** The `description` names the upstream project and
+  file, and says why the value is not a secret, so a reviewer can check the
+  claim.
+- **Add the rule in the branch where the finding appeared.** Usually that is
+  the development branch whose change (for example, a dependency bump or a
+  new upstream checkout) introduced the file. The rule is then reviewed in
+  the same pull request as its cause, and the branch build can be rerun with
+  it. Do not add exceptions for one branch's findings in another branch or
+  directly on `main`.
+- **Reviewers check each new rule** against the reported finding: that the
+  file really is upstream test or documentation content, and that the rule
+  matches nothing beyond it.
 
 ## Writing allow rules
 
