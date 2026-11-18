@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Build vLLM-Omni NV image
+name: Build NV image
 on:
   push:
     branches:
@@ -23,14 +23,10 @@ on:
         required: false
         default: ""
       disable_docker_cache:
-        description: "Disable Docker cache on build"
+        description: "Disable Docker cache on NV build"
         type: boolean
         required: false
         default: false
-      docker_build_args:
-        description: "Newline-separated Docker build arguments in KEY=VALUE form"
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -45,27 +41,27 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-
+      
       - name: Get short commit SHA
         id: short_sha
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
+      
       - name: Write workflow summary
         uses: ./.github/actions/write-workflow-summary
         with:
           title: 'Workflow Configuration'
           tables: |
             {
-              "vLLM-Omni NV build parameters": {
-                "tag": "${{ inputs.tag || steps.short_sha.outputs.sha }}",
-                "runner": "${{ inputs.runner || vars.BUILD_RUNNER_NV || 'build-only' }}",
+              "NV build parameters": {
+                "tag": "${{ inputs.tag }}",
+                "runner": "${{ inputs.runner || 'build-only' }}",
                 "disable_docker_cache": "${{ inputs.disable_docker_cache || 'false' }}",
-                "docker_build_args": ${{ toJSON(inputs.docker_build_args || '') }}
+                "short_sha": "${{ steps.short_sha.outputs.sha }}"
               }
             }
 
-  build-vllm-omni-nv-image:
-    name: Build vLLM-Omni NV image (${{ matrix.platform }})
+  build-nv-image:
+    name: Build NV image (${{ matrix.platform }})
     needs: [get-short-sha]
     strategy:
       matrix:
@@ -76,16 +72,13 @@ jobs:
             tag_suffix: -arm64
     uses: ./.github/workflows/build-nv-image-reusable.yml
     with:
-      git_ref: ${{ github.sha }}
+      git_ref: ${{ github.head_ref || github.ref_name }}
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
       image_tag_suffix: ${{ matrix.tag_suffix }}
-      image_name: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-vllm-omni-nvidia' }}
-      dockerfile: docker/Dockerfile.vllm_omni.cuda
-      cache_channel: vllm-omni-nv
+      image_name: ${{ vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia' }}
       cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
       platform: ${{ matrix.platform }}
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
-      docker_build_args: ${{ inputs.docker_build_args }}
       runner: ${{ inputs.runner || vars.BUILD_RUNNER_NV || 'build-only' }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
@@ -93,7 +86,7 @@ jobs:
 
   assemble-manifest:
     name: Assemble multi-arch manifest
-    needs: [get-short-sha, build-vllm-omni-nv-image]
+    needs: [get-short-sha, build-nv-image]
     runs-on: ubuntu-latest
     steps:
       - name: Log in to Docker Hub
@@ -101,13 +94,13 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
           password: ${{ secrets.DOCKERHUB_OAT }}
-
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-
+      
       - name: Create multi-arch manifest
         env:
-          IMAGE: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-vllm-omni-nvidia' }}
+          IMAGE: ${{ vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia' }}
           TAG: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
         run: |
           docker buildx imagetools create \
