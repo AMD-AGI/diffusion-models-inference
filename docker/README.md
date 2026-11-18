@@ -2,7 +2,9 @@
 - `Dockerfile.ci` docker file for AMD images
 - `Dockerfile.cuda` docker file for CUDA images
 - `Dockerfile.rdna4` docker file for RDNA4 AMD images
-- `Dockerfile.sgld` SGL-D image based on `amdsiloai/pytorch-xdit`
+- `Dockerfile.sgld` SGL-D image based on `amdsiloai/pytorch-xdit`, with separate SGL kernel
+  libraries for gfx942 and gfx950. [patches/sglang-rocm-arch-loader.patch](patches/sglang-rocm-arch-loader.patch)
+  preserves explicit build targets and makes SGLang select the matching library at runtime.
 - `Dockerfile.sgld.cuda` SGL-D image for CUDA based on `lmsysorg/sglang`
 - `Dockerfile.sgld_lmsys` SGL-D image based on `lmsysorg/sglang-rocm` with CI scripts from xDiT
 - `Dockerfile.vllm_omni` vLLM-Omni image for ROCm based on `amdsiloai/pytorch-xdit`
