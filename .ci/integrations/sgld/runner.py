@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import subprocess
 import re
+import shlex
 
 from sglang.multimodal_gen import DiffGenerator
 
@@ -289,6 +290,15 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
         default=None,
         help="Layer name patterns to keep unquantized (e.g. blocks.0 blocks.1)",
     )
+    parser.add_argument(
+        "--print-command",
+        action="store_true",
+        help=(
+            "Print the sglang generate command this configuration builds and exit, "
+            "instead of running it. The command is shell-quoted, so it can be copied "
+            "and run directly."
+        ),
+    )
     # Anything not declared above is assumed to be an sglang generate option and
     # is forwarded as-is by run_cli, so new sglang flags can be used from the
     # benchmark YAMLs without touching this parser.
@@ -498,6 +508,10 @@ def run_cli(args, extra):
     # flag, so a forwarded flag overrides the defaults hard-coded above.
     cmd.extend(_passthrough_args(extra))
 
+    if args.print_command:
+        print(shlex.join(str(part) for part in cmd))
+        return
+
     print(f"Running command: {' '.join(cmd)}")
 
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -631,6 +645,9 @@ def main():
     if args.run_type == "cli":
         run_cli(args, extra)
     elif args.run_type == "api":
+        if args.print_command:
+            # The api path calls DiffGenerator in process, so there is no command.
+            raise ValueError("--print-command needs --run_type cli, which is the path that builds a command")
         # Silently dropping any of these would benchmark a different configuration
         # than the one the config asked for.
         if extra:
