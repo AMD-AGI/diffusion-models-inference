@@ -1,38 +1,17 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Build example image with
-#
-# docker build -f docker/Dockerfile.ci \
-#              -t amdsiloai/pytorch-xdit:latest .
-#
-# when running from repository root.
-#
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.10"
+FROM ${BASE_IMAGE}
 
-# core image arguments
-ARG BASE_IMAGE="ubuntu:24.04"
-ARG THEROCK_COMMIT="ab56f1f7c5b54746bf9f7948fff3f306b2bef8b2"
-ARG ROCM_RELEASE_ID="20261108-42427827092"
-# ROCM_GFX_TARGETS selects architecture-specific nightly deb package shards.
-# PYTORCH_ROCM_ARCH defaults to the package targets but can be overridden.
-# Values are ";" separated; supported LLVM targets are documented at
-# https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
-ARG ROCM_GFX_TARGETS="gfx942;gfx950"
-ARG PYTORCH_ROCM_ARCH="${ROCM_GFX_TARGETS}"
-ARG TRITON_COMMIT="669b31acc1dd1b3fd93286afd5db67f65d9f7557"
-ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
-ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
-ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
-ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
-# deps image arguments
-ARG AITER_COMMIT="04913fc854631d74147a926ad8be005c8a0bb133"
-ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
-ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
-ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
-ARG XDIT_COMMIT="8d7467a5b53849b7b6e0fa7366b65d7b445a28ac"
+ARG VLLM_COMMIT="v0.28.0" # v0.28.0
+#ARG SGL_COMMIT="2948168" # v0.5.17
+#ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
 
-FROM ${BASE_IMAGE} AS base
-ARG DEBIAN_FRONTEND=noninteractive
+# Necessary PRs manually merged
+ARG SGL_COMMIT="perf_branch_1410"
+ARG SGL_REPO="https://github.com/avjves/sglang.git"
+ENV SGLANG_BUILD_RUST_EXTS=none
 
 # Shared fetch/compiler tools. Native extensions in core (AITER)
 # and the torch/ffmpeg builders still need a host toolchain.
@@ -395,105 +374,61 @@ COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/to
 COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
 COPY --from=evidence_mori /evidence/mori /opt/license-evidence/mori-build-sources
 
-FROM core AS deps
-ARG LONGCONTEXTATTENTION_COMMIT
-ARG DIFFUSERS_COMMIT
-ARG DISTVAE_COMMIT
-ARG XDIT_COMMIT
+# Install SGL
+# Build each architecture separately; the patched loader selects its matching library.
+COPY docker/patches/sglang-rocm-arch-loader.patch /tmp/sglang-rocm-arch-loader.patch
+RUN git clone ${SGL_REPO} sglang && \
+    cd sglang && \
+    git checkout ${SGL_COMMIT} && \
+    git apply /tmp/sglang-rocm-arch-loader.patch && \
+    rm /tmp/sglang-rocm-arch-loader.patch && \
+    cd python/sglang/kernels/aot && \
+    mv pyproject_rocm.toml pyproject.toml && \
+    for arch in gfx942 gfx950; do \
+        rm -rf build && \
+        AMDGPU_TARGET=${arch} python setup_rocm.py build && \
+        mkdir -p /tmp/sgl_ops/${arch} && \
+        cp build/lib*/sgl_kernel/common_ops*.so /tmp/sgl_ops/${arch}/ || exit 1; \
+    done && \
+    AMDGPU_TARGET=gfx950 python setup_rocm.py install && \
+    sgl_kernel_dir=$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("sgl_kernel").origin).parent)') && \
+    cp -r /tmp/sgl_ops/gfx942 /tmp/sgl_ops/gfx950 "${sgl_kernel_dir}/" && \
+    rm -rf /tmp/sgl_ops && \
+    ls "${sgl_kernel_dir}"/gfx942/common_ops*.so "${sgl_kernel_dir}"/gfx950/common_ops*.so && \
+    cd ../../../../ && \
+    mv python/pyproject_other.toml python/pyproject.toml && \
+    sed -i 's/compressed-tensors==0\.15\.0/compressed-tensors==0.17.0/' python/pyproject.toml && \
+    sed -i '/numpy/d' python/pyproject.toml && \
+    sed -i '/torch/d' python/pyproject.toml && \
+    sed -i '/torchvision/d' python/pyproject.toml && \
+    sed -i '/transformers/d' python/pyproject.toml && \
+    sed -i '/timm/d' python/pyproject.toml && \
+    sed -i '/diffusers/d' python/pyproject.toml && \
+    sed -i '/accelerate/d' python/pyproject.toml && \
+    pip install --no-cache-dir -e "python[all_hip,diffusion]"
 
-# setup
-WORKDIR /app/external
-# install yunchang
-RUN --mount=type=bind,source=patches,target=/patches \
-    git clone https://github.com/feifeibear/long-context-attention.git && \
-    cd long-context-attention && \
-    git reset --hard ${LONGCONTEXTATTENTION_COMMIT} && \
-    git apply /patches/yunchang_aiter_round_mode.patch && \
-    pip install -e .
-# install transformers with [sentencepiece] extras that brings in protobuf, required for T5 tokenizers
-RUN pip install --no-cache-dir "transformers[sentencepiece]==5.16.1"
-# install diffusers
-# ftfy is an optional dependency, we install it as needed for StableDiffusion 3.5 (CLIP-based encoder pipelines)
-# final rm step is needed presently to pass a release process image scan
-RUN git clone https://github.com/huggingface/diffusers.git && \
-    cd diffusers && \
-    git reset --hard ${DIFFUSERS_COMMIT} && \
-    pip install -e ".[torch]" && \
-    rm scripts/convert_vq_diffusion_to_diffusers.py && \
-    pip install --no-cache-dir "ftfy"
-# install torchao
-RUN pip install --no-cache-dir "torchao==0.18.0"
-# install distvae
-RUN git clone https://github.com/xdit-project/DistVAE.git && \
-    cd DistVAE && \
-    git reset --hard ${DISTVAE_COMMIT} && \
-    pip install -e .
-# install xfuser
-WORKDIR /app
-RUN --mount=type=bind,source=patches,target=/patches \
-    git clone https://github.com/xdit-project/xDiT.git && \
-    cd xDiT && \
-    git reset --hard ${XDIT_COMMIT} && \
-    git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
-    pip freeze | grep numpy > constraints.txt && \
-    pip install -c constraints.txt -e .
-# rocprofiler-compute ships with rocm_devel.
-# Due to https://github.com/ROCm/rocm-systems/pull/2821 drop numpy to avoid installing numpy<2
-RUN sed -i '/numpy/d' "${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt" && \
-    pip install --no-cache-dir -r "${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt"
-# imageio + imageio-ffmpeg for diffusers export_to_video H.264 encoding
-# --no-binary avoids shipping imageio-ffmpeg's bundled GPL ffmpeg binary
-RUN pip install --no-cache-dir --no-binary :all: imageio-ffmpeg
-RUN pip install --no-cache-dir imageio
+# Other dependencies
+RUN pip3 install remote_pdb imageio && \
+    pip3 uninstall torch_c_dlpack_ext -y
 
-FROM core AS final
-# by copying from the deps stage we leave behind all cache and temporary files created during installation
-COPY --from=deps /venv /venv
-COPY --from=deps /app /app
-COPY LICENSE /tmp/project-license/LICENSE
+RUN pip3 install "transformers==5.12.1" --upgrade
 
-# install basic terminal utilities
-RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    less \
-    nano \
-    vim \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime envs
+ENV SGLANG_TORCH_COMPILE_MODE="default"
+ENV SGLANG_USE_ROCM_VAE=0
+ENV SGLANG_USE_AITER=1
+ENV SGLANG_USE_ROCM_FLYDSL=1
+ENV SGLANG_DIFFUSION_DISABLE_SP_PAD_MASK=1
 
 WORKDIR /app
-# copy assets
-COPY assets/data /app/data
-# copy instructions and CI prerequisites
-COPY assets/docs/README.md /app/README.md
+# Include CI
+RUN rm -fr /app/.ci/*
 COPY .ci/run.py /app/.ci/run.py
 COPY .ci/memory_sampler.py /app/.ci/memory_sampler.py
 COPY .ci/miopen_driver_commands.py /app/.ci/miopen_driver_commands.py
 COPY .ci/determinism_report.py /app/.ci/determinism_report.py
-COPY benchmark_configs/xdit/ /app/.ci/benchmark_configs/
-RUN if [ -d /app/xDiT/.ci/configs ]; then \
-      cp -a /app/xDiT/.ci/configs /app/.ci/benchmark_configs_xdit; \
-    fi
-COPY src/sweep_tooling/generate_sweep_configs.py /app/.ci/tools/generate_sweep_configs.py
-# use shared MIOpen databases
-COPY ./data/miopen/userdb /miopen_userdb
-ENV MIOPEN_USER_DB_PATH="/miopen_userdb"
+COPY .ci/integrations/sgld/runner.py /app/.ci/runner.py
+COPY benchmark_configs/sgld/ /app/.ci/benchmark_configs/
 
-# Generate third-party license evidence from the final filesystem instead of
-# maintaining a dependency list separately from the image build.
-COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
-RUN python3 /usr/local/libexec/collect_image_licenses.py \
-    --output /usr/share/licenses/diffusion-models-inference \
-    --scan-root app=/app \
-    --scan-root project=/tmp/project-license \
-    --scan-root python=/venv \
-    --scan-root rocm=/opt/rocm \
-    --scan-root local=/usr/local \
-    --evidence-root torch-build-sources=/opt/license-evidence/torch-build-sources \
-    --evidence-root ffmpeg-build-sources=/opt/license-evidence/ffmpeg-build-sources \
-    --evidence-root mori-build-sources=/opt/license-evidence/mori-build-sources \
-    --git-root /app \
-    --python-root /venv \
-    --debian \
-    --fail-on-missing-git-license \
-    --required-git-depth 2 && \
-    rm -rf /tmp/project-license \
-        /usr/local/libexec/collect_image_licenses.py
+
+RUN wget -O /app/data/flux_cat.png https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png
