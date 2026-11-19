@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import unittest
-from parameterized import parameterized  # type: ignore[import-untyped]
+
 from miopen_convolution import MIOpenConvolution
 
 
@@ -134,54 +134,53 @@ class TestMIOpenConvolution(unittest.TestCase):
         ),
     ]
 
-    @parameterized.expand(DB_KEY_TEST_CASES)
-    def test_from_db_key(self, db_key, expected_attrs):
-        """Test parsing ufdb keys"""
-        conv = MIOpenConvolution.from_db_key(db_key)
-        for attr, expected_value in expected_attrs.items():
-            self.assertEqual(getattr(conv, attr), expected_value, f"Attribute {attr} mismatch for key: {db_key}")
+    @staticmethod
+    def _parse(value):
+        if value.startswith("MIOpenDriver"):
+            return MIOpenConvolution.from_miopendriver_command(value)
+        return MIOpenConvolution.from_db_key(value)
 
-    @parameterized.expand(COMMAND_TEST_CASES)
-    def test_from_miopendriver_command(self, command, expected_attrs):
-        """Test parsing MIOpenDriver commands"""
-        conv = MIOpenConvolution.from_miopendriver_command(command)
-        for attr, expected_value in expected_attrs.items():
-            self.assertEqual(getattr(conv, attr), expected_value, f"Attribute {attr} mismatch for command: {command}")
+    def test_from_db_key(self):
+        """Test parsing ufdb keys."""
+        for db_key, expected_attrs in self.DB_KEY_TEST_CASES:
+            with self.subTest(db_key=db_key):
+                conv = MIOpenConvolution.from_db_key(db_key)
+                for attr, expected_value in expected_attrs.items():
+                    self.assertEqual(getattr(conv, attr), expected_value, attr)
 
-    @parameterized.expand(INVALID_DB_KEYS)
-    def test_validate_db_key_invalid(self, invalid_key, _description):
-        """Test invalid ufdb keys"""
-        print(f"Testing {_description}")
-        with self.assertRaises(ValueError):
-            MIOpenConvolution.from_db_key(invalid_key)
+    def test_from_miopendriver_command(self):
+        """Test parsing MIOpenDriver commands."""
+        for command, expected_attrs in self.COMMAND_TEST_CASES:
+            with self.subTest(command=command):
+                conv = MIOpenConvolution.from_miopendriver_command(command)
+                for attr, expected_value in expected_attrs.items():
+                    self.assertEqual(getattr(conv, attr), expected_value, attr)
 
-    @parameterized.expand(INVALID_COMMANDS)
-    def test_validate_command_invalid(self, invalid_command, _description):
-        """Test invalid MIOpenDriver commands"""
-        print(f"Testing {_description}")
-        with self.assertRaises(ValueError):
-            MIOpenConvolution.from_miopendriver_command(invalid_command)
+    def test_validate_db_key_invalid(self):
+        """Test invalid ufdb keys."""
+        for invalid_key, description in self.INVALID_DB_KEYS:
+            with self.subTest(description=description):
+                with self.assertRaises(ValueError):
+                    MIOpenConvolution.from_db_key(invalid_key)
 
-    @parameterized.expand(EQUALITY_TEST_CASES)
-    def test_equality(self, input1, input2, is_equal):
-        """Test equality after normalization (ufdb keys and commands)"""
-        print(f"Testing equality for inputs: {input1} and {input2}")
-        conv1 = (
-            MIOpenConvolution.from_db_key(input1)
-            if not input1.startswith("MIOpenDriver")
-            else MIOpenConvolution.from_miopendriver_command(input1)
-        )
-        conv2 = (
-            MIOpenConvolution.from_db_key(input2)
-            if not input2.startswith("MIOpenDriver")
-            else MIOpenConvolution.from_miopendriver_command(input2)
-        )
+    def test_validate_command_invalid(self):
+        """Test invalid MIOpenDriver commands."""
+        for invalid_command, description in self.INVALID_COMMANDS:
+            with self.subTest(description=description):
+                with self.assertRaises(ValueError):
+                    MIOpenConvolution.from_miopendriver_command(invalid_command)
 
-        if is_equal:
-            self.assertEqual(conv1, conv2)
-            self.assertEqual(hash(conv1), hash(conv2))
-        else:
-            self.assertNotEqual(conv1, conv2)
+    def test_equality(self):
+        """Test equality after normalization for ufdb keys and commands."""
+        for input1, input2, is_equal in self.EQUALITY_TEST_CASES:
+            with self.subTest(input1=input1, input2=input2):
+                conv1 = self._parse(input1)
+                conv2 = self._parse(input2)
+                if is_equal:
+                    self.assertEqual(conv1, conv2)
+                    self.assertEqual(hash(conv1), hash(conv2))
+                else:
+                    self.assertNotEqual(conv1, conv2)
 
 
 if __name__ == "__main__":
