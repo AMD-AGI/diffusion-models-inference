@@ -126,5 +126,7 @@
     guidance_scale: 5.0
     attention_backend: aiter_quant
     attention_backend_config: format=mxfp6
+    component_attention_backend_configs.transformer.cross: format=bf16
+    quality: high
     component_quantizations.transformer: mxfp4
-    component_quantizations.transformer_2: fp8
+    component_quantizations.transformer_2: mxfp6
