@@ -126,4 +126,11 @@ allow-rules:
   `.git-dir`, and image configs and cache metadata appear as `blob.json`.
 - Trivy's built-in allow rules are disabled on purpose. Do not re-enable them.
 
+The SGL-D dependency exceptions cover reviewed Anthropic agent API docstrings,
+PyCryptodome self-test keys (including their bytecode), the PyJWT quick-start
+token and scikit-image's public grass-image download token. Their package
+versions and rationale are recorded in the policy. In particular, do not
+globally allow `"type": "service_account"`: that is the entire Trivy GCP
+service-account detection pattern, even when no credential accompanies it.
+
 Changes to this directory require approval from the CI code owners.
