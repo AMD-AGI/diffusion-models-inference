@@ -82,7 +82,7 @@ jobs:
     with:
       git_ref: ${{ github.ref_name }}
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
-      core_image_name: ${{ vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-vllm-omni' }}
+      core_image_name: ${{ vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-xdit-vllm' }}
       dockerfile: docker/Dockerfile.vllm_omni
       build_target: ''
       cache_channel: vllm-omni

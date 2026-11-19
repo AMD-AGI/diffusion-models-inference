@@ -79,7 +79,7 @@ jobs:
       git_ref: ${{ github.sha }}
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
       image_tag_suffix: ${{ matrix.tag_suffix }}
-      image_name: ${{ vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-sgld-nvidia' }}
+      image_name: ${{ vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-xdit-sglang-nvidia' }}
       dockerfile: docker/Dockerfile.sgld.cuda
       cache_channel: sgld-nv
       cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
@@ -107,7 +107,7 @@ jobs:
 
       - name: Create multi-arch manifest
         env:
-          IMAGE: ${{ vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-sgld-nvidia' }}
+          IMAGE: ${{ vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-xdit-sglang-nvidia' }}
           TAG: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
         run: |
           docker buildx imagetools create \

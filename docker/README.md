@@ -19,10 +19,12 @@ xDiT build workflows, and can also be started with `workflow_dispatch`:
 
 | Workflow | Dockerfile | Image variable (default repository) |
 | --- | --- | --- |
-| [build-sgld-image.yml](../.github/workflows/build-sgld-image.yml) | `Dockerfile.sgld` | `SGLD_IMAGE` (`amdsiloai/pytorch-sgld`) |
-| [build-vllm-omni-image.yml](../.github/workflows/build-vllm-omni-image.yml) | `Dockerfile.vllm_omni` | `VLLM_OMNI_IMAGE` (`amdsiloai/pytorch-vllm-omni`) |
-| [build-sgld-nv-image.yml](../.github/workflows/build-sgld-nv-image.yml) | `Dockerfile.sgld.cuda` | `SGLD_NV_IMAGE` (`amdsiloai/pytorch-sgld-nvidia`) |
-| [build-vllm-omni-nv-image.yml](../.github/workflows/build-vllm-omni-nv-image.yml) | `Dockerfile.vllm_omni.cuda` | `VLLM_OMNI_NV_IMAGE` (`amdsiloai/pytorch-vllm-omni-nvidia`) |
+| [build-sgld-image.yml](../.github/workflows/build-sgld-image.yml) | `Dockerfile.sgld` | `SGLD_IMAGE` (`amdsiloai/pytorch-xdit-sglang`) |
+| [build-vllm-omni-image.yml](../.github/workflows/build-vllm-omni-image.yml) | `Dockerfile.vllm_omni` | `VLLM_OMNI_IMAGE` (`amdsiloai/pytorch-xdit-vllm`) |
+| [build-sgld-nv-image.yml](../.github/workflows/build-sgld-nv-image.yml) | `Dockerfile.sgld.cuda` | `SGLD_NV_IMAGE` (`amdsiloai/pytorch-xdit-sglang-nvidia`) |
+| [build-vllm-omni-nv-image.yml](../.github/workflows/build-vllm-omni-nv-image.yml) | `Dockerfile.vllm_omni.cuda` | `VLLM_OMNI_NV_IMAGE` (`amdsiloai/pytorch-xdit-vllm-nvidia`) |
+
+All four SGL-D and vLLM-Omni image repositories are private.
 
 The tag defaults to the short commit SHA; override it with the `tag` input.
 

@@ -79,7 +79,7 @@ jobs:
       git_ref: ${{ github.sha }}
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
       image_tag_suffix: ${{ matrix.tag_suffix }}
-      image_name: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-vllm-omni-nvidia' }}
+      image_name: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-xdit-vllm-nvidia' }}
       dockerfile: docker/Dockerfile.vllm_omni.cuda
       cache_channel: vllm-omni-nv
       cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
@@ -107,7 +107,7 @@ jobs:
 
       - name: Create multi-arch manifest
         env:
-          IMAGE: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-vllm-omni-nvidia' }}
+          IMAGE: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-xdit-vllm-nvidia' }}
           TAG: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
         run: |
           docker buildx imagetools create \
