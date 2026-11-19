@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 name: Build NV image
+run-name: Build ${{ inputs.framework || 'xdit' }} CUDA image(s) on ${{ github.ref_name }}
 on:
   push:
     branches:
@@ -14,6 +15,15 @@ on:
       - 'README.md'
   workflow_dispatch:
     inputs:
+      framework:
+        description: "Framework image to build"
+        type: choice
+        required: true
+        default: xdit
+        options:
+          - xdit
+          - sgld
+          - vllmo
       tag:
         description: "Image tag. Short commit SHA will be used by default."
         required: false
@@ -27,6 +37,10 @@ on:
         type: boolean
         required: false
         default: false
+      docker_build_args:
+        description: "Newline-separated Docker build arguments in KEY=VALUE form"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -52,16 +66,19 @@ jobs:
           title: 'Workflow Configuration'
           tables: |
             {
-              "NV build parameters": {
+              "NV image build parameters": {
+                "framework": "${{ inputs.framework || 'xdit' }}",
                 "tag": "${{ inputs.tag }}",
                 "runner": "${{ inputs.runner || 'build-only' }}",
                 "disable_docker_cache": "${{ inputs.disable_docker_cache || 'false' }}",
+                "docker_build_args": ${{ toJSON(inputs.docker_build_args || '') }},
                 "short_sha": "${{ steps.short_sha.outputs.sha }}"
               }
             }
 
   build-nv-image:
-    name: Build NV image (${{ matrix.platform }})
+    name: Build xDiT CUDA image (${{ matrix.platform }})
+    if: ${{ github.event_name == 'push' || inputs.framework == 'xdit' }}
     needs: [get-short-sha]
     strategy:
       matrix:
@@ -79,13 +96,70 @@ jobs:
       cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
       platform: ${{ matrix.platform }}
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
+      docker_build_args: ${{ inputs.docker_build_args }}
+      runner: ${{ inputs.runner || vars.BUILD_RUNNER_NV || 'build-only' }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  build-sgld-nv-image:
+    name: Build SGL-D CUDA image (${{ matrix.platform }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.framework == 'sgld' }}
+    needs: [get-short-sha]
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag_suffix: -amd64
+          - platform: linux/arm64
+            tag_suffix: -arm64
+    uses: ./.github/workflows/build-nv-image-reusable.yml
+    with:
+      git_ref: ${{ github.head_ref || github.ref_name }}
+      image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
+      image_tag_suffix: ${{ matrix.tag_suffix }}
+      image_name: ${{ vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-xdit-sglang-nvidia' }}
+      dockerfile: docker/Dockerfile.sgld.cuda
+      cache_channel: sgld-nv
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      platform: ${{ matrix.platform }}
+      disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
+      docker_build_args: ${{ inputs.docker_build_args }}
+      runner: ${{ inputs.runner || vars.BUILD_RUNNER_NV || 'build-only' }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  build-vllm-omni-nv-image:
+    name: Build vLLM-Omni CUDA image (${{ matrix.platform }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.framework == 'vllmo' }}
+    needs: [get-short-sha]
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag_suffix: -amd64
+          - platform: linux/arm64
+            tag_suffix: -arm64
+    uses: ./.github/workflows/build-nv-image-reusable.yml
+    with:
+      git_ref: ${{ github.head_ref || github.ref_name }}
+      image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
+      image_tag_suffix: ${{ matrix.tag_suffix }}
+      image_name: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-xdit-vllm-nvidia' }}
+      dockerfile: docker/Dockerfile.vllm_omni.cuda
+      cache_channel: vllm-omni-nv
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      platform: ${{ matrix.platform }}
+      disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
+      docker_build_args: ${{ inputs.docker_build_args }}
       runner: ${{ inputs.runner || vars.BUILD_RUNNER_NV || 'build-only' }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
 
   assemble-manifest:
-    name: Assemble multi-arch manifest
+    name: Assemble xDiT CUDA manifest
     needs: [get-short-sha, build-nv-image]
     runs-on: ubuntu-latest
     steps:
@@ -101,6 +175,54 @@ jobs:
       - name: Create multi-arch manifest
         env:
           IMAGE: ${{ vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia' }}
+          TAG: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${TAG}" \
+            "${IMAGE}:${TAG}-amd64" \
+            "${IMAGE}:${TAG}-arm64"
+
+  assemble-sgld-manifest:
+    name: Assemble SGL-D CUDA manifest
+    needs: [get-short-sha, build-sgld-nv-image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create multi-arch manifest
+        env:
+          IMAGE: ${{ vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-xdit-sglang-nvidia' }}
+          TAG: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${TAG}" \
+            "${IMAGE}:${TAG}-amd64" \
+            "${IMAGE}:${TAG}-arm64"
+
+  assemble-vllm-omni-manifest:
+    name: Assemble vLLM-Omni CUDA manifest
+    needs: [get-short-sha, build-vllm-omni-nv-image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create multi-arch manifest
+        env:
+          IMAGE: ${{ vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-xdit-vllm-nvidia' }}
           TAG: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
         run: |
           docker buildx imagetools create \

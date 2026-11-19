@@ -12,29 +12,32 @@
 
 ## How-tos
 
-### Build SGL-D and vLLM-Omni images in CI
+### Build framework images in CI
 
-These workflows run on pushes to `main` with the same path exclusions as the
-xDiT build workflows, and can also be started with `workflow_dispatch`:
+Pushes to `main` build xDiT only, with the same path exclusions as before.
+SGL-D and vLLM-Omni images are built only by manual dispatch. Use the
+`framework` dropdown with `workflow_dispatch` to build one framework:
 
-| Workflow | Dockerfile | Image variable (default repository) |
-| --- | --- | --- |
-| [build-sgld-image.yml](../.github/workflows/build-sgld-image.yml) | `Dockerfile.sgld` | `SGLD_IMAGE` (`amdsiloai/pytorch-xdit-sglang`) |
-| [build-vllm-omni-image.yml](../.github/workflows/build-vllm-omni-image.yml) | `Dockerfile.vllm_omni` | `VLLM_OMNI_IMAGE` (`amdsiloai/pytorch-xdit-vllm`) |
-| [build-sgld-nv-image.yml](../.github/workflows/build-sgld-nv-image.yml) | `Dockerfile.sgld.cuda` | `SGLD_NV_IMAGE` (`amdsiloai/pytorch-xdit-sglang-nvidia`) |
-| [build-vllm-omni-nv-image.yml](../.github/workflows/build-vllm-omni-nv-image.yml) | `Dockerfile.vllm_omni.cuda` | `VLLM_OMNI_NV_IMAGE` (`amdsiloai/pytorch-xdit-vllm-nvidia`) |
+| Workflow | Framework | Dockerfile | Image variable (default repository) |
+| --- | --- | --- | --- |
+| [build-core-image.yml](../.github/workflows/build-core-image.yml) | xDiT | `Dockerfile.ci` | `CORE_IMAGE` (`amdsiloai/pytorch-xdit-core`) |
+| [build-core-image.yml](../.github/workflows/build-core-image.yml) | SGL-D | `Dockerfile.sgld` | `SGLD_IMAGE` (`amdsiloai/pytorch-xdit-sglang`) |
+| [build-core-image.yml](../.github/workflows/build-core-image.yml) | vLLM-Omni | `Dockerfile.vllm_omni` | `VLLM_OMNI_IMAGE` (`amdsiloai/pytorch-xdit-vllm`) |
+| [build-nv-image.yml](../.github/workflows/build-nv-image.yml) | xDiT | `Dockerfile.cuda` | `NV_IMAGE` (`amdsiloai/pytorch-xdit-nvidia`) |
+| [build-nv-image.yml](../.github/workflows/build-nv-image.yml) | SGL-D | `Dockerfile.sgld.cuda` | `SGLD_NV_IMAGE` (`amdsiloai/pytorch-xdit-sglang-nvidia`) |
+| [build-nv-image.yml](../.github/workflows/build-nv-image.yml) | vLLM-Omni | `Dockerfile.vllm_omni.cuda` | `VLLM_OMNI_NV_IMAGE` (`amdsiloai/pytorch-xdit-vllm-nvidia`) |
 
-All four SGL-D and vLLM-Omni image repositories are private.
+All SGL-D and vLLM-Omni image repositories are private.
 
 The tag defaults to the short commit SHA; override it with the `tag` input.
 
-The ROCm workflows reuse `build-core-image-reusable.yml` with their own
-`dockerfile`, an empty `build_target` (final stage), and no untuned image.
-Like the core build, their layer cache is scoped to the branch (override with
-`cache_scope`) and is exported on pushes or when `export_docker_cache` is set.
-The CUDA workflows reuse `build-nv-image-reusable.yml`; they build `-amd64`
-and `-arm64` tags, then assemble a multi-architecture manifest at the
-unsuffixed tag.
+Both workflows call the existing reusable build for each selected image.
+Manual dispatch builds only the selected framework (xDiT is the default).
+xDiT alone builds the untuned image and runs MIOpen tuning. The ROCm images
+use separate cache channels scoped to the branch (override with `cache_scope`),
+with cache export enabled on pushes or when `export_docker_cache` is set. CUDA
+builds produce `-amd64` and `-arm64` tags, then assemble a multi-architecture
+manifest at the unsuffixed tag.
 
 Both reusable workflows build private candidates, scan them with Trivy, and
 promote them only after scanning passes. Each image has its own cache channel;
@@ -42,13 +45,14 @@ the existing xDiT defaults are unchanged. They use `BUILDCACHE_IMAGE` and the
 existing `DOCKERHUB_ORGANIZATION` / `DOCKERHUB_OAT` secrets.
 
 The `runner` input overrides `BUILD_RUNNER` (ROCm) or `BUILD_RUNNER_NV`
-(CUDA), falling back to `build-only`. CUDA arm64 builds require the same
-pre-registered QEMU handler as the xDiT NV workflow.
+(CUDA), falling back to `build-only`. `prebuilt_core_image_tag`,
+`force_trigger_tuning`, and `gpu_runners` apply only to xDiT. CUDA arm64 builds
+require the same pre-registered QEMU handler as the xDiT NV workflow.
 Use `disable_docker_cache` for a clean build. Set `docker_build_args` to
 newline-separated `KEY=VALUE` entries to override Dockerfile arguments, for
 example `BASE_IMAGE=amdsiloai/pytorch-xdit:<tag>` or a dependency commit.
-The ROCm workflows use their Dockerfiles' prebuilt base images; they do not
-rebuild the xDiT core or trigger MIOpen tuning.
+The SGL-D and vLLM-Omni ROCm builds use their Dockerfiles' prebuilt base images;
+they do not rebuild the xDiT core or trigger MIOpen tuning.
 
 ### PR benchmark configurations from xDiT
 

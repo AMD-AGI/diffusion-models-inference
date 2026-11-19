@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 name: Build core image
+run-name: Build ${{ inputs.framework || 'xdit' }} ROCm image(s) on ${{ github.ref_name }}
 on:
   push:
     branches:
@@ -14,6 +15,15 @@ on:
       - 'README.md'
   workflow_dispatch:
     inputs:
+      framework:
+        description: "Framework image to build"
+        type: choice
+        required: true
+        default: xdit
+        options:
+          - xdit
+          - sgld
+          - vllmo
       tag:
         description: "Image tag. Short commit SHA will be used by default. Untuned image will receive an additional -temp suffix."
         required: false
@@ -23,16 +33,16 @@ on:
         required: false
         default: ""
       prebuilt_core_image_tag:
-        description: "Prebuilt core image tag (build untuned only)"
+        description: "Prebuilt core image tag (xDiT only; build untuned only)"
         required: false
         default: ""
       force_trigger_tuning:
-        description: "Force trigger automatic MIOpen tuning"
+        description: "Force trigger automatic MIOpen tuning (xDiT only)"
         type: boolean
         required: false
         default: false
       gpu_runners:
-        description: "Comma-separated list of GPU runner labels used for MIOpen tuning"
+        description: "Comma-separated GPU runner labels for MIOpen tuning (xDiT only)"
         required: false
         default: 'gfx942,gfx950'
       disable_docker_cache:
@@ -78,7 +88,8 @@ jobs:
           title: 'Workflow Configuration'
           tables: |
             {
-              "Core build parameters": {
+              "Image build parameters": {
+                "framework": "${{ inputs.framework || 'xdit' }}",
                 "tag": "${{ inputs.tag }}",
                 "runner": "${{ inputs.runner || 'build-only' }}",
                 "prebuilt_core_image_tag": "${{ inputs.prebuilt_core_image_tag || '' }}",
@@ -92,7 +103,8 @@ jobs:
             }
 
   build-xdit-images:
-    name: Build xDiT images
+    name: Build xDiT ROCm image
+    if: ${{ github.event_name == 'push' || inputs.framework == 'xdit' }}
     needs: [get-short-sha]
     uses: ./.github/workflows/build-core-image-reusable.yml
     with:
@@ -112,10 +124,56 @@ jobs:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
 
+  build-sgld-image:
+    name: Build SGL-D ROCm image
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.framework == 'sgld' }}
+    needs: [get-short-sha]
+    uses: ./.github/workflows/build-core-image-reusable.yml
+    with:
+      git_ref: ${{ github.ref_name }}
+      image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
+      core_image_name: ${{ vars.SGLD_IMAGE || 'amdsiloai/pytorch-xdit-sglang' }}
+      dockerfile: docker/Dockerfile.sgld
+      build_target: ''
+      cache_channel: sgld
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      cache_scope: ${{ inputs.cache_scope }}
+      build_untuned_image: false
+      disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
+      export_docker_cache: ${{ inputs.export_docker_cache }}
+      docker_build_args: ${{ inputs.docker_build_args }}
+      runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
+  build-vllm-omni-image:
+    name: Build vLLM-Omni ROCm image
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.framework == 'vllmo' }}
+    needs: [get-short-sha]
+    uses: ./.github/workflows/build-core-image-reusable.yml
+    with:
+      git_ref: ${{ github.ref_name }}
+      image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
+      core_image_name: ${{ vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-xdit-vllm' }}
+      dockerfile: docker/Dockerfile.vllm_omni
+      build_target: ''
+      cache_channel: vllm-omni
+      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
+      cache_scope: ${{ inputs.cache_scope }}
+      build_untuned_image: false
+      disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
+      export_docker_cache: ${{ inputs.export_docker_cache }}
+      docker_build_args: ${{ inputs.docker_build_args }}
+      runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
+    secrets:
+      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
+
   check-changes:
     name: Check for MIOpen changes
     runs-on: ubuntu-latest
-    if: ${{ inputs.force_trigger_tuning != true }}
+    if: ${{ (github.event_name == 'push' || inputs.framework == 'xdit') && inputs.force_trigger_tuning != true }}
     outputs:
       should_trigger: ${{ steps.check.outputs.should_trigger }}
       changed_paths: ${{ steps.check.outputs.changed_paths }}
@@ -135,6 +193,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       !cancelled() &&
+      (github.event_name == 'push' || inputs.framework == 'xdit') &&
       needs.build-xdit-images.result == 'success' &&
       (
         inputs.force_trigger_tuning == true ||
