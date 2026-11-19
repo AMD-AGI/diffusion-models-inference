@@ -26,7 +26,7 @@ inputs:
     description: 'Image used for tuning, benchmarking, and as the build-final cache source'
     required: true
   base_image:
-    description: 'Raw base_image input (if specified)'
+    description: 'Effective base image for this run'
     required: false
     default: ''
   git_branch:

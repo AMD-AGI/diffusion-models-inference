@@ -7,21 +7,6 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 BRANCH=$(git branch --show-current)
 ```
 
-## Find latest core build
-
-```bash
-gh run list \
-  --repo "$REPO" \
-  --workflow build-core-image.yml \
-  --branch DEFAULT_BRANCH \
-  --status success \
-  --limit 1 \
-  --json headSha,startedAt,conclusion,url \
-  --jq '.[0]'
-```
-
-Untuned image tag = first 7 chars of `headSha` + `-temp`.
-
 ## Workflow run template
 
 Start with this command. Include optional fields only when non-empty or when
@@ -39,6 +24,7 @@ Supported optional fields:
 ```text
 --field git_branch="GIT_BRANCH"
 --field base_image="BASE_IMAGE"
+--field use_latest_main_core=true
 --field image_tag="IMAGE_TAG"
 --field rebuild=true
 --field run_miopen_tuning=false
