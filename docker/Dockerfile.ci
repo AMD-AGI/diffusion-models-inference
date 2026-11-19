@@ -30,6 +30,9 @@ ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
 ARG DISTVAE_COMMIT="dce484185dc11d7406076117771e36acd796aa6a"
 ARG XDIT_COMMIT="8d7467a5b53849b7b6e0fa7366b65d7b445a28ac"
+# PyAV is built from source against our LGPL-only FFmpeg (stage build_pyav).
+# PyAV 17 and later need FFmpeg 8, so keep 16.1.0 while FFmpeg is 7.1.
+ARG PYAV_VERSION="16.1.0"
 
 FROM ${BASE_IMAGE} AS base
 ARG DEBIAN_FRONTEND=noninteractive
@@ -246,7 +249,7 @@ RUN apt-get update -qq && apt-get -y install --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # See https://ffmpeg.org/releases/ for valid choices of FFMPEG_VERSION
-ARG FFMPEG_VERSION="7.1.3"
+ARG FFMPEG_VERSION="7.1.4"
 ENV FFMPEG_BUILD_DIR=/ffmpeg/build
 ENV FFMPEG_SRC_DIR=/ffmpeg/src
 ENV FFMPEG_BIN_DIR=/ffmpeg/bin
@@ -282,6 +285,15 @@ COPY .ci/collect_image_licenses.py /usr/local/libexec/collect_image_licenses.py
 RUN python3 /usr/local/libexec/collect_image_licenses.py \
     --output /ffmpeg/license-evidence \
     --scan-root ffmpeg=${FFMPEG_SRC_DIR}
+
+# The PyAV wheels on PyPI bundle their own FFmpeg with GPL x264 and x265.
+# Build PyAV from source against our LGPL-only FFmpeg instead. The wheel links
+# libav*.so by soname, and core supplies these libraries in /usr/local/lib.
+FROM ffmpeg_builder AS build_pyav
+ARG PYAV_VERSION
+RUN mkdir -p /wheel && \
+    PKG_CONFIG_PATH="${FFMPEG_BUILD_DIR}/lib/pkgconfig" \
+    pip wheel --no-cache-dir --no-deps --no-binary av "av==${PYAV_VERSION}" --wheel-dir /wheel
 
 # Triton and PyTorch wheels are already in /install. The two wheels below
 # come from stages BuildKit schedules together. Each evidence stage scanned
@@ -400,6 +412,7 @@ ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
+ARG PYAV_VERSION
 
 # setup
 WORKDIR /app/external
@@ -428,6 +441,10 @@ RUN git clone https://github.com/xdit-project/DistVAE.git && \
     cd DistVAE && \
     git reset --hard ${DISTVAE_COMMIT} && \
     pip install -e .
+# install PyAV built against our LGPL-only FFmpeg, before xfuser pulls in the PyPI wheel
+RUN --mount=type=bind,from=build_pyav,source=/wheel,target=/pyav-wheel \
+    pip install --no-cache-dir /pyav-wheel/av-*.whl && \
+    python -c "import av; assert 'libx264' not in av.codecs_available and 'libopenh264' in av.codecs_available, av.codecs_available"
 # install xfuser
 WORKDIR /app
 RUN --mount=type=bind,source=patches,target=/patches \
@@ -435,7 +452,8 @@ RUN --mount=type=bind,source=patches,target=/patches \
     cd xDiT && \
     git reset --hard ${XDIT_COMMIT} && \
     git apply /patches/xfuser_ltx25_disable_gc_during_inference.patch && \
-    pip freeze | grep numpy > constraints.txt && \
+    git apply /patches/xfuser_video_codec_fallback.patch && \
+    { pip freeze | grep numpy; echo "av==${PYAV_VERSION}"; } > constraints.txt && \
     pip install -c constraints.txt -e .
 # rocprofiler-compute ships with rocm_devel.
 # Due to https://github.com/ROCm/rocm-systems/pull/2821 drop numpy to avoid installing numpy<2

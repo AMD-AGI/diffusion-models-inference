@@ -1,0 +1,201 @@
+diff --git a/tests/integration/cpu/core/utils/test_video_utils.py b/tests/integration/cpu/core/utils/test_video_utils.py
+index 78f1e66..b35a9d8 100644
+--- a/tests/integration/cpu/core/utils/test_video_utils.py
++++ b/tests/integration/cpu/core/utils/test_video_utils.py
+@@ -26,3 +26,28 @@ def test_encode_video_with_audio(tmp_path):
+     assert len(frames) == 4
+     assert frames[0].width == 16
+     assert frames[0].height == 16
++
++
++def test_encode_video_with_audio_libopenh264_high_profile(tmp_path):
++    av = pytest.importorskip("av")
++    if "libopenh264" not in av.codecs_available:
++        pytest.skip("PyAV's FFmpeg has no libopenh264 encoder")
++
++    from xfuser.core.utils.video_utils import encode_video_with_audio
++
++    video = torch.randint(0, 256, (8, 64, 64, 3), dtype=torch.uint8)
++    output_path = tmp_path / "test.mp4"
++
++    encode_video_with_audio(
++        video,
++        fps=8,
++        output_path=str(output_path),
++        audio=torch.zeros(2, 8000),
++        audio_sample_rate=8000,
++        video_codec="libopenh264",
++    )
++
++    container = av.open(output_path)
++    assert [stream.type for stream in container.streams] == ["video", "audio"]
++    assert container.streams.video[0].codec_context.profile == "High"
++    assert len(list(container.decode(video=0))) == 8
+diff --git a/tests/unit/core/utils/test_video_codec_selection.py b/tests/unit/core/utils/test_video_codec_selection.py
+new file mode 100644
+index 0000000..3ba5665
+--- /dev/null
++++ b/tests/unit/core/utils/test_video_codec_selection.py
+@@ -0,0 +1,80 @@
++"""CPU-only tests for H.264 encoder selection in encode_video_with_audio.
++
++PyAV wheels bundle an FFmpeg with libx264. An image that builds PyAV against an
++LGPL-only FFmpeg has libopenh264 instead. The default call must work in both.
++"""
++
++from types import SimpleNamespace
++
++import pytest
++
++torch = pytest.importorskip("torch", reason="PyTorch is required for video utils tests")
++
++from xfuser.core.utils import video_utils  # noqa: E402
++
++
++class _FakeStream:
++    def encode(self, frame=None):
++        return []
++
++
++class _FakeContainer:
++    def __init__(self):
++        self.streams = []
++
++    def add_stream(self, codec, rate):
++        stream = _FakeStream()
++        stream.codec = codec
++        self.streams.append(stream)
++        return stream
++
++    def mux(self, packet):
++        pass
++
++    def close(self):
++        pass
++
++
++def _fake_av(codecs):
++    container = _FakeContainer()
++    return SimpleNamespace(
++        codecs_available=set(codecs),
++        open=lambda path, mode: container,
++        VideoFrame=SimpleNamespace(from_ndarray=lambda array, format: object()),
++        container=container,
++    )
++
++
++def _encode(monkeypatch, codecs, **kwargs):
++    av = _fake_av(codecs)
++    monkeypatch.setattr(video_utils, "_import_av", lambda: av)
++    video = torch.zeros(2, 16, 16, 3, dtype=torch.uint8)
++    video_utils.encode_video_with_audio(video, fps=4, output_path="unused.mp4", **kwargs)
++    (stream,) = av.container.streams
++    return stream
++
++
++def test_default_uses_libx264_with_crf_and_preset_when_available(monkeypatch):
++    stream = _encode(monkeypatch, {"libx264", "libopenh264", "aac"})
++
++    assert stream.codec == "libx264"
++    assert stream.options == {"crf": "12", "preset": "medium"}
++
++
++def test_default_falls_back_to_libopenh264_without_libx264(monkeypatch):
++    stream = _encode(monkeypatch, {"libopenh264", "aac"}, crf=20, preset="slow")
++
++    assert stream.codec == "libopenh264"
++    assert stream.options == {"profile": "high", "rc_mode": "buffer"}
++
++
++def test_explicit_codec_keeps_crf_and_preset(monkeypatch):
++    stream = _encode(monkeypatch, {"libx264", "libx265"}, video_codec="libx265", crf=20, preset="slow")
++
++    assert stream.codec == "libx265"
++    assert stream.options == {"crf": "20", "preset": "slow"}
++
++
++def test_default_without_h264_encoder_raises(monkeypatch):
++    with pytest.raises(RuntimeError, match="No H.264 encoder"):
++        _encode(monkeypatch, {"aac"})
+diff --git a/xfuser/core/utils/video_utils.py b/xfuser/core/utils/video_utils.py
+index a81de2d..fab3ebd 100644
+--- a/xfuser/core/utils/video_utils.py
++++ b/xfuser/core/utils/video_utils.py
+@@ -6,17 +6,37 @@ import numpy as np
+ import PIL.Image
+ import torch
+ 
++# H.264 encoders in order of preference. libx264 is GPL. Some FFmpeg builds
++# are LGPL-only and do not include it. These builds can supply libopenh264.
++_H264_ENCODERS = ("libx264", "libopenh264")
++
++# libopenh264 does not use crf or preset. In "buffer" rate-control mode with the
++# High profile, quality is near x264 CRF 12. Its defaults give a 2 Mbps
++# Constrained Baseline stream instead.
++_OPENH264_OPTIONS = {"profile": "high", "rc_mode": "buffer"}
++
+ 
+ def _import_av():
+     try:
+         import av
+     except ImportError as error:
+-        raise ImportError(
+-            "PyAV is required to encode videos with audio. Install it with `pip install av`."
+-        ) from error
++        raise ImportError("PyAV is required to encode videos with audio. Install it with `pip install av`.") from error
+     return av
+ 
+ 
++def _select_video_codec(av_module) -> str:
++    for codec in _H264_ENCODERS:
++        if codec in av_module.codecs_available:
++            return codec
++    raise RuntimeError(f"No H.264 encoder is available in the FFmpeg that PyAV uses. Expected one of {_H264_ENCODERS}.")
++
++
++def _video_codec_options(video_codec: str, crf: int, preset: str) -> dict[str, str]:
++    if video_codec == "libopenh264":
++        return dict(_OPENH264_OPTIONS)
++    return {"crf": str(crf), "preset": preset}
++
++
+ def _prepare_audio_stream(container, audio_sample_rate: int, audio_bitrate: int):
+     audio_stream = container.add_stream("aac", rate=audio_sample_rate)
+     audio_stream.bit_rate = audio_bitrate
+@@ -70,7 +90,7 @@ def encode_video_with_audio(
+     audio: torch.Tensor | None = None,
+     audio_sample_rate: int | None = None,
+     video_chunks_number: int = 1,
+-    video_codec: str = "libx264",
++    video_codec: str | None = None,
+     pixel_format: str = "yuv420p",
+     crf: int = 12,
+     preset: str = "medium",
+@@ -80,8 +100,15 @@ def encode_video_with_audio(
+ 
+     Tensor inputs are expected to be uint8 RGB frames in ``[F, H, W, C]`` format.
+     NumPy inputs may instead contain normalized floating-point values in ``[0, 1]``.
++
++    If ``video_codec`` is ``None``, the function uses ``libx264`` when it is available.
++    If not, it uses ``libopenh264``. ``crf`` and ``preset`` apply only to codecs that
++    support them. ``libopenh264`` ignores them and uses High profile with buffer
++    rate control.
+     """
+     av = _import_av()
++    if video_codec is None:
++        video_codec = _select_video_codec(av)
+ 
+     if isinstance(video, list):
+         video = torch.from_numpy(np.stack([np.asarray(frame) for frame in video]))
+@@ -101,10 +128,7 @@ def encode_video_with_audio(
+     video_stream.width = width
+     video_stream.height = height
+     video_stream.pix_fmt = pixel_format
+-    video_stream.options = {
+-        "crf": str(crf),
+-        "preset": preset,
+-    }
++    video_stream.options = _video_codec_options(video_codec, crf, preset)
+ 
+     audio_stream = None
+     if audio is not None:
