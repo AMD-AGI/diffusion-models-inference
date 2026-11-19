@@ -31,13 +31,15 @@ All SGL-D and vLLM-Omni image repositories are private.
 
 The tag defaults to the short commit SHA; override it with the `tag` input.
 
-Both workflows call the existing reusable build for each selected image.
-Manual dispatch builds only the selected framework (xDiT is the default).
-xDiT alone builds the untuned image and runs MIOpen tuning. The ROCm images
-use separate cache channels scoped to the branch (override with `cache_scope`),
-with cache export enabled on pushes or when `export_docker_cache` is set. CUDA
-builds produce `-amd64` and `-arm64` tags, then assemble a multi-architecture
-manifest at the unsuffixed tag.
+Both workflows call a framework-aware reusable build. The reusable selects the
+Dockerfile, repository defaults, and cache channel from `framework`; callers
+can override the image repository where needed. Manual dispatch builds only
+the selected framework (xDiT is the default), while pushes continue to build
+xDiT only. xDiT alone builds the untuned image and runs MIOpen tuning. The ROCm
+images use separate cache channels scoped to the branch (override with
+`cache_scope`), with cache export enabled on pushes or when
+`export_docker_cache` is set. CUDA builds produce `-amd64` and `-arm64` tags,
+then assemble a multi-architecture manifest at the unsuffixed tag.
 
 Both reusable workflows build private candidates, scan them with Trivy, and
 promote them only after scanning passes. Each image has its own cache channel;
@@ -53,6 +55,26 @@ newline-separated `KEY=VALUE` entries to override Dockerfile arguments, for
 example `BASE_IMAGE=amdsiloai/pytorch-xdit:<tag>` or a dependency commit.
 The SGL-D and vLLM-Omni ROCm builds use their Dockerfiles' prebuilt base images;
 they do not rebuild the xDiT core or trigger MIOpen tuning.
+
+### Build, tune, and benchmark a framework
+
+[build-and-benchmark.yml](../.github/workflows/build-and-benchmark.yml) also
+accepts `framework: xdit` (default), `sgld`, or `vllmo`, both through manual
+dispatch and `workflow_call`. New builds select the same Dockerfiles,
+repositories, and cache channels as the core-image workflow. SGL-D and
+vLLM-Omni build a single image; benchmarks use its unsuffixed tag rather than
+an xDiT staging image with `-temp`.
+
+All three frameworks support optional MIOpen tuning, benchmarking, and MIOpen
+DB branch creation. Tuning still uses this repository's shared workloads.
+Final tuned-image publishing (`build_final`) is xDiT-only and is skipped with
+a notice for the other frameworks. `use_xdit_configs` is also xDiT-only.
+
+With `rebuild=false`, `base_image` can select an existing framework image;
+bare tags resolve against the selected framework's repository (xDiT uses
+`STAGING_IMAGE`). An empty `base_image` forces a build. On SGL-D/vLLM-Omni
+rebuilds, forwarding `base_image` into the framework Dockerfile is not
+implemented; those builds retain their Dockerfile base defaults.
 
 ### PR benchmark configurations from xDiT
 

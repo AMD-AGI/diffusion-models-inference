@@ -2,6 +2,12 @@
 
 ## 1. Image source behavior
 
+The framework defaults to `xdit`; choose `sgld` or `vllmo` explicitly for those
+images. The prebuilt-core/cache behavior below applies to xDiT. SGL-D/vLLM-Omni
+rebuilds do not consume `base_image` yet and use their Dockerfile base defaults.
+For reuse without rebuilding, bare tags resolve against the selected framework's
+repository (`STAGING_IMAGE` for xDiT).
+
 ```
 base_image empty                → rebuild forced on, full build from source
 base_image set, rebuild=false   → use base_image directly, no build
@@ -15,6 +21,7 @@ build cache source (`rebuild=true`), it must be a bare tag against the core imag
 ## 2. Confirmation checklist
 
 When presenting the command, highlight:
+- Selected framework
 - Selected run profile and dispatch ref
 - `base_image` and effective rebuild behavior
 - Comma-separated GPU runner labels
@@ -23,12 +30,16 @@ When presenting the command, highlight:
 
 ## 3. Validation rules
 
+- `framework` must be `xdit`, `sgld`, or `vllmo`
+- `use_xdit_configs=true` requires `framework=xdit`
 - `gpu_runners` must contain at least one non-empty comma-separated runner label
 - Boolean values must be `true` or `false`
 - `benchmark_flags` must not combine `--name` and `--tag`
 
 ## 4. Workflow effects
 
+- `build_final` is xDiT-only; other frameworks skip it with a notice. All three
+  frameworks support optional tuning, benchmarks, and MIOpen DB branch creation.
 - Each step checkbox (`rebuild`, `run_miopen_tuning`, `run_benchmarks`, `build_final`,
   `create_miopen_db_branch`) is independent; there is no implicit run-mode coupling.
 - `base_image` empty forces `rebuild` on regardless of the checkbox value.

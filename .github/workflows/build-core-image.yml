@@ -102,68 +102,19 @@ jobs:
               }
             }
 
-  build-xdit-images:
-    name: Build xDiT ROCm image
-    if: ${{ github.event_name == 'push' || inputs.framework == 'xdit' }}
+  build-image:
+    name: Build ${{ inputs.framework || 'xdit' }} ROCm image
     needs: [get-short-sha]
     uses: ./.github/workflows/build-core-image-reusable.yml
     with:
       git_ref: ${{ github.ref_name }}
       image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
-      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
-      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+      framework: ${{ inputs.framework || 'xdit' }}
       cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
       cache_scope: ${{ inputs.cache_scope }}
       prebuilt_core_image_tag: ${{ inputs.prebuilt_core_image_tag }}
-      build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
       export_docker_cache: ${{ inputs.export_docker_cache || github.event_name == 'push' }}
-      docker_build_args: ${{ inputs.docker_build_args }}
-      runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
-    secrets:
-      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
-      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
-
-  build-sgld-image:
-    name: Build SGL-D ROCm image
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.framework == 'sgld' }}
-    needs: [get-short-sha]
-    uses: ./.github/workflows/build-core-image-reusable.yml
-    with:
-      git_ref: ${{ github.ref_name }}
-      image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
-      core_image_name: ${{ vars.SGLD_IMAGE || 'amdsiloai/pytorch-xdit-sglang' }}
-      dockerfile: docker/Dockerfile.sgld
-      build_target: ''
-      cache_channel: sgld
-      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
-      cache_scope: ${{ inputs.cache_scope }}
-      build_untuned_image: false
-      disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
-      export_docker_cache: ${{ inputs.export_docker_cache }}
-      docker_build_args: ${{ inputs.docker_build_args }}
-      runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
-    secrets:
-      DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
-      DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
-
-  build-vllm-omni-image:
-    name: Build vLLM-Omni ROCm image
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.framework == 'vllmo' }}
-    needs: [get-short-sha]
-    uses: ./.github/workflows/build-core-image-reusable.yml
-    with:
-      git_ref: ${{ github.ref_name }}
-      image_tag: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
-      core_image_name: ${{ vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-xdit-vllm' }}
-      dockerfile: docker/Dockerfile.vllm_omni
-      build_target: ''
-      cache_channel: vllm-omni
-      cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
-      cache_scope: ${{ inputs.cache_scope }}
-      build_untuned_image: false
-      disable_docker_cache: ${{ inputs.disable_docker_cache || false }}
-      export_docker_cache: ${{ inputs.export_docker_cache }}
       docker_build_args: ${{ inputs.docker_build_args }}
       runner: ${{ inputs.runner || vars.BUILD_RUNNER || 'build-only' }}
     secrets:
@@ -189,12 +140,12 @@ jobs:
 
   tuning-matrix:
     name: Generate tuning matrix
-    needs: [get-short-sha, check-changes, build-xdit-images]
+    needs: [get-short-sha, check-changes, build-image]
     runs-on: ubuntu-latest
     if: |
       !cancelled() &&
       (github.event_name == 'push' || inputs.framework == 'xdit') &&
-      needs.build-xdit-images.result == 'success' &&
+      needs.build-image.result == 'success' &&
       (
         inputs.force_trigger_tuning == true ||
         (github.ref_name == 'main' && needs.check-changes.outputs.should_trigger == 'true')
@@ -232,7 +183,7 @@ jobs:
 
   tune:
     name: ${{ matrix.arch }} tuning
-    needs: [get-short-sha, build-xdit-images, tuning-matrix]
+    needs: [get-short-sha, build-image, tuning-matrix]
     if: ${{ !cancelled() && needs.tuning-matrix.result == 'success' }}
     strategy:
       fail-fast: false

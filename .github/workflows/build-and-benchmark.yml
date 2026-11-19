@@ -1,11 +1,21 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Build and Benchmark xDiT
+name: Build and Benchmark
+run-name: Build and Benchmark ${{ inputs.framework || 'xdit' }}
 
 on:
   workflow_dispatch:
     inputs:
+      framework:
+        description: 'Framework image to build and benchmark'
+        type: choice
+        required: true
+        default: xdit
+        options:
+          - xdit
+          - sgld
+          - vllmo
       git_branch:
         description: 'Git branch to build from (optional)'
         required: false
@@ -34,7 +44,7 @@ on:
         required: false
         default: true
       build_final:
-        description: 'Build the final tuned image'
+        description: 'Build the final tuned image (xDiT only)'
         type: boolean
         required: false
         default: true
@@ -53,7 +63,7 @@ on:
         required: false
         default: ''
       use_xdit_configs:
-        description: 'Use configs from the xDiT checkout in the image instead of downstream configs'
+        description: 'Use configs from the xDiT checkout instead of downstream configs (xDiT only)'
         type: boolean
         required: false
         default: false
@@ -105,6 +115,11 @@ on:
         default: 'gfx942,gfx950'
   workflow_call:
     inputs:
+      framework:
+        description: 'Framework to build and benchmark: xdit, sgld, or vllmo'
+        required: false
+        type: string
+        default: xdit
       git_branch:
         description: 'Git branch to build from'
         required: false
@@ -136,7 +151,7 @@ on:
         type: boolean
         default: true
       build_final:
-        description: 'Build the final tuned image'
+        description: 'Build the final tuned image (xDiT only)'
         required: false
         type: boolean
         default: true
@@ -156,7 +171,7 @@ on:
         type: string
         default: ''
       use_xdit_configs:
-        description: 'Use configs from the xDiT checkout in the image instead of downstream configs'
+        description: 'Use configs from the xDiT checkout instead of downstream configs (xDiT only)'
         required: false
         type: boolean
         default: false
@@ -218,8 +233,8 @@ permissions:
   actions: read
 
 env:
-  CORE_IMAGE: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
-  STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+  CORE_IMAGE: ${{ inputs.framework == 'sgld' && (vars.SGLD_IMAGE || 'amdsiloai/pytorch-xdit-sglang') || inputs.framework == 'vllmo' && (vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-xdit-vllm') || vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
+  STAGING_IMAGE: ${{ inputs.framework == 'sgld' && (vars.SGLD_IMAGE || 'amdsiloai/pytorch-xdit-sglang') || inputs.framework == 'vllmo' && (vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-xdit-vllm') || vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
   BUILDCACHE_IMAGE: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
 
 jobs:
@@ -237,6 +252,27 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
+
+      - name: Validate framework
+        env:
+          FRAMEWORK: ${{ inputs.framework }}
+          USE_XDIT_CONFIGS: ${{ inputs.use_xdit_configs }}
+          BUILD_FINAL: ${{ inputs.build_final }}
+        run: |
+          case "$FRAMEWORK" in
+            xdit|sgld|vllmo) ;;
+            *)
+              echo "::error::Unsupported framework '$FRAMEWORK'. Choose xdit, sgld, or vllmo."
+              exit 1
+              ;;
+          esac
+          if [ "$FRAMEWORK" != "xdit" ] && [ "$USE_XDIT_CONFIGS" = "true" ]; then
+            echo "::error::use_xdit_configs is supported only for xdit."
+            exit 1
+          fi
+          if [ "$FRAMEWORK" != "xdit" ] && [ "$BUILD_FINAL" = "true" ]; then
+            echo "::notice::Skipping final tuned image publishing: build_final applies only to xdit."
+          fi
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
@@ -299,13 +335,18 @@ jobs:
         id: working_image
         env:
           SHOULD_REBUILD: ${{ steps.rebuild.outputs.should_rebuild }}
-          STAGING_TEMP_IMAGE: ${{ env.STAGING_IMAGE }}:${{ steps.generate_tag.outputs.tag }}-temp
+          FRAMEWORK: ${{ inputs.framework }}
+          IMAGE_TAG: ${{ steps.generate_tag.outputs.tag }}
           BASE_IMAGE: ${{ steps.resolve_base.outputs.image }}
         run: |
           if [ "$SHOULD_REBUILD" = "true" ]; then
-            echo "image=${STAGING_TEMP_IMAGE}" >> $GITHUB_OUTPUT
+            if [ "$FRAMEWORK" = "xdit" ]; then
+              echo "image=${STAGING_IMAGE}:${IMAGE_TAG}-temp" >> "$GITHUB_OUTPUT"
+            else
+              echo "image=${CORE_IMAGE}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+            fi
           else
-            echo "image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
+            echo "image=${BASE_IMAGE}" >> "$GITHUB_OUTPUT"
           fi
       
       - name: Store build metadata
@@ -329,6 +370,7 @@ jobs:
           tables: |
             {
               "Workflow Inputs": {
+                "framework": "${{ inputs.framework }}",
                 "base_image": "${{ inputs.base_image }}",
                 "rebuild": "${{ inputs.rebuild }}",
                 "run_miopen_tuning": "${{ inputs.run_miopen_tuning }}",
@@ -343,26 +385,25 @@ jobs:
               },
               "Resolved": {
                 "should_rebuild": "${{ steps.rebuild.outputs.should_rebuild }}",
-                "working_image": "${{ steps.working_image.outputs.image }}"
+                "working_image": "${{ steps.working_image.outputs.image }}",
+                "build_final": "${{ inputs.framework == 'xdit' && inputs.build_final }}"
               },
               "Architecture Check Results": ${{ toJSON(steps.check-archs.outputs) }},
               "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
             }
 
   build-core:
-    name: Build core and untuned images
+    name: Build ${{ inputs.framework || 'xdit' }} image(s)
     needs: [validate]
     if: ${{ needs.validate.outputs.should_rebuild == 'true' }}
     uses: ./.github/workflows/build-core-image-reusable.yml
     with:
       git_ref: ${{ inputs.git_branch || github.ref_name }}
       image_tag: ${{ needs.validate.outputs.image_tag }}
-      core_image_name: ${{ vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
-      staging_image_name: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
+      framework: ${{ inputs.framework }}
       cache_image_name: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
       cache_scope: ${{ inputs.cache_scope }}
       prebuilt_core_image_tag: ${{ inputs.base_image }}
-      build_untuned_image: true
       disable_docker_cache: ${{ inputs.disable_docker_cache }}
       export_docker_cache: ${{ inputs.export_docker_cache }}
       docker_build_args: ${{ inputs.docker_build_args }}
@@ -532,7 +573,7 @@ jobs:
     name: Build final tuned image
     needs: [validate, build-core, tune-and-benchmark]
     runs-on: ${{ inputs.build_runner || vars.BUILD_RUNNER || 'build-only' }}
-    if: ${{ inputs.build_final && !cancelled() && !failure() }}
+    if: ${{ inputs.framework == 'xdit' && inputs.build_final && !cancelled() && !failure() }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
