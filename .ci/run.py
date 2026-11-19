@@ -133,6 +133,16 @@ def _parse_args():
         help="Print commands without executing them",
     )
     parser.add_argument(
+        "--print-command",
+        action="store_true",
+        help=(
+            "Print the benchmark command each experiment runs and exit, instead of running it. "
+            "A runner that is the command itself (xdit) prints that command. An entrypoint that "
+            "builds its own command is asked to print that one, so what is printed is the command "
+            "that actually benchmarks, not the wrapper invocation."
+        ),
+    )
+    parser.add_argument(
         "--print-csv",
         action="store_true",
         help="Print MAD csv rows",
@@ -682,6 +692,35 @@ def command(
     return cmd
 
 
+def _builds_its_own_command(e: Experiment) -> bool:
+    """True when the entrypoint assembles the benchmark command itself.
+
+    The xdit runner is the benchmark command, so what `command()` returns is
+    already final. Every other runner starts a wrapper that builds a different
+    command from the same arguments, and only the wrapper knows that command.
+    """
+    return e.runner != "xdit"
+
+
+def _print_experiment_command(exp: Experiment, cmd: List[str]) -> bool:
+    """Print the command that benchmarks this experiment. Returns success."""
+    argv = [str(part) for part in cmd]
+    print(f"# {exp.name}")
+    if not _builds_its_own_command(exp):
+        print(shlex.join(argv))
+        return True
+
+    probe = subprocess.run(argv + ["--print-command"], capture_output=True, text=True)
+    if probe.returncode != 0:
+        logger.error(
+            f"Entrypoint {exp.entrypoint} could not print the command for {exp.name}. "
+            f"It needs to support --print-command. stderr: {probe.stderr.strip()}"
+        )
+        return False
+    print(probe.stdout.strip())
+    return True
+
+
 def _group_by_model(experiments: List[Experiment]) -> Dict[str, List[Experiment]]:
     """Group experiments by model, preserving first-appearance order.
 
@@ -810,7 +849,8 @@ def main():
         model_existed_before = _model_in_cache(model_name, revision)
         try:
             t0 = time.monotonic()
-            _download_model(model_name, revision, args.dry_run)
+            if not args.print_command:
+                _download_model(model_name, revision, args.dry_run)
             timing["download_model"][model_name] = round(time.monotonic() - t0, 2)
         except Exception as e:
             logger.error(e, stack_info=True, exc_info=True)
@@ -821,14 +861,20 @@ def main():
         for i, exp in enumerate(exps, 1):
             benchmark_output_directory = Path(args.results_directory) / exp.name
 
-            logger.info(
-                f"Running Experiment {i}/{len(exps)}: {exp.name}. See {benchmark_output_directory}/stdout.txt for stdout logs."
-            )
+            if not args.print_command:
+                logger.info(
+                    f"Running Experiment {i}/{len(exps)}: {exp.name}. See {benchmark_output_directory}/stdout.txt for stdout logs."
+                )
 
             cmd = command(exp, override_args, args.override_runner, args.override_entrypoint) + [
                 "--output-directory",
                 benchmark_output_directory,
             ]
+
+            if args.print_command:
+                if not _print_experiment_command(exp, cmd):
+                    errors.append(f"Could not print the command for {exp.name}.")
+                continue
 
             t0 = time.monotonic()
             process_succeeded = _run_experiment(
