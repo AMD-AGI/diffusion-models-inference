@@ -19,11 +19,21 @@ on:
         required: false
         type: string
         default: ''
-      image_name:
-        description: 'NV image name'
+      framework:
+        description: 'Framework image to build: xdit, sgld, or vllmo'
         required: false
         type: string
-        default: 'amdsiloai/pytorch-xdit-nvidia'
+        default: xdit
+      image_name:
+        description: 'Override the framework image repository'
+        required: false
+        type: string
+        default: ''
+      docker_build_args:
+        description: 'Newline-separated Docker build arguments in KEY=VALUE form'
+        required: false
+        type: string
+        default: ''
       cache_image_name:
         description: 'Private repository holding the registry layer cache and secret scan candidates'
         required: false
@@ -64,9 +74,25 @@ jobs:
     # repository; the Trivy scan step promotes it only after it passes.
     env:
       CANDIDATE_TAG: cand-${{ github.run_id }}-${{ github.run_attempt }}
+      IMAGE_NAME: ${{ inputs.image_name || (inputs.framework == 'sgld' && (vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-xdit-sglang-nvidia') || inputs.framework == 'vllmo' && (vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-xdit-vllm-nvidia') || vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia') }}
+      DOCKERFILE: ${{ inputs.framework == 'sgld' && 'docker/Dockerfile.sgld.cuda' || inputs.framework == 'vllmo' && 'docker/Dockerfile.vllm_omni.cuda' || 'docker/Dockerfile.cuda' }}
+      CACHE_CHANNEL: ${{ inputs.framework == 'sgld' && 'sgld-nv' || inputs.framework == 'vllmo' && 'vllm-omni-nv' || 'nv' }}
     outputs:
       image_with_tag: ${{ steps.set_outputs.outputs.image_with_tag }}
     steps:
+      - name: Validate framework
+        shell: bash
+        env:
+          FRAMEWORK: ${{ inputs.framework }}
+        run: |
+          case "$FRAMEWORK" in
+            xdit|sgld|vllmo) ;;
+            *)
+              echo "::error::Unsupported framework '$FRAMEWORK'. Choose xdit, sgld, or vllmo."
+              exit 1
+              ;;
+          esac
+
       - name: Validate platform input
         shell: bash
         env:
@@ -100,7 +126,7 @@ jobs:
       # host's nproc; the value is injected as a --build-arg only for the
       # arm64 (QEMU) build below.
       - name: Detect build host parallelism
-        if: ${{ inputs.platform == 'linux/arm64' }}
+        if: ${{ inputs.platform == 'linux/arm64' && inputs.framework == 'xdit' }}
         id: cores
         shell: bash
         run: |
@@ -127,9 +153,12 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           CACHE_IMAGE_NAME: ${{ inputs.cache_image_name }}
-          IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
-          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-nv${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
-          CANDIDATE_CACHE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-nvcache${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
+          CACHE_CHANNEL: ${{ env.CACHE_CHANNEL }}
+          DOCKERFILE: ${{ env.DOCKERFILE }}
+          DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
+          IMAGE_TAG: ${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ env.CACHE_CHANNEL }}${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
+          CANDIDATE_CACHE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ env.CACHE_CHANNEL }}cache${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
           TAG_SUFFIX: ${{ inputs.image_tag_suffix }}
           FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
         run: |
@@ -138,10 +167,19 @@ jobs:
             NO_CACHE_FLAG="--no-cache"
           fi
           
-          EXTRA_BUILD_ARGS=""
+          BUILD_ARGS=()
           if [ "${PLATFORM}" = "linux/arm64" ] && [ -n "${FLASH_ATTN_NPROC}" ]; then
-            EXTRA_BUILD_ARGS="--build-arg FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}"
+            BUILD_ARGS+=(--build-arg "FLASH_ATTN_MAX_JOBS_AARCH64=${FLASH_ATTN_NPROC}")
           fi
+
+          while IFS= read -r build_arg; do
+            [[ -z "${build_arg}" ]] && continue
+            if [[ ! "${build_arg}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]] || [[ "${build_arg}" == *$'\r'* ]]; then
+              echo "::error::Invalid Docker build argument syntax"
+              exit 1
+            fi
+            BUILD_ARGS+=(--build-arg "${build_arg}")
+          done <<< "${DOCKER_BUILD_ARGS}"
           
           # IMAGE_TAG carries the commit SHA, so it never exists before a build
           # of a new commit and can only seed cache when the same tag is rebuilt.
@@ -149,7 +187,7 @@ jobs:
           # build reuse the previous commit's layers, on any runner. It lives in
           # the private cache repository, because a mode=max cache holds
           # builder stages that never reach the published image.
-          CACHE_REF="${CACHE_IMAGE_NAME}:nv-buildcache${TAG_SUFFIX}"
+          CACHE_REF="${CACHE_IMAGE_NAME}:${CACHE_CHANNEL}-buildcache${TAG_SUFFIX}"
           
           # The remote builder imports cache straight from the registry, so a
           # missing ref must not fail the build.
@@ -172,12 +210,12 @@ jobs:
           # digests change and dedup is lost.
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
-            -f docker/Dockerfile.cuda \
+            -f "${DOCKERFILE}" \
             --platform "${PLATFORM}" \
             --pull \
             --push \
             ${NO_CACHE_FLAG} \
-            ${EXTRA_BUILD_ARGS} \
+            "${BUILD_ARGS[@]}" \
             ${CACHE_FROM_FLAGS} \
             --cache-to "type=registry,ref=${CANDIDATE_CACHE},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true" \
             --metadata-file "${RUNNER_TEMP}/nv-build-metadata.json" \
@@ -199,7 +237,7 @@ jobs:
       - name: Set outputs
         id: set_outputs
         env:
-          IMAGE_TAG: ${{ inputs.image_name }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          IMAGE_TAG: ${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
           IMAGE_SOURCE: ${{ steps.build.outputs.source }}
           CACHE_SOURCE: ${{ steps.build.outputs.cache_source }}
           CACHE_LIVE_REF: ${{ steps.build.outputs.cache_live_ref }}
@@ -223,7 +261,7 @@ jobs:
         uses: ./.github/actions/secret-scan
         with:
           targets_file: ${{ runner.temp }}/secret-scan-targets/targets.json
-          scan_id: nv${{ inputs.image_tag_suffix }}
+          scan_id: ${{ env.CACHE_CHANNEL }}${{ inputs.image_tag_suffix }}
           policy_ref: ${{ github.ref_name }}
       
       - name: Cleanup

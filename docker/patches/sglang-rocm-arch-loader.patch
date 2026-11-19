@@ -1,0 +1,79 @@
+diff --git a/python/sglang/kernels/aot/setup_rocm.py b/python/sglang/kernels/aot/setup_rocm.py
+--- a/python/sglang/kernels/aot/setup_rocm.py
++++ b/python/sglang/kernels/aot/setup_rocm.py
+@@ -69,7 +69,7 @@
+-if torch.cuda.is_available():
++if "AMDGPU_TARGET" not in os.environ and torch.cuda.is_available():
+     try:
+         amdgpu_target = torch.cuda.get_device_properties(0).gcnArchName.split(":")[0]
+     except Exception as e:
+         print(f"Warning: Failed to detect GPU properties: {e}")
+-else:
++elif not torch.cuda.is_available():
+     print(f"Warning: torch.cuda not available. Using default target: {amdgpu_target}")
+diff --git a/python/sglang/kernels/aot/python/sgl_kernel/load_utils.py b/python/sglang/kernels/aot/python/sgl_kernel/load_utils.py
+--- a/python/sglang/kernels/aot/python/sgl_kernel/load_utils.py
++++ b/python/sglang/kernels/aot/python/sgl_kernel/load_utils.py
+@@ -47,22 +47,30 @@ def _load_architecture_specific_ops():
+     """Load the appropriate common_ops library based on GPU architecture."""
+-    compute_capability = _get_compute_capability()
+-    logger.debug(
+-        f"[sgl_kernel] GPU Detection: compute_capability = {compute_capability}"
+-    )
++    is_rocm = torch.version.hip is not None
++
++    if is_rocm and torch.cuda.is_available():
++        properties = torch.cuda.get_device_properties(torch.cuda.current_device())
++        ops_subdir = properties.gcnArchName.split(":")[0]
++        variant_name = f"ROCm {ops_subdir}"
++        logger.debug(f"[sgl_kernel] GPU Detection: architecture = {ops_subdir}")
++    else:
++        compute_capability = _get_compute_capability()
++        logger.debug(
++            f"[sgl_kernel] GPU Detection: compute_capability = {compute_capability}"
++        )
++
++        # Determine which version to load based on GPU architecture
++        if compute_capability == 90:
++            ops_subdir = "sm90"
++            variant_name = "SM90 (Hopper/H100 with fast math optimization)"
++        elif compute_capability is not None:
++            ops_subdir = "sm100"
++            variant_name = f"SM{compute_capability} (precise math for compatibility)"
++        else:
++            ops_subdir = "sm100"
++            variant_name = "CPU/No GPU detected (using precise math)"
+ 
+     # Get the directory where sgl_kernel is installed
+     sgl_kernel_dir = Path(__file__).parent
+     logger.debug(f"[sgl_kernel] sgl_kernel directory: {sgl_kernel_dir}")
+-
+-    # Determine which version to load based on GPU architecture
+-    if compute_capability == 90:
+-        ops_subdir = "sm90"
+-        variant_name = "SM90 (Hopper/H100 with fast math optimization)"
+-    elif compute_capability is not None:
+-        ops_subdir = "sm100"
+-        variant_name = f"SM{compute_capability} (precise math for compatibility)"
+-    else:
+-        ops_subdir = "sm100"
+-        variant_name = "CPU/No GPU detected (using precise math)"
+ 
+     # Look for the compiled module with any valid extension
+@@ -102,7 +110,16 @@ def _load_architecture_specific_ops():
+         logger.debug(
+             f"[sgl_kernel] ✗ Architecture-specific library not found matching pattern: {ops_pattern}"
+         )
+ 
++    if is_rocm and torch.cuda.is_available():
++        error = ImportError(
++            f"[sgl_kernel] No loadable common_ops library for ROCm architecture "
++            f"{ops_subdir} at {ops_pattern}. Refusing to load a different architecture's library."
++        )
++        if previous_import_errors:
++            raise error from previous_import_errors[-1]
++        raise error
++
+     # Try alternative directory (in case installation structure differs)
+     alt_pattern = str(sgl_kernel_dir / "common_ops.*")
+     raw_alt_files = glob.glob(alt_pattern)
