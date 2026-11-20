@@ -136,7 +136,7 @@ runs:
 
     - name: Upload converted configs
       if: ${{ always() && steps.convert.outputs.converted_dir != '' }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ inputs.artifact_name }}-configs
         path: ${{ steps.convert.outputs.converted_dir }}
@@ -169,7 +169,7 @@ runs:
 
     - name: Upload benchmark results
       if: always()
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ inputs.artifact_name }}
         path: ${{ inputs.output_dir }}/${{ inputs.arch }}/**

@@ -229,8 +229,6 @@ jobs:
     outputs:
       any_arch_enabled: ${{ steps.check-archs.outputs.any_enabled }}
       image_tag: ${{ steps.generate_tag.outputs.tag }}
-      core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
-      staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
       should_rebuild: ${{ steps.rebuild.outputs.should_rebuild }}
     steps:
       - name: Checkout repository
@@ -440,7 +438,7 @@ jobs:
           image: ${{ steps.metadata.outputs.working_image }}
       
       - name: Upload version artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ github.run_number }}-versions-${{ matrix.arch }}
           path: versions/**
