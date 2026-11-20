@@ -2,16 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 import os
-import imageio
 import json
-import torch
 import argparse
 import numpy as np
 import subprocess
 import re
 import shlex
-
-from sglang.multimodal_gen import DiffGenerator
 
 
 def parse_args() -> tuple[argparse.Namespace, list[str]]:
@@ -313,6 +309,8 @@ def run_sgld(generator, sampling_params):
 
 
 def save_output(output, elapsed_times, args):
+    import imageio
+
     with open(os.path.join(args.output_directory, "timings.json"), "w") as f:
         json.dump(elapsed_times, f)
 
@@ -347,6 +345,17 @@ def _maybe_local_snapshot(model: str, needs_resolve: bool, reason: str) -> str:
         return model
 
 
+def _load_config(config_json: str) -> dict:
+    config = json.loads(config_json)
+    if not isinstance(config, dict):
+        raise ValueError(f"--config must be a JSON object, got {type(config).__name__}")
+    return config
+
+
+def _config_path(output_directory: str) -> str:
+    return os.path.join(output_directory, "config.json")
+
+
 def _write_config_file(config_json: str, output_directory: str) -> str:
     """
     Dump the --config JSON payload into the output directory and return its path.
@@ -356,17 +365,29 @@ def _write_config_file(config_json: str, output_directory: str) -> str:
     are materialised here. Writing it next to the other run artifacts keeps it
     around for debugging.
     """
-    config = json.loads(config_json)
-    if not isinstance(config, dict):
-        raise ValueError(f"--config must be a JSON object, got {type(config).__name__}")
+    config = _load_config(config_json)
 
     os.makedirs(output_directory, exist_ok=True)
-    config_path = os.path.join(output_directory, "config.json")
+    config_path = _config_path(output_directory)
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
 
     print(f"Wrote generation config to {config_path}: {json.dumps(config)}")
     return config_path
+
+
+def _write_config_shell(config_json: str, output_directory: str) -> str:
+    """
+    Return a shell command that writes the --config JSON payload to the path that
+    _write_config_file uses. The printed command can then run on a different host
+    than the one that printed it.
+    """
+    config = _load_config(config_json)
+    config_path = _config_path(output_directory)
+    return (
+        f"mkdir -p {shlex.quote(output_directory)} && "
+        f"printf '%s\\n' {shlex.quote(json.dumps(config))} > {shlex.quote(config_path)}"
+    )
 
 
 def _passthrough_args(extra: list[str]) -> list[str]:
@@ -502,14 +523,21 @@ def run_cli(args, extra):
         cmd.extend(["--quantization-ignored-layers"] + args.quantization_ignored_layers)
 
     if args.config is not None:
-        cmd.extend(["--config", _write_config_file(args.config, args.output_directory)])
+        if args.print_command:
+            config_path = _config_path(args.output_directory)
+        else:
+            config_path = _write_config_file(args.config, args.output_directory)
+        cmd.extend(["--config", config_path])
 
     # Appended last on purpose: argparse keeps the last occurrence of a repeated
     # flag, so a forwarded flag overrides the defaults hard-coded above.
     cmd.extend(_passthrough_args(extra))
 
     if args.print_command:
-        print(shlex.join(str(part) for part in cmd))
+        command = shlex.join(str(part) for part in cmd)
+        if args.config is not None:
+            command = f"{_write_config_shell(args.config, args.output_directory)} && {command}"
+        print(command)
         return
 
     print(f"Running command: {' '.join(cmd)}")
@@ -536,6 +564,10 @@ def run_cli(args, extra):
 
 
 def run_api(args):
+    # Imported here so that the cli path, which only builds a command, does not need a GPU environment.
+    import torch
+    from sglang.multimodal_gen import DiffGenerator
+
     num_gpus = args.ulysses_degree * args.ring_degree
 
     model_path_value = _maybe_local_snapshot(
