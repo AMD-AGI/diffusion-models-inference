@@ -4,7 +4,8 @@
 
 set -euo pipefail
 
-# Generate a GitHub Actions matrix JSON from a runner list.
+# Generate a matrix from GPU runner labels, resolving gfx identifiers first
+# and falling back to MI product names.
 # Expects env var: GPU_RUNNERS (comma-separated list)
 
 GPU_RUNNERS=$(echo "${GPU_RUNNERS:-}" | xargs)
@@ -26,28 +27,33 @@ for TAG in "${TAGS[@]}"; do
 
   # Runner labels may carry a prefix (e.g. itt-gfx942); benchmark tag filtering
   # only cares about the gfx identifier, if the label contains one.
-  GFX_ARCH=$(echo "$TAG" | grep -oE 'gfx[0-9a-z]+' | head -1 || true)
+  GFX_ARCH=$(echo "${TAG,,}" | grep -oE 'gfx[0-9a-z]+' | head -1 || true)
 
-  # Match whole SKU tokens, optionally suffixed with X, separated by "-" or "_".
+  # Whole SKU tokens are separated by "-", "_" or "."; compare resolved archs
+  # rather than product counts so repeated SKUs do not become ambiguous.
   if [ -z "$GFX_ARCH" ]; then
-    PRODUCTS=()
-    IFS='-_' read -ra TOKENS <<< "${TAG,,}"
+    UNRESOLVED=false
+    IFS='-_.' read -ra TOKENS <<< "${TAG,,}"
     for TOKEN in "${TOKENS[@]}"; do
-      if [[ "$TOKEN" =~ ^(mi[0-9]+)x?$ ]]; then
-        PRODUCTS+=("${BASH_REMATCH[1]}")
+      if [[ "$TOKEN" =~ ^mi[0-9]+[axp]?$ ]]; then
+        case "$TOKEN" in
+          mi300|mi300a|mi300x|mi308|mi308x|mi325|mi325x) PRODUCT_ARCH="gfx942" ;;
+          mi350|mi350x|mi350p|mi355|mi355x) PRODUCT_ARCH="gfx950" ;;
+          *) UNRESOLVED=true; continue ;;
+        esac
+        if [ -n "$GFX_ARCH" ] && [ "$GFX_ARCH" != "$PRODUCT_ARCH" ]; then
+          UNRESOLVED=true
+        fi
+        GFX_ARCH="$PRODUCT_ARCH"
       fi
     done
-    if [ "${#PRODUCTS[@]}" -gt 1 ]; then
-      echo "::warning::Runner label '${TAG}' contains multiple MI product names; gfx_arch is unresolved and architecture filtering is disabled."
-    elif [ "${#PRODUCTS[@]}" -eq 1 ]; then
-      case "${PRODUCTS[0]}" in
-        mi300|mi308|mi325) GFX_ARCH="gfx942" ;;
-        mi350|mi355) GFX_ARCH="gfx950" ;;
-        *)
-          echo "::warning::Runner label '${TAG}' contains unmapped product '${PRODUCTS[0]}'; gfx_arch is unresolved and architecture filtering is disabled."
-          ;;
-      esac
+    if [ "$UNRESOLVED" = "true" ]; then
+      GFX_ARCH=""
     fi
+  fi
+
+  if [ -z "$GFX_ARCH" ]; then
+    echo "::warning::Runner label '${TAG}' has no resolved gfx_arch (unknown or conflicting architecture); architecture filtering is disabled."
   fi
 
   if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi

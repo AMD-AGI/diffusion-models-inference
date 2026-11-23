@@ -256,8 +256,7 @@ jobs:
           DIGEST=$(jq -er '."containerimage.digest"' "${RUNNER_TEMP}/untuned-build-metadata.json")
           echo "source=${CANDIDATE_IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
       
-      - name: Set outputs
-        id: set_outputs
+      - name: Write scan targets
         env:
           CORE_IMAGE: ${{ inputs.core_image_name }}:${{ inputs.image_tag }}
           STAGING_IMAGE: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
