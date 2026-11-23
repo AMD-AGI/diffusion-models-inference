@@ -28,13 +28,26 @@ for TAG in "${TAGS[@]}"; do
   # only cares about the gfx identifier, if the label contains one.
   GFX_ARCH=$(echo "$TAG" | grep -oE 'gfx[0-9a-z]+' | head -1 || true)
 
-  # Fall back to mapping product names (e.g. mi325, itt-mi355) to gfx arch.
+  # Match whole SKU tokens, optionally suffixed with X, separated by "-" or "_".
   if [ -z "$GFX_ARCH" ]; then
-    PRODUCT=$(echo "$TAG" | grep -oiE 'mi[0-9]+' | head -1 | tr '[:upper:]' '[:lower:]' || true)
-    case "$PRODUCT" in
-      mi300|mi308|mi325) GFX_ARCH="gfx942" ;;
-      mi350|mi355) GFX_ARCH="gfx950" ;;
-    esac
+    PRODUCTS=()
+    IFS='-_' read -ra TOKENS <<< "${TAG,,}"
+    for TOKEN in "${TOKENS[@]}"; do
+      if [[ "$TOKEN" =~ ^(mi[0-9]+)x?$ ]]; then
+        PRODUCTS+=("${BASH_REMATCH[1]}")
+      fi
+    done
+    if [ "${#PRODUCTS[@]}" -gt 1 ]; then
+      echo "::warning::Runner label '${TAG}' contains multiple MI product names; gfx_arch is unresolved and architecture filtering is disabled."
+    elif [ "${#PRODUCTS[@]}" -eq 1 ]; then
+      case "${PRODUCTS[0]}" in
+        mi300|mi308|mi325) GFX_ARCH="gfx942" ;;
+        mi350|mi355) GFX_ARCH="gfx950" ;;
+        *)
+          echo "::warning::Runner label '${TAG}' contains unmapped product '${PRODUCTS[0]}'; gfx_arch is unresolved and architecture filtering is disabled."
+          ;;
+      esac
+    fi
   fi
 
   if [ "$FIRST" = "false" ]; then MATRIX_JSON="${MATRIX_JSON},"; fi

@@ -5,7 +5,8 @@ name: 'Generate Architecture Matrix'
 description: 'Generates matrix configuration for enabled architectures'
 inputs:
   gpu_runners:
-    description: 'Comma-separated list of GPU runner labels'
+    description: >-
+      Comma-separated runner labels.
     required: true
 
 outputs:
