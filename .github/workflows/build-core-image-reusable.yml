@@ -64,13 +64,6 @@ on:
         required: false
         type: string
         default: ''
-    outputs:
-      core_image_with_tag:
-        description: 'Full core image with tag'
-        value: ${{ jobs.build.outputs.core_image_with_tag }}
-      staging_image_with_tag:
-        description: 'Full staging image with tag (untuned, with -temp suffix)'
-        value: ${{ jobs.build.outputs.staging_image_with_tag }}
     secrets:
       DOCKERHUB_ORGANIZATION:
         description: 'Docker Hub username/organization'
@@ -88,9 +81,6 @@ jobs:
     # repository; the Trivy scan step promotes it only after it passes.
     env:
       CANDIDATE_TAG: cand-${{ github.run_id }}-${{ github.run_attempt }}
-    outputs:
-      core_image_with_tag: ${{ steps.set_outputs.outputs.core_image_with_tag }}
-      staging_image_with_tag: ${{ steps.set_outputs.outputs.staging_image_with_tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -266,8 +256,7 @@ jobs:
           DIGEST=$(jq -er '."containerimage.digest"' "${RUNNER_TEMP}/untuned-build-metadata.json")
           echo "source=${CANDIDATE_IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
       
-      - name: Set outputs
-        id: set_outputs
+      - name: Write scan targets
         env:
           CORE_IMAGE: ${{ inputs.core_image_name }}:${{ inputs.image_tag }}
           STAGING_IMAGE: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
@@ -289,10 +278,6 @@ jobs:
           # Hub organization, which is stored as a secret.
           mkdir -p "${RUNNER_TEMP}/secret-scan-targets"
           printf '%s\n' "${TARGETS}" > "${RUNNER_TEMP}/secret-scan-targets/targets.json"
-          {
-            echo "core_image_with_tag=${CORE_IMAGE}"
-            echo "staging_image_with_tag=${STAGING_IMAGE}"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Trivy scan and promote
         uses: ./.github/actions/secret-scan

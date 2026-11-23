@@ -5,7 +5,10 @@ name: 'Generate Architecture Matrix'
 description: 'Generates matrix configuration for enabled architectures'
 inputs:
   gpu_runners:
-    description: 'Comma-separated list of GPU runner labels'
+    description: >-
+      Comma-separated GPU runner labels. Resolves gfx identifiers
+      case-insensitively, then whole MI SKU tokens separated by hyphens,
+      underscores or dots. Unresolved labels warn and leave gfx_arch empty.
     required: true
 
 outputs:
