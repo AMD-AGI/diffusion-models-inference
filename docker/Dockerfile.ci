@@ -150,6 +150,8 @@ FROM build_triton AS build_pytorch
 ARG PYTORCH_COMMIT
 ARG PYTORCH_ROCM_ARCH
 RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1
+# PyTorch 2.14 and later build through PEP 517 (scikit-build-core).
+# There, "setup.py bdist_wheel" only prints a deprecation notice and fails.
 RUN cd pytorch && \
     UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
     PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
@@ -163,7 +165,7 @@ RUN cd pytorch && \
     CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
     LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
-    python setup.py bdist_wheel && \
+    python -m build --wheel --no-isolation && \
     pip install dist/*.whl && \
     mv dist/*.whl /install && \
     rm -rf build dist
