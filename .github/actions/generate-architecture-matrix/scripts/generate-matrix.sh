@@ -27,7 +27,7 @@ for TAG in "${TAGS[@]}"; do
 
   # Runner labels may carry a prefix (e.g. itt-gfx942); benchmark tag filtering
   # only cares about the gfx identifier, if the label contains one.
-  GFX_ARCH=$(echo "${TAG,,}" | grep -oE 'gfx[0-9a-z]+' | head -1 || true)
+  GFX_ARCH=$(echo "${TAG,,}" | grep -oE 'gfx[0-9][0-9a-z]*' | head -1 || true)
 
   # Whole SKU tokens are separated by "-", "_" or "."; compare resolved archs
   # rather than product counts so repeated SKUs do not become ambiguous.
