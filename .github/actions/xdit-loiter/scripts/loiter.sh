@@ -205,6 +205,20 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
             echo "xDiT run ${xrun}: use_xdit_configs must be a boolean, skipping"
             continue
         fi
+        if ! run_benchmarks=$(printf '%s' "$request_metadata" | jq -er '
+            if has("run_benchmarks") then
+              .run_benchmarks | select(type == "boolean") | tostring
+            else "true" end'); then
+            echo "xDiT run ${xrun}: run_benchmarks must be a boolean, skipping"
+            continue
+        fi
+        if ! run_tests=$(printf '%s' "$request_metadata" | jq -er '
+            if has("run_tests") then
+              .run_tests | select(type == "boolean") | tostring
+            else "false" end'); then
+            echo "xDiT run ${xrun}: run_tests must be a boolean, skipping"
+            continue
+        fi
 
         if [[ "$origin_event" == issue_comment ]]; then
             sha=$(printf '%s' "$request_metadata" | jq -r '.xdit_sha // ""')
@@ -270,6 +284,8 @@ while [[ "$(date +%s)" -lt "$deadline" ]]; do
             -f ref="${GITHUB_REF_NAME}" \
             -f inputs[xdit_sha]="$sha" \
             -f 'inputs[xdit_run_id]='"$original_run_id" \
+            -F 'inputs[run_benchmarks]='"$run_benchmarks" \
+            -F 'inputs[run_tests]='"$run_tests" \
             -f 'inputs[request_metadata]='"$request_metadata" || api_status=$?
         [[ "$api_status" -ne "$AUTH_FAILURE_STATUS" ]] || fail_auth
         if [[ "$api_status" -ne 0 ]]; then
