@@ -106,6 +106,19 @@ jobs:
     needs: [get-short-sha, build-nv-image]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions/resolve-framework
+
+      - name: Resolve framework
+        id: framework
+        uses: ./.github/actions/resolve-framework
+        with:
+          framework: ${{ inputs.framework || 'xdit' }}
+          target: cuda
+          vars_json: ${{ toJSON(vars) }}
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
@@ -117,7 +130,7 @@ jobs:
       
       - name: Create multi-arch manifest
         env:
-          IMAGE: ${{ inputs.framework == 'sgld' && (vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-xdit-sglang-nvidia') || inputs.framework == 'vllmo' && (vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-xdit-vllm-nvidia') || vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia' }}
+          IMAGE: ${{ steps.framework.outputs.image }}
           TAG: ${{ inputs.tag || needs.get-short-sha.outputs.short_sha }}
         run: |
           docker buildx imagetools create \

@@ -31,10 +31,12 @@ mkdir -p \
 
 copy_optional() {
   local source="$1" destination="$2" error_file="$extract_dir/docker-cp-error"
-  # Docker does not provide a distinct exit code for a missing image path.
+  # Docker does not provide a distinct exit code for a missing image path, and
+  # its wording differs between engine versions; other errors still fail.
   if docker cp "${CONTAINER_NAME}:${source}" "$destination" 2>"$error_file"; then
     cat "$error_file" >&2
-  elif [[ "$(<"$error_file")" == "Error response from daemon: Could not find the file ${source} in container ${CONTAINER_NAME}" ]]; then
+  elif grep -qiE 'could not find the file|no such file or directory|not found' "$error_file" \
+    && ! grep -qiE 'no such container|permission denied|cannot connect' "$error_file"; then
     echo "Optional image path not found: ${source}"
   else
     echo "::error::Failed to copy image path ${source}" >&2

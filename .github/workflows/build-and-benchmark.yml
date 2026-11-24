@@ -233,8 +233,6 @@ permissions:
   actions: read
 
 env:
-  CORE_IMAGE: ${{ inputs.framework == 'sgld' && (vars.SGLD_IMAGE || 'amdsiloai/pytorch-xdit-sglang') || inputs.framework == 'vllmo' && (vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-xdit-vllm') || vars.CORE_IMAGE || 'amdsiloai/pytorch-xdit-core' }}
-  STAGING_IMAGE: ${{ inputs.framework == 'sgld' && (vars.SGLD_IMAGE || 'amdsiloai/pytorch-xdit-sglang') || inputs.framework == 'vllmo' && (vars.VLLM_OMNI_IMAGE || 'amdsiloai/pytorch-xdit-vllm') || vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
   BUILDCACHE_IMAGE: ${{ vars.BUILDCACHE_IMAGE || 'amdsiloai/pytorch-xdit-buildcache' }}
 
 jobs:
@@ -251,19 +249,20 @@ jobs:
         with:
           ref: ${{ inputs.git_branch || github.ref_name }}
 
-      - name: Validate framework
+      - name: Resolve framework
+        id: framework
+        uses: ./.github/actions/resolve-framework
+        with:
+          framework: ${{ inputs.framework }}
+          target: rocm
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Validate framework options
         env:
           FRAMEWORK: ${{ inputs.framework }}
           USE_XDIT_CONFIGS: ${{ inputs.use_xdit_configs }}
           BUILD_FINAL: ${{ inputs.build_final }}
         run: |
-          case "$FRAMEWORK" in
-            xdit|sgld|vllmo) ;;
-            *)
-              echo "::error::Unsupported framework '$FRAMEWORK'. Choose xdit, sgld, or vllmo."
-              exit 1
-              ;;
-          esac
           if [ "$FRAMEWORK" != "xdit" ] && [ "$USE_XDIT_CONFIGS" = "true" ]; then
             echo "::error::use_xdit_configs is supported only for xdit."
             exit 1
@@ -282,12 +281,14 @@ jobs:
         id: generate_tag
         env:
           IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+          CORE_IMAGE: ${{ steps.framework.outputs.image }}
+          STAGING_IMAGE: ${{ steps.framework.outputs.staging_image }}
         run: |
           IMAGE_TAG="${IMAGE_TAG_INPUT:-$(git rev-parse --short HEAD)}"
           {
             echo "tag=${IMAGE_TAG}"
-            echo "core_image_with_tag=${{ env.CORE_IMAGE }}:${IMAGE_TAG}"
-            echo "staging_image_with_tag=${{ env.STAGING_IMAGE }}:${IMAGE_TAG}"
+            echo "core_image_with_tag=${CORE_IMAGE}:${IMAGE_TAG}"
+            echo "staging_image_with_tag=${STAGING_IMAGE}:${IMAGE_TAG}"
           } >> $GITHUB_OUTPUT
       
       - name: Check architectures
@@ -307,7 +308,7 @@ jobs:
         uses: ./.github/actions/resolve-benchmark-image
         with:
           benchmark_image: ${{ inputs.base_image }}
-          staging_image: ${{ env.STAGING_IMAGE }}
+          staging_image: ${{ steps.framework.outputs.staging_image }}
           # Empty means "build from source" here, unlike the benchmark-only workflow.
           require_image: 'false'
       
@@ -336,6 +337,8 @@ jobs:
           FRAMEWORK: ${{ inputs.framework }}
           IMAGE_TAG: ${{ steps.generate_tag.outputs.tag }}
           BASE_IMAGE: ${{ steps.resolve_base.outputs.image }}
+          CORE_IMAGE: ${{ steps.framework.outputs.image }}
+          STAGING_IMAGE: ${{ steps.framework.outputs.staging_image }}
         run: |
           if [ "$SHOULD_REBUILD" = "true" ]; then
             if [ "$FRAMEWORK" = "xdit" ]; then
@@ -351,9 +354,9 @@ jobs:
         uses: ./.github/actions/save-build-metadata
         with:
           image_tag: ${{ steps.generate_tag.outputs.tag }}
-          core_image: ${{ env.CORE_IMAGE }}
+          core_image: ${{ steps.framework.outputs.image }}
           core_image_with_tag: ${{ steps.generate_tag.outputs.core_image_with_tag }}
-          staging_image: ${{ env.STAGING_IMAGE }}
+          staging_image: ${{ steps.framework.outputs.staging_image }}
           staging_image_with_tag: ${{ steps.generate_tag.outputs.staging_image_with_tag }}
           should_rebuild: ${{ steps.rebuild.outputs.should_rebuild }}
           working_image: ${{ steps.working_image.outputs.image }}
@@ -390,7 +393,7 @@ jobs:
               "Generated Tags": ${{ toJSON(steps.generate_tag.outputs) }}
             }
 
-  build-core:
+  build-image:
     name: Build ${{ inputs.framework || 'xdit' }} image(s)
     needs: [validate]
     if: ${{ needs.validate.outputs.should_rebuild == 'true' }}
@@ -412,12 +415,12 @@ jobs:
 
   generate-matrix:
     name: Generate architecture matrix
-    needs: [validate, build-core]
+    needs: [validate, build-image]
     runs-on: ubuntu-latest
     if: |
       !cancelled() &&
       needs.validate.result == 'success' &&
-      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped')
+      (needs.build-image.result == 'success' || needs.build-image.result == 'skipped')
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
@@ -443,7 +446,7 @@ jobs:
 
   tune-and-benchmark:
     name: ${{ matrix.arch }} tuning and benchmarking
-    needs: [validate, generate-matrix, build-core]
+    needs: [validate, generate-matrix, build-image]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout }}
     if: |
@@ -451,7 +454,7 @@ jobs:
       (inputs.run_miopen_tuning || inputs.run_benchmarks) &&
       !cancelled() && 
       needs.validate.result == 'success' &&
-      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped')
+      (needs.build-image.result == 'success' || needs.build-image.result == 'skipped')
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
@@ -569,7 +572,7 @@ jobs:
 
   build-final:
     name: Build final tuned image
-    needs: [validate, build-core, tune-and-benchmark]
+    needs: [validate, build-image, tune-and-benchmark]
     runs-on: ${{ inputs.build_runner || vars.BUILD_RUNNER || 'build-only' }}
     if: ${{ inputs.framework == 'xdit' && inputs.build_final && !cancelled() && !failure() }}
     steps:
