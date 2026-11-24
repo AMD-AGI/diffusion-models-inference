@@ -158,9 +158,9 @@ To build an image locally:
 docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 ```
 
-This build does not require a GPU. The ROCm stack comes from the nightly deb
-snapshot from the Ubuntu 24.04 native index, pinned by `ROCM_RELEASE_ID`
-in the Dockerfile.
+This build does not require a GPU. ROCm and the PyTorch stack come as
+TheRock nightly Python wheels, pinned by `ROCM_WHEEL_VERSION` and the
+`TORCH*_VERSION` arguments in the Dockerfile.
 See [docker/README.md](docker/README.md) for the ROCm package and architecture
 settings.
 

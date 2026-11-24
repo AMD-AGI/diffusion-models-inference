@@ -5,7 +5,7 @@
 # Make `import amdsmi` work inside the venv.
 #
 # The amd-smi CLI lives at ${ROCM_HOME}/bin and is unaffected by this script.
-# The nightly debs drop the Python bindings at ${ROCM_HOME}/share/amd_smi/amdsmi
+# The ROCm SDK wheels put the Python bindings at ${ROCM_HOME}/share/amd_smi/amdsmi
 # with no setup.py or pyproject.toml, so pip refuses to install them and they
 # land nowhere on sys.path. torch.cuda wants them for device_count() and for
 # utilization/memory_usage/temperature/power_draw/clock_rate; accelerate wants
@@ -19,7 +19,7 @@
 # because it exposes the sibling tools/, tests/ and example/ directories as
 # implicit namespace packages.
 #
-# This shim is expected to expire. Once a nightly ships the bindings on sys.path
+# This shim is expected to expire. Once a release ships the bindings on sys.path
 # on its own, the script changes nothing and prints a RETIRE banner instead --
 # the signal to delete it along with its COPY/RUN in docker/Dockerfile.ci.
 
@@ -53,7 +53,7 @@ if [[ -n "${origin}" ]]; then
     echo "     ${origin}" >&2
     if [[ "${origin}" != "${rocm_root}/"* ]]; then
         echo " Note: that path is outside ${rocm_root}, so the bindings are" >&2
-        echo " probably a PyPI amdsmi wheel rather than a fixed nightly deb." >&2
+        echo " probably a PyPI amdsmi wheel rather than the ROCm SDK copy." >&2
         echo " Those bundle their own libamd_smi and can skew from ROCm." >&2
     fi
     echo " No symlink was created. Delete docker/setup_amdsmi.sh and its" >&2
@@ -64,7 +64,7 @@ fi
 
 if [[ ! -d "${src}" ]]; then
     echo "amdsmi is not importable and ${src} does not exist;" >&2
-    echo "is the amdrocm-amdsmi deb installed in this layer?" >&2
+    echo "is the rocm-sdk-devel wheel installed and initialized in this layer?" >&2
     exit 1
 fi
 

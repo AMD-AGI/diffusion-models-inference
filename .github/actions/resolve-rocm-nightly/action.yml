@@ -2,12 +2,18 @@
 # SPDX-License-Identifier: MIT
 
 name: Resolve ROCm Nightly
-description: Resolves the latest ROCm nightly release ID from the package index
+description: Resolves the latest TheRock nightly ROCm wheel version that also has the pinned torch wheel
+
+inputs:
+  dockerfile:
+    description: 'Dockerfile that pins TORCH_VERSION'
+    required: false
+    default: 'docker/Dockerfile.ci'
 
 outputs:
-  release_id:
-    description: 'Latest ROCm nightly release ID'
-    value: ${{ steps.resolve.outputs.release_id }}
+  rocm_wheel_version:
+    description: 'Latest ROCm nightly wheel version, for example 10.3.0a20261108'
+    value: ${{ steps.resolve.outputs.rocm_wheel_version }}
 
 runs:
   using: composite
@@ -16,21 +22,44 @@ runs:
       id: resolve
       shell: bash
       env:
-        ROCM_NIGHTLY_ROOT: https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404
+        DOCKERFILE: ${{ inputs.dockerfile }}
+        ROCM_WHEEL_INDEX: https://nightly.repo.amd.com/rocm/whl-next
       run: |
         set -euo pipefail
 
-        release_id=$(
-          curl --fail --silent --show-error --location "${ROCM_NIGHTLY_ROOT}/" |
-            grep -oE '[0-9]{8}-[0-9]+/index\.html' |
-            sed 's#/index\.html##' |
-            sort -V |
-            tail -n 1
-        )
-        if [[ ! "$release_id" =~ ^[0-9]{8}-[0-9]+$ ]]; then
-          echo "::error::Could not resolve a valid ROCm nightly release ID"
+        torch_version=$(sed -nE 's/^ARG TORCH_VERSION="([^"]+)"$/\1/p' "${DOCKERFILE}")
+        if [[ ! "$torch_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::Could not read TORCH_VERSION from ${DOCKERFILE}"
           exit 1
         fi
 
-        echo "Resolved ROCm nightly release: ${release_id}"
-        echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+        # ROCm SDK builds on the index. The wheel version encodes the build
+        # date (10.3.0a20261108), and the minor version moves over time, so
+        # read it from the index.
+        sdk_versions=$(
+          curl --fail --silent --show-error --location "${ROCM_WHEEL_INDEX}/rocm-sdk-core/" |
+            grep -oE 'rocm_sdk_core-[0-9]+\.[0-9]+\.[0-9]+a[0-9]{8}-py3-none-linux_x86_64\.whl' |
+            sed -E 's/^rocm_sdk_core-//; s/-py3-none-linux_x86_64\.whl$//' |
+            sort -u
+        )
+        # Builds of the pinned torch version for the image Python (cp312).
+        torch_pattern="torch-${torch_version//./\\.}(%2B|\\+)rocm[0-9]+\\.[0-9]+\\.[0-9]+a[0-9]{8}-cp312-cp312-linux_x86_64\\.whl"
+        torch_rocm_versions=$(
+          curl --fail --silent --show-error --location "${ROCM_WHEEL_INDEX}/torch/" |
+            grep -oE "${torch_pattern}" |
+            sed -E 's/^.*rocm//; s/-cp312-cp312-linux_x86_64\.whl$//' |
+            sort -u
+        )
+
+        rocm_wheel_version=$(
+          comm -12 <(echo "${sdk_versions}") <(echo "${torch_rocm_versions}") |
+            sort -V |
+            tail -n 1
+        )
+        if [[ ! "$rocm_wheel_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+a[0-9]{8}$ ]]; then
+          echo "::error::Could not resolve a ROCm nightly wheel version with torch ${torch_version}"
+          exit 1
+        fi
+
+        echo "Resolved ROCm nightly wheel version: ${rocm_wheel_version} (torch ${torch_version})"
+        echo "rocm_wheel_version=${rocm_wheel_version}" >> "$GITHUB_OUTPUT"

@@ -22,7 +22,7 @@ jobs:
     name: Resolve latest ROCm nightly
     runs-on: ubuntu-latest
     outputs:
-      release_id: ${{ steps.resolve.outputs.release_id }}
+      rocm_wheel_version: ${{ steps.resolve.outputs.rocm_wheel_version }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -37,9 +37,9 @@ jobs:
           title: 'Resolved ROCm Nightly'
           tables: |
             {
-              "ROCm package": {
-                "release_id": "${{ steps.resolve.outputs.release_id }}",
-                "image_tag": "nightly-${{ steps.resolve.outputs.release_id }}"
+              "ROCm wheels": {
+                "rocm_wheel_version": "${{ steps.resolve.outputs.rocm_wheel_version }}",
+                "image_tag": "nightly-${{ steps.resolve.outputs.rocm_wheel_version }}"
               }
             }
 
@@ -49,7 +49,7 @@ jobs:
     uses: ./.github/workflows/build-and-benchmark.yml
     with:
       git_branch: ${{ github.ref_name }}
-      image_tag: nightly-${{ needs.resolve-rocm.outputs.release_id }}
+      image_tag: nightly-${{ needs.resolve-rocm.outputs.rocm_wheel_version }}
       rebuild: true
       run_miopen_tuning: true
       run_benchmarks: true
@@ -60,7 +60,7 @@ jobs:
       cache_scope: 'nightly-rocm'
       benchmark_flags: "--tag nightly"
       docker_build_args: |
-        ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
+        ROCM_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.rocm_wheel_version }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}

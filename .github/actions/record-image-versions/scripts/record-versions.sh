@@ -5,6 +5,8 @@
 set -euo pipefail
 
 # Copy ROCm identity out of IMAGE into OUTPUT_DIR using a created container.
+# Images with ROCm wheels (TheRock rocm-sdk-*) also get the wheel versions and
+# the TheRock build manifest, read through a short python3 run in the image.
 # Expects env vars: IMAGE, OUTPUT_DIR, CONTAINER_NAME
 
 IMAGE="${IMAGE:?IMAGE is required}"
@@ -58,6 +60,35 @@ version_files=(
   "/opt/rocm/share/hip/version:$extract_dir/hip-version"
 )
 
+# Wheel images: installed ROCm/torch wheels and the TheRock build identity.
+# The python3 run does not need a GPU. Deb images print nothing here.
+wheels="$(docker run --rm -i --network none --entrypoint python3 "$IMAGE" - <<'PY' || true
+import importlib.metadata as metadata
+import json
+import re
+
+names = re.compile(r"^(torch|torchvision|torchaudio|triton|rocm|rocm[-_].+|amd[-_]torch.*)$", re.I)
+for dist in sorted(metadata.distributions(), key=lambda d: d.metadata["Name"].lower()):
+    if names.match(dist.metadata["Name"]):
+        print(f"{dist.metadata['Name']}\t{dist.version}")
+try:
+    core = metadata.distribution("rocm-sdk-core")
+except metadata.PackageNotFoundError:
+    raise SystemExit(0)
+manifest = core.locate_file("_rocm_sdk_core/share/therock/therock_manifest.json")
+data = json.loads(manifest.read_text())
+for key in ("rocm_package_version", "the_rock_commit", "github_run_id"):
+    print(f"therock_manifest.{key}\t{data.get(key, '')}")
+try:
+    torch = metadata.distribution("torch")
+    for line in torch.locate_file("torch/version.py").read_text().splitlines():
+        if line.startswith(("git_version", "hip")):
+            print(f"torch.version.{line.split()[0].rstrip(':')}\t{line.split('=', 1)[1].strip()}")
+except metadata.PackageNotFoundError:
+    pass
+PY
+)"
+
 # TheRock debian versions encode the channel (stable X.Y.Z,
 # nightly X.Y.Z~YYYYMMDD, prerelease X.Y.Z~preN, dev X.Y.Z~devYYYYMMDD).
 # Classic ROCm apt uses rocm-* names; TheRock uses amdrocm-*.
@@ -73,8 +104,9 @@ packages="$(awk '
   /^$/ { emit() }
   END { emit() }
 ' "$extract_dir/dpkg-status")"
-# Source-built ROCm images can provide version files without Debian packages.
-if [[ -z "${packages}" ]]; then
+# Source-built ROCm images can provide version files without Debian packages
+# or ROCm wheels.
+if [[ -z "${packages}" && -z "${wheels}" ]]; then
   found_version=
   for entry in "${version_files[@]}"; do
     dest="${entry#*:}"
@@ -84,10 +116,10 @@ if [[ -z "${packages}" ]]; then
     fi
   done
   if [[ -z "$found_version" ]]; then
-    echo "::error::No ROCm packages or version files found in ${IMAGE}" >&2
+    echo "::error::No ROCm packages, ROCm wheels, or version files found in ${IMAGE}" >&2
     exit 1
   fi
-  echo "::notice::No ROCm Debian packages found; recording version files instead." >&2
+  echo "::notice::No ROCm Debian packages or wheels found; recording version files instead." >&2
   packages="(no amdrocm-* or rocm-* packages found)"
 fi
 
@@ -102,7 +134,10 @@ fi
   fi
   echo
   echo "=== installed ROCm packages ==="
-  echo "${packages}"
+  echo "${packages:-(none found)}"
+  echo
+  echo "=== installed ROCm wheels ==="
+  echo "${wheels:-(none found)}"
   echo
   echo "=== ROCm version files ==="
   found=
