@@ -9,7 +9,7 @@ ARG VLLM_COMMIT="v0.28.0" # v0.28.0
 #ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
 
 # Necessary PRs manually merged
-ARG SGL_COMMIT="perf_branch_1410"
+ARG SGL_COMMIT="performance_branch_20261124"
 ARG SGL_REPO="https://github.com/avjves/sglang.git"
 ARG AMDGPU_TARGET="gfx950"
 
