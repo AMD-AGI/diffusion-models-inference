@@ -62,7 +62,7 @@ version_files=(
 
 # Wheel images: installed ROCm/torch wheels and the TheRock build identity.
 # The python3 run does not need a GPU. Deb images print nothing here.
-wheels="$(docker run --rm -i --network none --entrypoint python3 "$IMAGE" - <<'PY' || true
+wheels="$(docker run --rm -i --entrypoint python3 "$IMAGE" - <<'PY' || true
 import importlib.metadata as metadata
 import json
 import re
