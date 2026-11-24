@@ -24,11 +24,6 @@ on:
         required: false
         type: string
         default: xdit
-      image_name:
-        description: 'Override the framework image repository'
-        required: false
-        type: string
-        default: ''
       docker_build_args:
         description: 'Newline-separated Docker build arguments in KEY=VALUE form'
         required: false
@@ -74,25 +69,9 @@ jobs:
     # repository; the Trivy scan step promotes it only after it passes.
     env:
       CANDIDATE_TAG: cand-${{ github.run_id }}-${{ github.run_attempt }}
-      IMAGE_NAME: ${{ inputs.image_name || (inputs.framework == 'sgld' && (vars.SGLD_NV_IMAGE || 'amdsiloai/pytorch-xdit-sglang-nvidia') || inputs.framework == 'vllmo' && (vars.VLLM_OMNI_NV_IMAGE || 'amdsiloai/pytorch-xdit-vllm-nvidia') || vars.NV_IMAGE || 'amdsiloai/pytorch-xdit-nvidia') }}
-      DOCKERFILE: ${{ inputs.framework == 'sgld' && 'docker/Dockerfile.sgld.cuda' || inputs.framework == 'vllmo' && 'docker/Dockerfile.vllm_omni.cuda' || 'docker/Dockerfile.cuda' }}
-      CACHE_CHANNEL: ${{ inputs.framework == 'sgld' && 'sgld-nv' || inputs.framework == 'vllmo' && 'vllm-omni-nv' || 'nv' }}
     outputs:
       image_with_tag: ${{ steps.set_outputs.outputs.image_with_tag }}
     steps:
-      - name: Validate framework
-        shell: bash
-        env:
-          FRAMEWORK: ${{ inputs.framework }}
-        run: |
-          case "$FRAMEWORK" in
-            xdit|sgld|vllmo) ;;
-            *)
-              echo "::error::Unsupported framework '$FRAMEWORK'. Choose xdit, sgld, or vllmo."
-              exit 1
-              ;;
-          esac
-
       - name: Validate platform input
         shell: bash
         env:
@@ -110,6 +89,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_ref }}
+
+      - name: Resolve framework
+        id: framework
+        uses: ./.github/actions/resolve-framework
+        with:
+          framework: ${{ inputs.framework }}
+          target: cuda
+          vars_json: ${{ toJSON(vars) }}
       
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
@@ -146,19 +133,19 @@ jobs:
           echo "QEMU aarch64 binfmt handler is available:"
           cat /host-binfmt_misc/qemu-aarch64
       
-      - name: Build NV image
+      - name: Build CUDA image
         id: build
         env:
           BUILDKIT_PROGRESS: plain
           PLATFORM: ${{ inputs.platform }}
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           CACHE_IMAGE_NAME: ${{ inputs.cache_image_name }}
-          CACHE_CHANNEL: ${{ env.CACHE_CHANNEL }}
-          DOCKERFILE: ${{ env.DOCKERFILE }}
+          CACHE_CHANNEL: ${{ steps.framework.outputs.cache_channel }}
+          DOCKERFILE: ${{ steps.framework.outputs.dockerfile }}
           DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
-          IMAGE_TAG: ${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
-          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ env.CACHE_CHANNEL }}${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
-          CANDIDATE_CACHE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ env.CACHE_CHANNEL }}cache${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
+          IMAGE_TAG: ${{ steps.framework.outputs.image }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ steps.framework.outputs.cache_channel }}${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
+          CANDIDATE_CACHE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ steps.framework.outputs.cache_channel }}cache${{ inputs.image_tag_suffix }}-${{ inputs.image_tag }}
           TAG_SUFFIX: ${{ inputs.image_tag_suffix }}
           FLASH_ATTN_NPROC: ${{ steps.cores.outputs.nproc }}
         run: |
@@ -237,19 +224,20 @@ jobs:
       - name: Set outputs
         id: set_outputs
         env:
-          IMAGE_TAG: ${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
+          IMAGE_TAG: ${{ steps.framework.outputs.image }}:${{ inputs.image_tag }}${{ inputs.image_tag_suffix }}
           IMAGE_SOURCE: ${{ steps.build.outputs.source }}
           CACHE_SOURCE: ${{ steps.build.outputs.cache_source }}
           CACHE_LIVE_REF: ${{ steps.build.outputs.cache_live_ref }}
           PLATFORM: ${{ inputs.platform }}
+          LABEL: ${{ steps.framework.outputs.label }}
         run: |
           TARGETS=$(jq -cn \
-            --arg platform "${PLATFORM}" \
+            --arg platform "${PLATFORM}" --arg label "${LABEL}" \
             --arg image "${IMAGE_SOURCE}" --arg image_dest "${IMAGE_TAG}" \
             --arg cache "${CACHE_SOURCE}" --arg cache_dest "${CACHE_LIVE_REF}" \
             '[
-              {name: "NV image (\($platform))", source: $image, image_scan: true, promote: [$image_dest]},
-              (select($cache != "") | {name: "NV build cache (\($platform))", source: $cache, image_scan: false, promote: [$cache_dest]})
+              {name: "\($label) CUDA image (\($platform))", source: $image, image_scan: true, promote: [$image_dest]},
+              (select($cache != "") | {name: "\($label) CUDA build cache (\($platform))", source: $cache, image_scan: false, promote: [$cache_dest]})
             ]')
           # Kept in a file: GitHub drops job outputs that contain the Docker
           # Hub organization, which is stored as a secret.
@@ -261,7 +249,9 @@ jobs:
         uses: ./.github/actions/secret-scan
         with:
           targets_file: ${{ runner.temp }}/secret-scan-targets/targets.json
-          scan_id: ${{ env.CACHE_CHANNEL }}${{ inputs.image_tag_suffix }}
+          scan_id: cuda-${{ inputs.framework }}${{ inputs.image_tag_suffix }}
+          # lmsysorg/sglang base-image exceptions apply to this image only.
+          overlay_policy_path: ${{ inputs.framework == 'sgld' && '.github/secret-scan/trivy-secret-sgld-cuda.yaml' || '' }}
           policy_ref: ${{ github.ref_name }}
       
       - name: Cleanup

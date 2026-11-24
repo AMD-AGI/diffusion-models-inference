@@ -3,10 +3,9 @@
 - `Dockerfile.cuda` docker file for CUDA images
 - `Dockerfile.rdna4` docker file for RDNA4 AMD images
 - `Dockerfile.sgld` SGL-D image based on `amdsiloai/pytorch-xdit`, with separate SGL kernel
-  libraries for gfx942 and gfx950. [patches/sglang-rocm-arch-loader.patch](patches/sglang-rocm-arch-loader.patch)
+  libraries for gfx942 and gfx950. [patches/sglang-rocm-arch-loader.patch](../patches/sglang-rocm-arch-loader.patch)
   preserves explicit build targets and makes SGLang select the matching library at runtime.
 - `Dockerfile.sgld.cuda` SGL-D image for CUDA based on `lmsysorg/sglang`
-- `Dockerfile.sgld_lmsys` SGL-D image based on `lmsysorg/sglang-rocm` with CI scripts from xDiT
 - `Dockerfile.vllm_omni` vLLM-Omni image for ROCm based on `amdsiloai/pytorch-xdit`
 - `Dockerfile.vllm_omni.cuda` vLLM-Omni image for CUDA based on `vllm/vllm-openai`
 
@@ -31,9 +30,11 @@ All SGL-D and vLLM-Omni image repositories are private.
 
 The tag defaults to the short commit SHA; override it with the `tag` input.
 
-Both workflows call a framework-aware reusable build. The reusable selects the
-Dockerfile, repository defaults, and cache channel from `framework`; callers
-can override the image repository where needed. Manual dispatch builds only
+Both workflows call a framework-aware reusable build. The
+[resolve-framework](../.github/actions/resolve-framework/action.yml) action
+maps `framework` to the Dockerfile, repository defaults, and cache channel for
+every build workflow; add a new framework there. ROCm callers can override the
+image repository where needed. Manual dispatch builds only
 the selected framework (xDiT is the default), while pushes continue to build
 xDiT only. xDiT alone builds the untuned image and runs MIOpen tuning. The ROCm
 images use separate cache channels scoped to the branch (override with

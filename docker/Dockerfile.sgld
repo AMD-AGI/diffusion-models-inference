@@ -24,7 +24,7 @@ RUN git clone https://github.com/vllm-project/vllm.git && \
 
 # Install SGL
 # Build each architecture separately; the patched loader selects its matching library.
-COPY docker/patches/sglang-rocm-arch-loader.patch /tmp/sglang-rocm-arch-loader.patch
+COPY patches/sglang-rocm-arch-loader.patch /tmp/sglang-rocm-arch-loader.patch
 RUN git clone ${SGL_REPO} sglang && \
     cd sglang && \
     git checkout ${SGL_COMMIT} && \
