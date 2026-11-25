@@ -17,18 +17,15 @@ tools:
   bash: ["cat"]
   edit:
 safe-outputs:
-  # TEMP: staged previews issues/comments in the run summary instead of writing them. Remove before merging.
   create-issue:
     title-prefix: "[nightly] "
     labels: [nightly-failure]
     max: 3
     deduplicate-by-title: true
-    staged: true
   add-comment:
     target: "*"
     required-labels: [nightly-failure]
     max: 3
-    staged: true
   report-incomplete: false
   report-failure-as-issue: false
   report-failed-jobs: false
