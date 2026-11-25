@@ -64,13 +64,6 @@ on:
         required: false
         type: string
         default: ''
-    outputs:
-      core_image_with_tag:
-        description: 'Full framework image with tag (the core image for xDiT)'
-        value: ${{ jobs.build.outputs.core_image_with_tag }}
-      staging_image_with_tag:
-        description: 'Full xDiT staging image with tag (untuned, with -temp suffix); empty for other frameworks'
-        value: ${{ jobs.build.outputs.staging_image_with_tag }}
     secrets:
       DOCKERHUB_ORGANIZATION:
         description: 'Docker Hub username/organization'
@@ -88,9 +81,6 @@ jobs:
     # repository; the Trivy scan step promotes it only after it passes.
     env:
       CANDIDATE_TAG: cand-${{ github.run_id }}-${{ github.run_attempt }}
-    outputs:
-      core_image_with_tag: ${{ steps.set_outputs.outputs.core_image_with_tag }}
-      staging_image_with_tag: ${{ steps.set_outputs.outputs.staging_image_with_tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
