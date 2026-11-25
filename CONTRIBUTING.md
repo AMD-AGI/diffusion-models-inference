@@ -172,13 +172,25 @@ and benchmark runs on supported hardware. The release path from staging to the p
 
 The [daily report](.github/workflows/daily-benchmark-report.md) is manual-only
 while being tested. It reports today's completed Build and Benchmark and
-Nightly ROCm runs, from midnight Europe/Helsinki to the start of data collection,
-in its Actions summary. Cancelled and
-in-progress runs are excluded. Completion is determined from the last completed
-job. Successful runs are compared by GPU and experiment against the latest
-successful run on the newest `release/vXX.XX` branch; missing or ambiguous
-measurements are reported explicitly. Failure triage is AI-generated, and
-Nightly ROCm failures are listed separately.
+nightly runs, from midnight Europe/Helsinki to the start of data collection, in
+its Actions summary. Completion is determined from the last completed job. The
+report starts with run counts (succeeded, failed, cancelled) per category;
+cancelled runs are counted but not analysed, and in-progress runs are excluded.
+
+- **Release branches** (`release/vXX.XX`): every benchmark is listed and
+  compared against the previous release branch and the previous successful run
+  on the same branch. Missing results show `N/A` and failed ones `FAILED`.
+- **Nightlies** (Nightly ROCm): benchmarked models are compared against the
+  newest release, and the tested dependency version is shown. AI triage
+  classifies failures; non-transient ones get an issue labelled
+  `nightly-failure`, or a comment on a matching open issue. Additional
+  nightlies are added to `NIGHTLIES` in
+  [the collector](.github/scripts/daily-benchmark-report.py).
+- **Development branches**: same as nightlies, but no issues are created.
+
+Comparisons only use runs of the same framework and skip baselines without
+benchmark results. Latency changes of 5% or more are highlighted as
+improvements or regressions.
 
 The workflow requires organization-billed Copilot CLI access and GitHub Actions
 permissions to read run logs. Start it with `workflow_dispatch`. After changing
