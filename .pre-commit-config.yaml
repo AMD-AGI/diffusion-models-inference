@@ -21,6 +21,8 @@ repos:
     hooks:
       - id: actionlint
         args: ['-shellcheck=']
+        # gh-aw generated lock files use Actions syntax newer than actionlint; gh aw compile validates them.
+        exclude: '\.lock\.yml$'
 
   - repo: local
     hooks:

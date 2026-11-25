@@ -168,6 +168,25 @@ The CI pipeline (`.github/workflows/build-and-benchmark.yml`) automates image bu
 and benchmark runs on supported hardware. The release path from staging to the public
 `rocm/pytorch-xdit` image is managed internally.
 
+### Daily benchmark report
+
+The [daily report](.github/workflows/daily-benchmark-report.md) is manual-only
+while being tested. It reports today's completed Build and Benchmark and
+Nightly ROCm runs, from midnight Europe/Helsinki to the start of data collection,
+in its Actions summary. Cancelled and
+in-progress runs are excluded. Completion is determined from the last completed
+job. Successful runs are compared by GPU and experiment against the latest
+successful run on the newest `release/vXX.XX` branch; missing or ambiguous
+measurements are reported explicitly. Failure triage is AI-generated, and
+Nightly ROCm failures are listed separately.
+
+The workflow requires organization-billed Copilot CLI access and GitHub Actions
+permissions to read run logs. Start it with `workflow_dispatch`. After changing
+the workflow's frontmatter, regenerate its lock file with
+`gh aw compile daily-benchmark-report`; commit both files. Run the report's
+focused tests with `python3 -m unittest discover -s .github/scripts/tests -p
+'test_daily_benchmark_report.py'`.
+
 ## Common contribution patterns
 
 ### Adding a new model or workload
