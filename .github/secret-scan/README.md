@@ -24,9 +24,12 @@ vulnerabilities and misconfigurations are reported only.
    tags (staging/core images, live cache refs). Downstream jobs depend on the
    build job, so nothing consumes an unscanned artifact.
 
-Every build stage (core, NV, final tuned) applies the same rules, and each
-scans its own outputs in full, including layers shared with images an earlier
-stage already scanned.
+Every build stage (ROCm framework, CUDA, final tuned) applies the same rules,
+and each scans its own outputs in full, including layers shared with images an
+earlier stage already scanned. The one exception is the SGL-D CUDA image: its
+build appends [`trivy-secret-sgld-cuda.yaml`](trivy-secret-sgld-cuda.yaml),
+which covers files in the third-party `lmsysorg/sglang` base image, so those
+rules cannot hide findings in any other image.
 
 Trivy and crane are baked into the runner image at pinned versions (see the
 infrastructure repository); the job fails if the runner provides a different
@@ -125,5 +128,21 @@ allow-rules:
 - Paths are relative to the layer root, `.git` directories appear as
   `.git-dir`, and image configs and cache metadata appear as `blob.json`.
 - Trivy's built-in allow rules are disabled on purpose. Do not re-enable them.
+- If a rule only applies to one image's third-party base, put it in an
+  overlay file such as `trivy-secret-sgld-cuda.yaml` and pass it as
+  `overlay_policy_path` from that build only. An overlay holds only an
+  `allow-rules:` list of `  - id:` items with ids not used in
+  `trivy-secret.yaml`; the scan fails on anything else.
+- A `path` rule that does not pin the package version keeps applying after an
+  upgrade. Say so in its description, and re-review it when the package or
+  base image is bumped.
+
+The SGL-D dependency exceptions cover reviewed Anthropic agent API docstrings,
+PyCryptodome self-test keys (including their bytecode), the PyJWT quick-start
+token and scikit-image's public grass-image download token. Their package
+versions and rationale are recorded in the policy. The SGL-D CUDA exceptions
+for the `lmsysorg/sglang` base image are in `trivy-secret-sgld-cuda.yaml`. In particular, do not
+globally allow `"type": "service_account"`: that is the entire Trivy GCP
+service-account detection pattern, even when no credential accompanies it.
 
 Changes to this directory require approval from the CI code owners.

@@ -37,6 +37,7 @@ gh workflow run "build-and-benchmark.yml" \
 Supported optional fields:
 
 ```text
+--field framework="FRAMEWORK"
 --field git_branch="GIT_BRANCH"
 --field base_image="BASE_IMAGE"
 --field image_tag="IMAGE_TAG"

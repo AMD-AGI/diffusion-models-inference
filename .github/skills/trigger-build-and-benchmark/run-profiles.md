@@ -4,6 +4,11 @@ Every profile is expressed as `base_image` + the five step checkboxes
 (`rebuild`, `run_miopen_tuning`, `run_benchmarks`, `build_final`,
 `create_miopen_db_branch`). There is no run-mode input; combine checkboxes directly.
 
+These profiles describe the default `framework=xdit`. With `framework=sgld`
+or `vllmo`, builds produce one framework image rather than core/untuned images,
+`base_image` is not consumed by rebuilds, and final-image publishing is skipped.
+Optional tuning and benchmarking remain available.
+
 ## Full standard build (default)
 
 - `base_image`: empty (forces rebuild)
