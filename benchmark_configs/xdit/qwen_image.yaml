@@ -17,6 +17,7 @@
     use_torch_compile: true
     attention_backend: aiter
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
 
 - name: qwen_image.default.hopper
   tags: [lucid, hopper, h100, h200]

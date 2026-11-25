@@ -18,6 +18,7 @@
     num_iterations: 25
     attention_backend: aiter
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
 
 - name: flux2_klein.default.hopper
   tags: [hopper, h100, h200]

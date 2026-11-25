@@ -15,10 +15,12 @@
     num_inference_steps: 50
     guidance_scale: 4.0
     num_iterations: 25
-    ulysses_degree: 8
+    ulysses_degree: 4
+    use_cfg_parallel: true
     use_torch_compile: true
     attention_backend: aiter
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
 
 - name: qwen_image_edit.default.hopper
   tags: [lucid, hopper, h100, h200]
