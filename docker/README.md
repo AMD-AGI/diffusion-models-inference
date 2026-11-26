@@ -138,12 +138,13 @@ The index mirrors the pure-Python dependencies of torch, so no PyPI package
 can replace a ROCm build. Then it runs `rocm-sdk init` in the same layer,
 links `/opt/rocm` to the initialized `rocm-sdk-devel` tree, and writes
 the pinned versions to the pip constraints file
-`/opt/rocm-wheel-constraints.txt`. It also writes the build identity
-(TheRock manifest, the source commits of torch, torchvision, torchaudio, and
-Triton, and the HIP and Triton versions) to
-`/opt/rocm-wheel-build-info.txt`. The image environment variables
-`ROCM_WHEEL_CONSTRAINTS` and `ROCM_WHEEL_BUILD_INFO` give these two paths, and
-the record-image-versions action copies both files into the versions artifact.
+`/opt/rocm-wheel-constraints.txt`. It also writes the build identity to
+`/opt/rocm-wheel-build-info.txt` and a copy of the TheRock manifest to
+`/opt/rocm-wheel-therock-manifest.json` (see
+[ROCm and PyTorch provenance](#rocm-and-pytorch-provenance)). The image
+environment variables `ROCM_WHEEL_CONSTRAINTS`, `ROCM_WHEEL_BUILD_INFO`, and
+`ROCM_WHEEL_THEROCK_MANIFEST` give these paths, and the record-image-versions
+action copies the files into the versions artifact.
 
 During the build, a build argument (`ARG PIP_CONSTRAINT` in `core`) applies
 the constraints file to the `pip` runs in `core` and `final`. Thus AITER,
@@ -190,6 +191,74 @@ docker/install_rocm_wheels.sh --print-requirements`.
 The image does not build ROCm or PyTorch
 from source. Changes that are not available in a published wheel build must
 first be published on the index.
+
+### ROCm and PyTorch provenance
+
+`ROCM_WHEEL_VERSION` (for example `10.3.0a20261108`) identifies one TheRock
+nightly build. That build sets the source of all ROCm and PyTorch packages in
+the image. The torch, torchvision, and torchaudio wheel versions are
+`<*_VERSION>+rocm<ROCM_WHEEL_VERSION>`, for example
+`torch 2.14.0+rocm10.3.0a20261108`. TheRock builds these wheels and Triton
+again for each ROCm wheel build, from the ROCm/pytorch release branch and the
+torchvision, torchaudio, and Triton commits that it pins (`related_commits`
+and `.ci/docker/ci_commit_pins/triton.txt`). Thus a new `ROCM_WHEEL_VERSION`
+can contain different commits even when the `*_VERSION` pins do not change.
+
+The build info file (`$ROCM_WHEEL_BUILD_INFO`) gives each source commit as a
+`key<TAB>value` line:
+
+| Component | Build info key | Repository |
+| --- | --- | --- |
+| TheRock | `therock_manifest.the_rock_commit`; `therock_manifest.github_run_id` is the TheRock CI run | [ROCm/TheRock](https://github.com/ROCm/TheRock) |
+| ROCm components (rocm-systems, rocm-libraries, llvm-project, and the other TheRock submodules) | `therock_manifest.submodule.<path>`; the value is `<commit> <repository>` | The repository in the value |
+| torch | `torch.version.git_version` | [ROCm/pytorch](https://github.com/ROCm/pytorch) |
+| torchvision | `torchvision.version.git_version` | [ROCm/vision](https://github.com/ROCm/vision) |
+| torchaudio | `torchaudio.version.git_version` | [ROCm/audio](https://github.com/ROCm/audio) |
+| Triton | `triton.git_version` (short commit) | [triton-lang/triton](https://github.com/triton-lang/triton) |
+
+The TheRock manifest (`$ROCM_WHEEL_THEROCK_MANIFEST`) is the full record of
+the TheRock build. It also lists the TheRock patches of each submodule and
+the build flags.
+
+**From an image:**
+
+```sh
+docker run --rm IMAGE sh -c 'cat "$ROCM_WHEEL_BUILD_INFO"'
+docker run --rm IMAGE sh -c 'cat "$ROCM_WHEEL_THEROCK_MANIFEST"'
+```
+
+CI runs that build or benchmark an image upload the same data in the
+`<run_number>-versions-<arch>` artifact: the build info in `rocm.txt`
+(section "ROCm wheel build info") and the manifest in
+`therock-manifest.json`.
+
+**From the wheel index, without an image:** the index keeps a build for about
+three months. The `rocm-sdk-core` wheel contains the TheRock manifest, and the
+torch, torchvision, and torchaudio wheels contain their source commits. The
+torch wheel metadata gives the exact Triton build. The download is about
+700 MB.
+
+```sh
+version=10.3.0a20261108                    # ROCM_WHEEL_VERSION
+torch=2.14.0 vision=0.29.0 audio=2.11.0.3  # *_VERSION pins of the same Dockerfile.ci
+wheels="$(mktemp -d)"
+pip download --no-deps --only-binary=:all: \
+    --python-version 3.12 --platform linux_x86_64 \
+    --index-url https://nightly.repo.amd.com/rocm/whl-next -d "$wheels" \
+    "rocm-sdk-core==${version}" "torch==${torch}+rocm${version}" \
+    "torchvision==${vision}+rocm${version}" "torchaudio==${audio}+rocm${version}"
+unzip -p "$wheels"/rocm_sdk_core-*.whl \
+    _rocm_sdk_core/share/therock/therock_manifest.json
+echo
+for package in torch torchvision torchaudio; do
+    unzip -p "$wheels/${package}"-*.whl "${package}/version.py" | grep '^git_version'
+done
+unzip -p "$wheels"/torch-*.whl 'torch-*.dist-info/METADATA' |
+    grep '^Requires-Dist: triton'
+```
+
+`--python-version` must agree with `ROCM_WHEEL_PYTHON_TAG` (`cp312` is
+3.12).
 
 ### amd-smi Python bindings
 

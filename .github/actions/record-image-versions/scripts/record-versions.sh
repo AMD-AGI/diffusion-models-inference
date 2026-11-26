@@ -6,8 +6,10 @@ set -euo pipefail
 
 # Copy ROCm identity out of IMAGE into OUTPUT_DIR using a created container.
 # Images with ROCm wheels (docker/install_rocm_wheels.sh) also get the wheel
-# pins and the build identity. The image config gives their paths in
-# ROCM_WHEEL_CONSTRAINTS and ROCM_WHEEL_BUILD_INFO.
+# pins, the build identity, and the TheRock manifest. The image config gives
+# their paths in ROCM_WHEEL_CONSTRAINTS, ROCM_WHEEL_BUILD_INFO, and
+# ROCM_WHEEL_THEROCK_MANIFEST. The manifest goes to
+# OUTPUT_DIR/therock-manifest.json.
 # Expects env vars: IMAGE, OUTPUT_DIR, CONTAINER_NAME
 
 IMAGE="${IMAGE:?IMAGE is required}"
@@ -78,6 +80,10 @@ build_info_path="$(image_env_value ROCM_WHEEL_BUILD_INFO)"
 if [[ -n "${build_info_path}" ]]; then
   docker cp "${CONTAINER_NAME}:${build_info_path}" "$extract_dir/rocm-wheel-build-info.txt"
   wheel_build_info="$(cat "$extract_dir/rocm-wheel-build-info.txt")"
+fi
+manifest_path="$(image_env_value ROCM_WHEEL_THEROCK_MANIFEST)"
+if [[ -n "${manifest_path}" ]]; then
+  docker cp "${CONTAINER_NAME}:${manifest_path}" "$OUTPUT_DIR/therock-manifest.json"
 fi
 
 # TheRock debian versions encode the channel (stable X.Y.Z,

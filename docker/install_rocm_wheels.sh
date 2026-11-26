@@ -34,8 +34,10 @@
 #
 # After the install, ROCM_WHEEL_BUILD_INFO receives the build identity
 # (TheRock manifest, the source commits of torch, torchvision, torchaudio, and
-# Triton, and the HIP and Triton versions) as "key<TAB>value" lines. The
-# record-image-versions action copies it.
+# Triton, and the HIP and Triton versions) as "key<TAB>value" lines.
+# ROCM_WHEEL_THEROCK_MANIFEST receives a copy of the full TheRock manifest.
+# The record-image-versions action copies both files. docker/README.md
+# ("ROCm and PyTorch provenance") tells how to read them.
 
 set -euo pipefail
 
@@ -132,6 +134,7 @@ readonly index="${ROCM_WHEEL_INDEX:?ROCM_WHEEL_INDEX must be set}"
 readonly python_tag="${ROCM_WHEEL_PYTHON_TAG:?ROCM_WHEEL_PYTHON_TAG must be set}"
 readonly constraints="${ROCM_WHEEL_CONSTRAINTS:?ROCM_WHEEL_CONSTRAINTS must be set}"
 readonly build_info="${ROCM_WHEEL_BUILD_INFO:?ROCM_WHEEL_BUILD_INFO must be set}"
+readonly therock_manifest="${ROCM_WHEEL_THEROCK_MANIFEST:?ROCM_WHEEL_THEROCK_MANIFEST must be set}"
 readonly rocm_link="/opt/rocm"
 
 # The nightly resolver checks the wheels for ROCM_WHEEL_PYTHON_TAG. The venv
@@ -199,6 +202,7 @@ import importlib.metadata as metadata
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 
 import torch
@@ -224,9 +228,9 @@ for target in targets:
         metadata.version(name)
 
 core = metadata.distribution("rocm-sdk-core")
-manifest = json.loads(
-    Path(core.locate_file("_rocm_sdk_core/share/therock/therock_manifest.json")).read_text()
-)
+manifest_path = Path(core.locate_file("_rocm_sdk_core/share/therock/therock_manifest.json"))
+manifest = json.loads(manifest_path.read_text())
+shutil.copyfile(manifest_path, os.environ["ROCM_WHEEL_THEROCK_MANIFEST"])
 # The Triton wheel has no git_version; its local version holds the short
 # commit, for example 3.9.0+git0a6e13e6.rocm10.3.0a20261108.
 triton_version = metadata.version("triton")
@@ -245,6 +249,14 @@ info = {
     "triton": triton_version,
     "triton.git_version": triton_commit.group(1) if triton_commit else "",
 }
+# The ROCm components (rocm-systems, rocm-libraries, llvm-project, and others)
+# are submodules of TheRock. Value: "<commit> <repository>", and the number
+# of TheRock patches if there are patches.
+for submodule in manifest.get("submodules", []):
+    value = f"{submodule['pin_sha']} {submodule['submodule_url'].removesuffix('.git')}"
+    if submodule.get("patches"):
+        value += f" (TheRock patches: {len(submodule['patches'])})"
+    info[f"therock_manifest.submodule.{submodule['submodule_path']}"] = value
 if info["therock_manifest.rocm_package_version"] != rocm_version:
     raise SystemExit(f"TheRock manifest version {info['therock_manifest.rocm_package_version']} != {rocm_version}")
 Path(os.environ["ROCM_WHEEL_BUILD_INFO"]).write_text(
@@ -257,3 +269,5 @@ print(f"torchvision {torchvision.__version__}, torchaudio {torchaudio.__version_
 PY
 echo "ROCm wheel build info (${build_info}):"
 cat "${build_info}"
+test -s "${therock_manifest}"
+echo "TheRock manifest: ${therock_manifest}"
