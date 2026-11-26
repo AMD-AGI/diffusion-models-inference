@@ -72,7 +72,10 @@ ARG ROCM_GFX_TARGETS
 ARG TORCH_VERSION
 ARG TORCHVISION_VERSION
 ARG TORCHAUDIO_VERSION
-ENV ROCM_WHEEL_CONSTRAINTS=/opt/rocm-wheel-constraints.txt
+# The record-image-versions action reads these two paths from the image
+# config and copies the files.
+ENV ROCM_WHEEL_CONSTRAINTS=/opt/rocm-wheel-constraints.txt \
+    ROCM_WHEEL_BUILD_INFO=/opt/rocm-wheel-build-info.txt
 COPY docker/install_rocm_wheels.sh /usr/local/bin/install_rocm_wheels
 COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
 RUN chmod +x /usr/local/bin/install_rocm_wheels \

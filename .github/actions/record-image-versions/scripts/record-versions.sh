@@ -5,8 +5,9 @@
 set -euo pipefail
 
 # Copy ROCm identity out of IMAGE into OUTPUT_DIR using a created container.
-# Images with ROCm wheels (TheRock rocm-sdk-*) also get the wheel versions and
-# the TheRock build manifest, read through a short python3 run in the image.
+# Images with ROCm wheels (docker/install_rocm_wheels.sh) also get the wheel
+# pins and the build identity. The image config gives their paths in
+# ROCM_WHEEL_CONSTRAINTS and ROCM_WHEEL_BUILD_INFO.
 # Expects env vars: IMAGE, OUTPUT_DIR, CONTAINER_NAME
 
 IMAGE="${IMAGE:?IMAGE is required}"
@@ -60,34 +61,24 @@ version_files=(
   "/opt/rocm/share/hip/version:$extract_dir/hip-version"
 )
 
-# Wheel images: installed ROCm/torch wheels and the TheRock build identity.
-# The python3 run does not need a GPU. Deb images print nothing here.
-wheels="$(docker run --rm -i --entrypoint python3 "$IMAGE" - <<'PY' || true
-import importlib.metadata as metadata
-import json
-import re
-
-names = re.compile(r"^(torch|torchvision|torchaudio|triton|rocm|rocm[-_].+|amd[-_]torch.*)$", re.I)
-for dist in sorted(metadata.distributions(), key=lambda d: d.metadata["Name"].lower()):
-    if names.match(dist.metadata["Name"]):
-        print(f"{dist.metadata['Name']}\t{dist.version}")
-try:
-    core = metadata.distribution("rocm-sdk-core")
-except metadata.PackageNotFoundError:
-    raise SystemExit(0)
-manifest = core.locate_file("_rocm_sdk_core/share/therock/therock_manifest.json")
-data = json.loads(manifest.read_text())
-for key in ("rocm_package_version", "the_rock_commit", "github_run_id"):
-    print(f"therock_manifest.{key}\t{data.get(key, '')}")
-try:
-    torch = metadata.distribution("torch")
-    for line in torch.locate_file("torch/version.py").read_text().splitlines():
-        if line.startswith(("git_version", "hip")):
-            print(f"torch.version.{line.split()[0].rstrip(':')}\t{line.split('=', 1)[1].strip()}")
-except metadata.PackageNotFoundError:
-    pass
-PY
-)"
+# Wheel images: the paths come from the image config. Deb images do not set
+# them. A set path that cannot be copied is an error.
+image_env="$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGE")"
+image_env_value() {
+  sed -n "s/^$1=//p" <<< "${image_env}" | tail -n 1
+}
+wheels=""
+wheel_build_info=""
+constraints_path="$(image_env_value ROCM_WHEEL_CONSTRAINTS)"
+if [[ -n "${constraints_path}" ]]; then
+  docker cp "${CONTAINER_NAME}:${constraints_path}" "$extract_dir/rocm-wheel-constraints.txt"
+  wheels="$(sort -f "$extract_dir/rocm-wheel-constraints.txt")"
+fi
+build_info_path="$(image_env_value ROCM_WHEEL_BUILD_INFO)"
+if [[ -n "${build_info_path}" ]]; then
+  docker cp "${CONTAINER_NAME}:${build_info_path}" "$extract_dir/rocm-wheel-build-info.txt"
+  wheel_build_info="$(cat "$extract_dir/rocm-wheel-build-info.txt")"
+fi
 
 # TheRock debian versions encode the channel (stable X.Y.Z,
 # nightly X.Y.Z~YYYYMMDD, prerelease X.Y.Z~preN, dev X.Y.Z~devYYYYMMDD).
@@ -138,6 +129,9 @@ fi
   echo
   echo "=== installed ROCm wheels ==="
   echo "${wheels:-(none found)}"
+  echo
+  echo "=== ROCm wheel build info ==="
+  echo "${wheel_build_info:-(none found)}"
   echo
   echo "=== ROCm version files ==="
   found=

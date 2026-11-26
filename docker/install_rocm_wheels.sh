@@ -19,22 +19,37 @@
 # in a lower layer makes overlayfs copy the file. It runs here at build time,
 # because the compiler trampolines otherwise start it on first use, for example
 # in an AITER JIT build in a running container.
+#
+# This script is the single source of the ROCm wheel requirement list. With
+# --print-requirements, it writes that list to stdout and installs nothing.
+# The nightly resolver (.github/actions/resolve-rocm-nightly) uses this mode to
+# find the ROCm wheel builds that have all the pinned packages. Only
+# ROCM_WHEEL_VERSION, ROCM_GFX_TARGETS, and the TORCH*_VERSION variables are
+# necessary for this mode.
+#
+# After the install, ROCM_WHEEL_BUILD_INFO receives the build identity
+# (TheRock manifest, torch source commit, HIP and Triton versions) as
+# "key<TAB>value" lines. The record-image-versions action copies it.
 
 set -euo pipefail
 
-if [[ $# -ne 0 ]]; then
-    echo "usage: install_rocm_wheels" >&2
+usage() {
+    echo "usage: install_rocm_wheels [--print-requirements]" >&2
     exit 2
-fi
+}
 
-readonly index="${ROCM_WHEEL_INDEX:?ROCM_WHEEL_INDEX must be set}"
+print_only=false
+case "$#:${1:-}" in
+    0:) ;;
+    1:--print-requirements) print_only=true ;;
+    *) usage ;;
+esac
+
 readonly rocm_version="${ROCM_WHEEL_VERSION:?ROCM_WHEEL_VERSION must be set}"
 readonly gfx_targets="${ROCM_GFX_TARGETS:?ROCM_GFX_TARGETS must be set}"
 readonly torch_version="${TORCH_VERSION:?TORCH_VERSION must be set}"
 readonly torchvision_version="${TORCHVISION_VERSION:?TORCHVISION_VERSION must be set}"
 readonly torchaudio_version="${TORCHAUDIO_VERSION:?TORCHAUDIO_VERSION must be set}"
-readonly constraints="${ROCM_WHEEL_CONSTRAINTS:?ROCM_WHEEL_CONSTRAINTS must be set}"
-readonly rocm_link="/opt/rocm"
 readonly local_version="+rocm${rocm_version}"
 
 IFS=';' read -r -a targets <<< "${gfx_targets}"
@@ -51,12 +66,41 @@ extras="$(printf 'device-%s,' "${usable[@]}")"
 extras="${extras%,}"
 readonly extras
 
-pip install --no-cache-dir --index-url "${index}" \
-    "torch[${extras}]==${torch_version}${local_version}" \
-    "torchvision[${extras}]==${torchvision_version}${local_version}" \
-    "torchaudio==${torchaudio_version}${local_version}" \
-    "rocm-sdk-devel==${rocm_version}" \
+# All wheels from one TheRock build. The device wheels and the SDK parts also
+# come through the torch dependencies; the explicit pins make the list
+# complete for the resolver and make pip fail if torch pins other versions.
+# torch also pins triton, but its version (for example
+# 3.9.0+git0a6e13e6.rocm10.3.0a20261108) is not known before the install. The
+# resolver checks for a triton build with the same "rocm" suffix.
+requirements=(
+    "torch[${extras}]==${torch_version}${local_version}"
+    "torchvision[${extras}]==${torchvision_version}${local_version}"
+    "torchaudio==${torchaudio_version}${local_version}"
+    "rocm-sdk-core==${rocm_version}"
+    "rocm-sdk-libraries==${rocm_version}"
+    "rocm-sdk-devel==${rocm_version}"
     "rocm-profiler==${rocm_version}"
+)
+for target in "${usable[@]}"; do
+    requirements+=(
+        "amd-torch-device-${target}==${torch_version}${local_version}"
+        "amd-torchvision-device-${target}==${torchvision_version}${local_version}"
+        "rocm-sdk-device-${target}==${rocm_version}"
+    )
+done
+readonly requirements
+
+if [[ "${print_only}" == true ]]; then
+    printf '%s\n' "${requirements[@]}"
+    exit 0
+fi
+
+readonly index="${ROCM_WHEEL_INDEX:?ROCM_WHEEL_INDEX must be set}"
+readonly constraints="${ROCM_WHEEL_CONSTRAINTS:?ROCM_WHEEL_CONSTRAINTS must be set}"
+readonly build_info="${ROCM_WHEEL_BUILD_INFO:?ROCM_WHEEL_BUILD_INFO must be set}"
+readonly rocm_link="/opt/rocm"
+
+pip install --no-cache-dir --index-url "${index}" "${requirements[@]}"
 
 rocm-sdk init
 sdk_root="$(rocm-sdk path --root)"
@@ -96,9 +140,12 @@ test -e "${rocm_link}/lib/libroctracer64.so"
 test -d "${rocm_link}/share/amd_smi/amdsmi"
 test -x "${rocm_link}/bin/MIOpenDriver"
 
-ROCM_WHEEL_TARGETS="${usable[*]}" python3 - <<PY
+ROCM_WHEEL_TARGETS="${usable[*]}" ROCM_WHEEL_INDEX_URL="${index}" \
+    ROCM_WHEEL_BUILD_INFO_PATH="${build_info}" python3 - <<PY
 import importlib.metadata as metadata
+import json
 import os
+from pathlib import Path
 
 import torch
 import torchaudio
@@ -119,7 +166,31 @@ if not torch.version.hip:
 for target in os.environ["ROCM_WHEEL_TARGETS"].split():
     for name in (f"amd-torch-device-{target}", f"rocm-sdk-device-{target}"):
         metadata.version(name)
+
+core = metadata.distribution("rocm-sdk-core")
+manifest = json.loads(
+    Path(core.locate_file("_rocm_sdk_core/share/therock/therock_manifest.json")).read_text()
+)
+info = {
+    "rocm_wheel_index": os.environ["ROCM_WHEEL_INDEX_URL"],
+    "rocm_wheel_version": "${rocm_version}",
+    "rocm_gfx_targets": " ".join(os.environ["ROCM_WHEEL_TARGETS"].split()),
+    "therock_manifest.rocm_package_version": manifest.get("rocm_package_version", ""),
+    "therock_manifest.the_rock_commit": manifest.get("the_rock_commit", ""),
+    "therock_manifest.github_run_id": manifest.get("github_run_id", ""),
+    "torch.version.git_version": torch.version.git_version,
+    "torch.version.hip": torch.version.hip,
+    "triton": metadata.version("triton"),
+}
+if info["therock_manifest.rocm_package_version"] != "${rocm_version}":
+    raise SystemExit(f"TheRock manifest version {info['therock_manifest.rocm_package_version']} != ${rocm_version}")
+Path(os.environ["ROCM_WHEEL_BUILD_INFO_PATH"]).write_text(
+    "".join(f"{key}\t{value}\n" for key, value in info.items())
+)
+
 print(f"torch {torch.__version__} (git {torch.version.git_version}), "
       f"HIP {torch.version.hip}, triton {triton.__version__}")
 print(f"torchvision {torchvision.__version__}, torchaudio {torchaudio.__version__}")
 PY
+echo "ROCm wheel build info (${build_info}):"
+cat "${build_info}"
