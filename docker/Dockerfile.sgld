@@ -24,6 +24,8 @@ RUN git clone https://github.com/vllm-project/vllm.git && \
 
 # Install SGL
 # Build each architecture separately; the patched loader selects its matching library.
+# The gfx950 install only registers the sgl_kernel package (reusing the last build/
+# output); the per-arch libraries are then copied into gfx942/ and gfx950/ subdirs.
 COPY patches/sglang-rocm-arch-loader.patch /tmp/sglang-rocm-arch-loader.patch
 RUN git clone ${SGL_REPO} sglang && \
     cd sglang && \

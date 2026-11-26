@@ -73,11 +73,6 @@ case "${FRAMEWORK}:${TARGET}" in
     ;;
 esac
 
-image="${IMAGE_OVERRIDE:-$image}"
-if [ "$TARGET" = "rocm" ]; then
-  staging_image="${STAGING_IMAGE_OVERRIDE:-$staging_image}"
-fi
-
 {
   echo "image=${image}"
   echo "staging_image=${staging_image}"

@@ -14,14 +14,6 @@ inputs:
     description: 'Repository variables as JSON (pass toJSON(vars)); composite actions cannot read the vars context'
     required: false
     default: '{}'
-  image_override:
-    description: 'Override the resolved image repository'
-    required: false
-    default: ''
-  staging_image_override:
-    description: 'Override the resolved ROCm staging image repository'
-    required: false
-    default: ''
 outputs:
   image:
     description: 'Image repository: the core image for ROCm, the CUDA image for CUDA'
@@ -51,6 +43,4 @@ runs:
         FRAMEWORK: ${{ inputs.framework }}
         TARGET: ${{ inputs.target }}
         VARS_JSON: ${{ inputs.vars_json }}
-        IMAGE_OVERRIDE: ${{ inputs.image_override }}
-        STAGING_IMAGE_OVERRIDE: ${{ inputs.staging_image_override }}
       run: bash "$GITHUB_ACTION_PATH/scripts/resolve-framework.sh"

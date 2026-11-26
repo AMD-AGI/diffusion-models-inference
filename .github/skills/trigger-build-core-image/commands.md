@@ -20,6 +20,7 @@ gh workflow run "build-core-image.yml" \
 ### Optional fields (add only when user specifies)
 
 ```
+  --field framework="xdit|sgld|vllmo"
   --field tag="TAG"
   --field runner="RUNNER"
   --field prebuilt_core_image_tag="PREBUILT_TAG"
@@ -50,6 +51,7 @@ gh run list --repo "$REPO" --workflow build-core-image.yml \
 
 | Input | Description | Default |
 |---|---|---|
+| `framework` | Framework image to build: `xdit`, `sgld`, or `vllmo`. `prebuilt_core_image_tag` and MIOpen tuning apply only to `xdit`. | `xdit` |
 | `tag` | Image tag; short commit SHA used if empty. Untuned image gets `-temp` suffix. | *(auto)* |
 | `runner` | Runner label | Workflow default |
 | `prebuilt_core_image_tag` | Skip core build, build untuned image from this tag | *(empty)* |

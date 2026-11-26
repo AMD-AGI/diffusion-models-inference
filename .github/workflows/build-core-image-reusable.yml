@@ -19,16 +19,6 @@ on:
         required: false
         type: string
         default: xdit
-      core_image_name:
-        description: 'Override the framework core image repository'
-        required: false
-        type: string
-        default: ''
-      staging_image_name:
-        description: 'Override the framework staging image repository'
-        required: false
-        type: string
-        default: ''
       cache_image_name:
         description: 'Repository holding the registry layer cache tags'
         required: false
@@ -94,8 +84,6 @@ jobs:
           framework: ${{ inputs.framework }}
           target: rocm
           vars_json: ${{ toJSON(vars) }}
-          image_override: ${{ inputs.core_image_name }}
-          staging_image_override: ${{ inputs.staging_image_name }}
       
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
