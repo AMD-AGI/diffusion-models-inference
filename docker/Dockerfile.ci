@@ -11,6 +11,9 @@
 
 # core image arguments
 ARG BASE_IMAGE="ubuntu:24.04"
+# CPython tag of python3 in BASE_IMAGE. The nightly resolver checks the wheels
+# for this tag, and install_rocm_wheels stops if python3 does not agree.
+ARG ROCM_WHEEL_PYTHON_TAG="cp312"
 # ROCm, PyTorch, torchvision, torchaudio, and Triton are TheRock wheels from
 # one index. ROCM_WHEEL_VERSION selects one TheRock build; torch pins rocm and
 # triton to that exact version.

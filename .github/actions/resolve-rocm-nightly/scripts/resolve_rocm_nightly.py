@@ -4,14 +4,16 @@
 """Resolve the TheRock nightly ROCm wheel build for the nightly image.
 
 The newest rocm-sdk-core build on the index is the target. The script gets
-the requirement list for each build from "install_rocm_wheels.sh
---print-requirements" and checks the wheel file names on the index. It selects
-the newest build that has all the pinned wheels. If that is not the newest
-build, it writes a warning with the missing wheels. It also writes notices for
-newer torch, torchvision, and torchaudio releases and for a new ROCm version.
+the requirement list for that build from "install_rocm_wheels.sh
+--print-requirements" and checks the wheel file names on the index. If a
+pinned wheel is missing, the script writes an error and fails. Then update the
+pins in the Dockerfile to follow the newest build. The script also writes
+notices for newer torch, torchvision, and torchaudio releases and for a new
+ROCm version.
 
 The index does not serve wheel metadata (PEP 658), so a pip dry run would
-download all the wheels. File name checks do not download wheels.
+download all the wheels. File name checks do not download wheels. The index
+redirects project pages to different back ends; urllib follows the redirects.
 
 Outputs: GITHUB_OUTPUT keys, a GITHUB_STEP_SUMMARY section, workflow
 annotations, and a provenance JSON file (--provenance).
@@ -27,32 +29,27 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from datetime import date
 from pathlib import Path
 
-# Dockerfile ARGs that the install script needs, and the index.
-DOCKERFILE_ARGS = (
-    "ROCM_WHEEL_INDEX",
-    "ROCM_WHEEL_VERSION",
-    "ROCM_GFX_TARGETS",
-    "TORCH_VERSION",
-    "TORCHVISION_VERSION",
-    "TORCHAUDIO_VERSION",
-)
-# Pinned framework releases. A newer release for the target build is a notice.
-FRAMEWORK_PINS = {
-    "torch": "TORCH_VERSION",
-    "torchvision": "TORCHVISION_VERSION",
-    "torchaudio": "TORCHAUDIO_VERSION",
-}
+# Dockerfile ARGs that the resolver itself reads. The install script reads
+# more ARGs; it gets all ARG defaults and stops if one that it needs is empty.
+REQUIRED_ARGS = ("ROCM_WHEEL_INDEX", "ROCM_WHEEL_VERSION", "ROCM_WHEEL_PYTHON_TAG")
+# Pinned framework releases (ARG <PROJECT>_VERSION). A newer release for the
+# build is a notice.
+FRAMEWORKS = ("torch", "torchvision", "torchaudio")
 ROCM_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)a(\d{8})$")
 REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9._-]+)(?:\[[^\]]*\])?==(\S+)$")
-HREF_RE = re.compile(r"""href=["']([^"'#]+\.whl)(?:#[^"']*)?["']""", re.IGNORECASE)
+HREF_RE = re.compile(r"""href=["']([^"']+)["']""", re.IGNORECASE)
 
 Fetch = Callable[[str], str]
+
+
+def framework_pin(project: str) -> str:
+    return f"{project.upper()}_VERSION"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,20 +59,38 @@ class Wheel:
     filename: str
 
 
-@dataclasses.dataclass
-class Check:
-    """Result of one requirement check for one ROCm build."""
+@dataclasses.dataclass(frozen=True)
+class Requirement:
+    """A pinned wheel: an exact version, or any version with a given suffix."""
 
     name: str
-    version: str
-    filename: str | None
+    version: str | None = None
+    suffix: str | None = None
+
+    def matches(self, version: str) -> bool:
+        if self.version is not None:
+            return version == self.version
+        return version.endswith(self.suffix)
+
+    def __str__(self) -> str:
+        if self.version is not None:
+            return f"{self.name}=={self.version}"
+        return f"{self.name}==*{self.suffix}"
+
+
+@dataclasses.dataclass(frozen=True)
+class WheelCheck:
+    """The wheels on the index that agree with one requirement."""
+
+    requirement: Requirement
+    filenames: tuple[str, ...]
 
     @property
     def found(self) -> bool:
-        return self.filename is not None
+        return bool(self.filenames)
 
-    def as_dict(self) -> dict[str, str | None]:
-        return {"name": self.name, "version": self.version, "wheel": self.filename}
+    def as_dict(self) -> dict:
+        return {"requirement": str(self.requirement), "wheels": list(self.filenames)}
 
 
 def normalize(name: str) -> str:
@@ -89,9 +104,9 @@ def rocm_version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in match.groups())
 
 
-def rocm_build_date(version: str) -> date:
-    stamp = ROCM_VERSION_RE.match(version).group(4)
-    return date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:]))
+def rocm_release(version: str) -> str:
+    """The ROCm release of a nightly wheel version, for example 10.3.0."""
+    return version.split("a", 1)[0]
 
 
 def release_key(version: str) -> tuple[int, ...]:
@@ -103,19 +118,26 @@ def release_key(version: str) -> tuple[int, ...]:
 
 
 def parse_dockerfile_args(text: str) -> dict[str, str]:
+    """Return the default of each ARG. The first ARG with a name sets its default."""
     values = {}
     for line in text.splitlines():
         match = re.match(r'^ARG\s+([A-Z0-9_]+)=(?:"([^"]*)"|(\S+))\s*$', line)
         if match and match.group(1) not in values:
             values[match.group(1)] = match.group(2) if match.group(2) is not None else match.group(3)
-    missing = [name for name in DOCKERFILE_ARGS if not values.get(name)]
+    needed = (*REQUIRED_ARGS, *(framework_pin(project) for project in FRAMEWORKS))
+    missing = [name for name in needed if not values.get(name)]
     if missing:
         raise ValueError(f"Dockerfile has no default for: {', '.join(missing)}")
-    return {name: values[name] for name in DOCKERFILE_ARGS}
+    return values
 
 
-def parse_wheel(filename: str, python_tag: str, platform: str) -> Wheel | None:
-    """Return the wheel if it installs on python_tag and platform."""
+def platform_matches(tag: str, arch: str) -> bool:
+    """True for "any", linux_<arch>, and the manylinux tags of arch."""
+    return tag == "any" or re.fullmatch(rf"(?:many)?linux(?:_\d+_\d+|\d+)?_{re.escape(arch)}", tag) is not None
+
+
+def parse_wheel(filename: str, python_tag: str, arch: str) -> Wheel | None:
+    """Return the wheel if it installs on python_tag and arch."""
     parts = filename[: -len(".whl")].split("-")
     if len(parts) not in (5, 6):
         return None
@@ -125,7 +147,7 @@ def parse_wheel(filename: str, python_tag: str, platform: str) -> Wheel | None:
         return None
     if not abis & {"none", "abi3", python_tag}:
         return None
-    if not platforms & {platform, "any"}:
+    if not any(platform_matches(tag, arch) for tag in platforms):
         return None
     return Wheel(normalize(name), version, filename)
 
@@ -133,11 +155,11 @@ def parse_wheel(filename: str, python_tag: str, platform: str) -> Wheel | None:
 class Index:
     """Wheel lists of the projects on a PEP 503 simple index."""
 
-    def __init__(self, url: str, fetch: Fetch, python_tag: str, platform: str):
+    def __init__(self, url: str, fetch: Fetch, python_tag: str, arch: str):
         self.url = url.rstrip("/")
         self.fetch = fetch
         self.python_tag = python_tag
-        self.platform = platform
+        self.arch = arch
         self._projects: dict[str, list[Wheel]] = {}
 
     def wheels(self, project: str) -> list[Wheel]:
@@ -146,18 +168,18 @@ class Index:
             page = self.fetch(f"{self.url}/{project}/")
             wheels = []
             for href in HREF_RE.findall(page):
-                filename = urllib.parse.unquote(href.rsplit("/", 1)[-1])
-                wheel = parse_wheel(filename, self.python_tag, self.platform)
+                path = urllib.parse.urlsplit(href).path
+                if not path.endswith(".whl"):
+                    continue
+                filename = urllib.parse.unquote(path.rsplit("/", 1)[-1])
+                wheel = parse_wheel(filename, self.python_tag, self.arch)
                 if wheel and wheel.name == project:
                     wheels.append(wheel)
             self._projects[project] = wheels
         return self._projects[project]
 
-    def find(self, project: str, version: str) -> str | None:
-        for wheel in self.wheels(project):
-            if wheel.version == version:
-                return wheel.filename
-        return None
+    def find(self, requirement: Requirement) -> tuple[str, ...]:
+        return tuple(sorted(w.filename for w in self.wheels(requirement.name) if requirement.matches(w.version)))
 
     def rocm_builds(self) -> list[str]:
         """rocm-sdk-core versions, newest first."""
@@ -171,7 +193,7 @@ class Index:
         return sorted(versions, key=release_key, reverse=True)
 
 
-def read_requirements(install_script: Path, pins: dict[str, str], rocm_version: str) -> list[tuple[str, str]]:
+def read_requirements(install_script: Path, pins: dict[str, str], rocm_version: str) -> list[Requirement]:
     env = {key: value for key, value in os.environ.items() if not key.startswith(("ROCM_", "TORCH"))}
     env.update(pins)
     env["ROCM_WHEEL_VERSION"] = rocm_version
@@ -187,160 +209,129 @@ def read_requirements(install_script: Path, pins: dict[str, str], rocm_version: 
         match = REQUIREMENT_RE.match(line.strip())
         if not match:
             raise ValueError(f"{install_script} printed an unexpected requirement: {line!r}")
-        requirements.append((normalize(match.group(1)), match.group(2)))
+        requirements.append(Requirement(normalize(match.group(1)), version=match.group(2)))
     if not requirements:
         raise ValueError(f"{install_script} printed no requirements")
     return requirements
 
 
-def check_build(index: Index, requirements: list[tuple[str, str]], rocm_version: str) -> list[Check]:
-    checks = [Check(name, version, index.find(name, version)) for name, version in requirements]
-    # torch pins triton to an exact version that is known only from the torch
-    # metadata. Look for a triton wheel with the same build suffix.
-    suffix = f"rocm{rocm_version}"
-    tritons = [w.filename for w in index.wheels("triton") if w.version.endswith(suffix)]
-    checks.append(Check("triton", f"*{suffix} (pinned by torch)", sorted(tritons)[-1] if tritons else None))
-    return checks
-
-
 @dataclasses.dataclass
 class Resolution:
-    index: str
+    index: Index
+    dockerfile: Path
     pins: dict[str, str]
-    python_tag: str
-    platform: str
-    newest: str
-    selected: str
-    newest_checks: list[Check]
-    selected_checks: list[Check]
+    build: str
+    checks: list[WheelCheck]
     newer_releases: dict[str, list[str]]
 
     @property
-    def missing_in_newest(self) -> list[Check]:
-        return [check for check in self.newest_checks if not check.found]
-
-    @property
-    def lag_days(self) -> int:
-        return (rocm_build_date(self.newest) - rocm_build_date(self.selected)).days
+    def missing(self) -> list[WheelCheck]:
+        return [check for check in self.checks if not check.found]
 
     def annotations(self) -> list[tuple[str, str]]:
         notes = []
-        if self.selected != self.newest:
-            missing = ", ".join(f"{c.name}=={c.version}" for c in self.missing_in_newest)
-            notes.append((
-                "warning",
-                f"Pinned wheels are not available for the newest ROCm build {self.newest}: {missing}. "
-                f"Selected {self.selected} ({self.lag_days} days older). "
-                "Update the pins in docker/Dockerfile.ci to follow the newest build.",
-            ))
-        pinned_line = self.pins["ROCM_WHEEL_VERSION"].split("a", 1)[0]
-        newest_line = self.newest.split("a", 1)[0]
-        if newest_line != pinned_line:
-            notes.append((
-                "notice",
-                f"The newest ROCm build is ROCm {newest_line}; docker/Dockerfile.ci pins "
-                f"ROCM_WHEEL_VERSION={self.pins['ROCM_WHEEL_VERSION']} (ROCm {pinned_line}).",
-            ))
+        if self.missing:
+            missing = ", ".join(str(check.requirement) for check in self.missing)
+            notes.append(
+                (
+                    "error",
+                    f"The newest ROCm build {self.build} does not have these pinned wheels: {missing}. "
+                    f"Update the pins in {self.dockerfile} to follow the newest build.",
+                )
+            )
+        pinned = self.pins["ROCM_WHEEL_VERSION"]
+        if rocm_release(self.build) != rocm_release(pinned):
+            notes.append(
+                (
+                    "notice",
+                    f"The newest ROCm build is ROCm {rocm_release(self.build)}; {self.dockerfile} pins "
+                    f"ROCM_WHEEL_VERSION={pinned} (ROCm {rocm_release(pinned)}).",
+                )
+            )
         for project, versions in self.newer_releases.items():
-            notes.append((
-                "notice",
-                f"Newer {project} releases exist for ROCm build {self.newest}: {', '.join(versions)} "
-                f"(pinned {FRAMEWORK_PINS[project]}={self.pins[FRAMEWORK_PINS[project]]}).",
-            ))
+            pin = framework_pin(project)
+            notes.append(
+                (
+                    "notice",
+                    f"Newer {project} releases exist for ROCm build {self.build}: {', '.join(versions)} "
+                    f"(pinned {pin}={self.pins[pin]}).",
+                )
+            )
         return notes
 
     def provenance(self) -> dict:
         return {
-            "rocm_wheel_index": self.index,
-            "python_tag": self.python_tag,
-            "platform": self.platform,
-            "dockerfile_pins": self.pins,
-            "newest_rocm_wheel_version": self.newest,
-            "rocm_wheel_version": self.selected,
-            "pins_available_in_newest": not self.missing_in_newest,
-            "selected_wheels": [check.as_dict() for check in self.selected_checks],
-            "missing_in_newest": [check.as_dict() for check in self.missing_in_newest],
+            "rocm_wheel_index": self.index.url,
+            "python_tag": self.index.python_tag,
+            "arch": self.index.arch,
+            "dockerfile_pins": {key: value for key, value in self.pins.items() if key.startswith(("ROCM_", "TORCH"))},
+            "rocm_wheel_version": self.build,
+            "pins_available": not self.missing,
+            "wheels": [check.as_dict() for check in self.checks],
             "newer_releases": self.newer_releases,
             "annotations": [{"level": level, "message": message} for level, message in self.annotations()],
         }
 
     def summary(self) -> str:
-        newest = {(c.name, c.version.replace(self.newest, self.selected)): c for c in self.newest_checks}
         lines = [
             "### ROCm nightly wheel resolution",
             "",
-            f"Index: {self.index} ({self.python_tag}, {self.platform})",
+            f"Index: {self.index.url} ({self.index.python_tag}, {self.index.arch})",
             "",
-            "| Build | ROCm wheel version |",
+            f"Newest ROCm build: `{self.build}` (pinned in {self.dockerfile}: `{self.pins['ROCM_WHEEL_VERSION']}`)",
+            "",
+            "| Requirement | Wheels |",
             "| --- | --- |",
-            f"| Newest on index | `{self.newest}` |",
-            f"| **Selected** | `{self.selected}` |",
-            f"| Pinned in docker/Dockerfile.ci | `{self.pins['ROCM_WHEEL_VERSION']}` |",
-            "",
-            "| Package | Selected wheel | In newest build |",
-            "| --- | --- | --- |",
         ]
-        for check in self.selected_checks:
-            in_newest = newest.get((check.name, check.version))
-            mark = "yes" if in_newest is None or in_newest.found else "**missing**"
-            lines.append(f"| {check.name} | `{check.filename}` | {mark} |")
+        for check in self.checks:
+            wheels = ", ".join(f"`{name}`" for name in check.filenames) or "**missing**"
+            lines.append(f"| `{check.requirement}` | {wheels} |")
         notes = self.annotations()
         if notes:
             lines += ["", *(f"- **{level}:** {message}" for level, message in notes)]
         return "\n".join(lines) + "\n"
 
 
-def resolve(
-    index: Index,
-    pins: dict[str, str],
-    install_script: Path,
-    max_builds: int,
-) -> Resolution:
+def resolve(index: Index, pins: dict[str, str], install_script: Path, dockerfile: Path) -> Resolution:
     builds = index.rocm_builds()
     if not builds:
-        raise LookupError(f"No rocm-sdk-core {index.python_tag}/{index.platform} builds on {index.url}")
-    newest = builds[0]
-    newest_checks = None
-    for rocm_version in builds[:max_builds]:
-        checks = check_build(index, read_requirements(install_script, pins, rocm_version), rocm_version)
-        if newest_checks is None:
-            newest_checks = checks
-        if all(check.found for check in checks):
-            break
-    else:
-        missing = ", ".join(f"{c.name}=={c.version}" for c in newest_checks if not c.found)
-        raise LookupError(
-            f"None of the {min(len(builds), max_builds)} newest ROCm builds has all pinned wheels. "
-            f"Missing in the newest build {newest}: {missing}"
-        )
+        raise LookupError(f"No rocm-sdk-core {index.python_tag}/{index.arch} builds on {index.url}")
+    build = builds[0]
+    requirements = read_requirements(install_script, pins, build)
+    # torch pins triton to an exact version that is known only from the torch
+    # metadata. The index can have more than one triton wheel for a build.
+    requirements.append(Requirement("triton", suffix=f"rocm{build}"))
+    checks = [WheelCheck(requirement, index.find(requirement)) for requirement in requirements]
     newer_releases = {}
-    for project, pin in FRAMEWORK_PINS.items():
-        newer = [v for v in index.releases_for_build(project, newest) if release_key(v) > release_key(pins[pin])]
+    for project in FRAMEWORKS:
+        pinned = release_key(pins[framework_pin(project)])
+        newer = [v for v in index.releases_for_build(project, build) if release_key(v) > pinned]
         if newer:
             newer_releases[project] = newer
-    return Resolution(
-        index=index.url,
-        pins=pins,
-        python_tag=index.python_tag,
-        platform=index.platform,
-        newest=newest,
-        selected=rocm_version,
-        newest_checks=newest_checks,
-        selected_checks=checks,
-        newer_releases=newer_releases,
-    )
+    return Resolution(index, dockerfile, pins, build, checks, newer_releases)
 
 
 def http_fetch(url: str, attempts: int = 3) -> str:
+    """Return the page at url. Return "" if the index has no such project (404)."""
     for attempt in range(1, attempts + 1):
         try:
             with urllib.request.urlopen(url, timeout=120) as response:
                 return response.read().decode("utf-8")
-        except OSError as error:
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                return ""
+            if error.code < 500 or attempt == attempts:
+                raise RuntimeError(f"Cannot read {url}: {error}") from error
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
             if attempt == attempts:
                 raise RuntimeError(f"Cannot read {url}: {error}") from error
-            time.sleep(5 * attempt)
+        time.sleep(5 * attempt)
     raise AssertionError("unreachable")
+
+
+def annotate(level: str, message: str) -> None:
+    escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::{level}::{escaped}")
 
 
 def append_file(env_name: str, text: str) -> None:
@@ -355,34 +346,32 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dockerfile", type=Path, default=Path("docker/Dockerfile.ci"))
     parser.add_argument("--install-script", type=Path, default=Path("docker/install_rocm_wheels.sh"))
     parser.add_argument("--index", help="wheel index URL (default: ROCM_WHEEL_INDEX in the Dockerfile)")
-    parser.add_argument("--python-tag", default="cp312", help="CPython tag of the image venv")
-    parser.add_argument("--platform", default="linux_x86_64")
-    parser.add_argument("--max-builds", type=int, default=60, help="number of newest builds to check")
+    parser.add_argument("--arch", default="x86_64", help="CPU architecture of the image")
     parser.add_argument("--provenance", type=Path, help="write the provenance JSON to this file")
     args = parser.parse_args(argv)
 
-    pins = parse_dockerfile_args(args.dockerfile.read_text())
-    index = Index(args.index or pins["ROCM_WHEEL_INDEX"], http_fetch, args.python_tag, args.platform)
     try:
-        resolution = resolve(index, pins, args.install_script, args.max_builds)
-    except LookupError as error:
-        print(f"::error::{error}")
+        pins = parse_dockerfile_args(args.dockerfile.read_text())
+        index = Index(args.index or pins["ROCM_WHEEL_INDEX"], http_fetch, pins["ROCM_WHEEL_PYTHON_TAG"], args.arch)
+        resolution = resolve(index, pins, args.install_script, args.dockerfile)
+    except subprocess.CalledProcessError as error:
+        annotate("error", f"{args.install_script} --print-requirements failed: {error.stderr.strip()}")
+        return 1
+    except (LookupError, OSError, RuntimeError, ValueError) as error:
+        annotate("error", str(error))
         return 1
 
     for level, message in resolution.annotations():
-        print(f"::{level}::{message}")
+        annotate(level, message)
     summary = resolution.summary()
     print(summary)
     append_file("GITHUB_STEP_SUMMARY", summary)
-    append_file(
-        "GITHUB_OUTPUT",
-        f"rocm_wheel_version={resolution.selected}\n"
-        f"newest_rocm_wheel_version={resolution.newest}\n"
-        f"pins_available_in_newest={str(not resolution.missing_in_newest).lower()}\n",
-    )
     if args.provenance:
         args.provenance.parent.mkdir(parents=True, exist_ok=True)
         args.provenance.write_text(json.dumps(resolution.provenance(), indent=2) + "\n")
+    if resolution.missing:
+        return 1
+    append_file("GITHUB_OUTPUT", f"rocm_wheel_version={resolution.build}\n")
     return 0
 
 
