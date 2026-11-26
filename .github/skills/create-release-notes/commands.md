@@ -53,7 +53,7 @@ Include `*_COMMIT`, the `*_VERSION` wheel pins, and the ROCm wheel index:
 
 ```bash
 git diff FROM_TAG..TO_REF -- docker/Dockerfile.ci | \
-  grep -E '^[+-]ARG\s+(\w+_COMMIT|\w+_VERSION|ROCM_WHEEL_INDEX|ROCM_RELEASE_ID)=' | sort
+  grep -E '^[+-]ARG\s+(\w+_COMMIT|\w+_VERSION|ROCM_WHEEL_INDEX)=' | sort
 ```
 
 ## Look up upstream changes
@@ -63,9 +63,23 @@ to see what was added. Use the repo mapping below to resolve the GitHub org/repo
 Record `ROCM_WHEEL_VERSION` changes as TheRock nightly wheel build updates
 (`10.3.0aYYYYMMDD`), and `TORCH_VERSION`, `TORCHVISION_VERSION`, and
 `TORCHAUDIO_VERSION` changes as PyTorch release updates. These are not Git
-commit hashes. The source commit of each torch wheel is
-`torch.version.git_version` in the image. Releases before the wheel move pin
-`ROCM_RELEASE_ID` (TheRock nightly deb snapshot) and the torch stack commits.
+commit hashes.
+
+Report torch, torchvision, and torchaudio with the full wheel version: the
+`*_VERSION` pin plus the local version `+rocm<ROCM_WHEEL_VERSION>`, for
+example `torch 2.14.0+rocm10.3.0a20261108`. TheRock builds the torch wheels
+again for each ROCm wheel build, from the ROCm/pytorch release branch. Thus a
+`ROCM_WHEEL_VERSION` change can change the torch source even when
+`TORCH_VERSION` stays the same. Read the torch source commit
+(`torch.version.git_version`) and the Triton version from the build info file
+in the image of each release:
+
+```bash
+docker run --rm IMAGE sh -c 'cat "$ROCM_WHEEL_BUILD_INFO"'
+```
+
+If the torch commits differ, compare them in ROCm/pytorch with the command
+below.
 
 ```bash
 gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
@@ -76,11 +90,7 @@ gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
 
 | ARG name | GitHub repo |
 |---|---|
-| THEROCK_COMMIT (before the wheel move) | ROCm/TheRock |
-| TRITON_COMMIT (before the wheel move) | triton-lang/triton |
-| PYTORCH_COMMIT (before the wheel move) | pytorch/pytorch |
-| PYTORCH_VISION_COMMIT (before the wheel move) | pytorch/vision |
-| PYTORCH_AUDIO_COMMIT (before the wheel move) | pytorch/audio |
+| `torch.version.git_version` (build info) | ROCm/pytorch |
 | AITER_COMMIT | ROCm/aiter |
 | LONGCONTEXTATTENTION_COMMIT | feifeibear/long-context-attention |
 | DIFFUSERS_COMMIT | huggingface/diffusers |
