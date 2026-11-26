@@ -537,6 +537,7 @@ def run_cli(args, extra):
         command = shlex.join(str(part) for part in cmd)
         if args.config is not None:
             command = f"{_write_config_shell(args.config, args.output_directory)} && {command}"
+        print(command)
         return
 
     print(f"Running command: {' '.join(cmd)}")
