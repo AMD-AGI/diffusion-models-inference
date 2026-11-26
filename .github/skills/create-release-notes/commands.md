@@ -67,19 +67,19 @@ commit hashes.
 
 Report torch, torchvision, and torchaudio with the full wheel version: the
 `*_VERSION` pin plus the local version `+rocm<ROCM_WHEEL_VERSION>`, for
-example `torch 2.14.0+rocm10.3.0a20261108`. TheRock builds the torch wheels
-again for each ROCm wheel build, from the ROCm/pytorch release branch. Thus a
-`ROCM_WHEEL_VERSION` change can change the torch source even when
-`TORCH_VERSION` stays the same. Read the torch source commit
-(`torch.version.git_version`) and the Triton version from the build info file
-in the image of each release:
+example `torch 2.14.0+rocm10.3.0a20261108`. TheRock builds these wheels and
+Triton again for each ROCm wheel build, from the ROCm/pytorch release branch
+and the torchvision, torchaudio, and Triton commits that it pins. Thus a
+`ROCM_WHEEL_VERSION` change can change their source even when the `*_VERSION`
+pins stay the same. Read the source commits (the `*.git_version` keys) from
+the build info file in the image of each release:
 
 ```bash
 docker run --rm IMAGE sh -c 'cat "$ROCM_WHEEL_BUILD_INFO"'
 ```
 
-If the torch commits differ, compare them in ROCm/pytorch with the command
-below.
+If a commit differs, compare the two commits in the repo from the mapping
+below with the command below. `triton.git_version` is a short hash.
 
 ```bash
 gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
@@ -91,6 +91,9 @@ gh api repos/OWNER/REPO/compare/OLD_HASH...NEW_HASH \
 | ARG name | GitHub repo |
 |---|---|
 | `torch.version.git_version` (build info) | ROCm/pytorch |
+| `torchvision.version.git_version` (build info) | ROCm/vision |
+| `torchaudio.version.git_version` (build info) | ROCm/audio |
+| `triton.git_version` (build info) | triton-lang/triton |
 | AITER_COMMIT | ROCm/aiter |
 | LONGCONTEXTATTENTION_COMMIT | feifeibear/long-context-attention |
 | DIFFUSERS_COMMIT | huggingface/diffusers |

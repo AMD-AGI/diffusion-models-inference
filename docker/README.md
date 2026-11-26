@@ -139,7 +139,8 @@ can replace a ROCm build. Then it runs `rocm-sdk init` in the same layer,
 links `/opt/rocm` to the initialized `rocm-sdk-devel` tree, and writes
 the pinned versions to the pip constraints file
 `/opt/rocm-wheel-constraints.txt`. It also writes the build identity
-(TheRock manifest, torch source commit, HIP and Triton versions) to
+(TheRock manifest, the source commits of torch, torchvision, torchaudio, and
+Triton, and the HIP and Triton versions) to
 `/opt/rocm-wheel-build-info.txt`. The image environment variables
 `ROCM_WHEEL_CONSTRAINTS` and `ROCM_WHEEL_BUILD_INFO` give these two paths, and
 the record-image-versions action copies both files into the versions artifact.

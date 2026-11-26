@@ -33,8 +33,9 @@
 # ROCM_WHEEL_CONSTRAINTS is necessary for this mode.
 #
 # After the install, ROCM_WHEEL_BUILD_INFO receives the build identity
-# (TheRock manifest, torch source commit, HIP and Triton versions) as
-# "key<TAB>value" lines. The record-image-versions action copies it.
+# (TheRock manifest, the source commits of torch, torchvision, torchaudio, and
+# Triton, and the HIP and Triton versions) as "key<TAB>value" lines. The
+# record-image-versions action copies it.
 
 set -euo pipefail
 
@@ -197,11 +198,12 @@ ROCM_WHEEL_TARGETS="${targets[*]}" python3 - <<'PY'
 import importlib.metadata as metadata
 import json
 import os
+import re
 from pathlib import Path
 
 import torch
-import torchaudio
-import torchvision
+import torchaudio.version
+import torchvision.version
 import triton
 
 rocm_version = os.environ["ROCM_WHEEL_VERSION"]
@@ -225,6 +227,10 @@ core = metadata.distribution("rocm-sdk-core")
 manifest = json.loads(
     Path(core.locate_file("_rocm_sdk_core/share/therock/therock_manifest.json")).read_text()
 )
+# The Triton wheel has no git_version; its local version holds the short
+# commit, for example 3.9.0+git0a6e13e6.rocm10.3.0a20261108.
+triton_version = metadata.version("triton")
+triton_commit = re.search(r"\+git([0-9a-f]+)", triton_version)
 info = {
     "rocm_wheel_index": os.environ["ROCM_WHEEL_INDEX"],
     "rocm_wheel_version": rocm_version,
@@ -234,7 +240,10 @@ info = {
     "therock_manifest.github_run_id": manifest.get("github_run_id", ""),
     "torch.version.git_version": torch.version.git_version,
     "torch.version.hip": torch.version.hip,
-    "triton": metadata.version("triton"),
+    "torchvision.version.git_version": torchvision.version.git_version,
+    "torchaudio.version.git_version": torchaudio.version.git_version,
+    "triton": triton_version,
+    "triton.git_version": triton_commit.group(1) if triton_commit else "",
 }
 if info["therock_manifest.rocm_package_version"] != rocm_version:
     raise SystemExit(f"TheRock manifest version {info['therock_manifest.rocm_package_version']} != {rocm_version}")
