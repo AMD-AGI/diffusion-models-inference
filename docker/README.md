@@ -103,21 +103,30 @@ benchmark config choice.
 `Dockerfile.ci` installs ROCm, PyTorch, torchvision, torchaudio, and Triton as
 TheRock Python wheels from the
 [nightly wheel index](https://nightly.repo.amd.com/rocm/whl-next/).
-`ROCM_WHEEL_VERSION` selects one TheRock build and defaults to
-`10.3.0a20261108`. torch pins `rocm[libraries]` and `triton` to that exact
+`ROCM_WHEEL_VERSION` selects one TheRock build (see its `ARG` default in
+`Dockerfile.ci`). torch pins `rocm[libraries]` and `triton` to that exact
 version, so all ROCm packages come from the same build. `TORCH_VERSION`,
 `TORCHVISION_VERSION`, and `TORCHAUDIO_VERSION` select the framework
 releases; the install adds the `+rocm${ROCM_WHEEL_VERSION}` local version.
-The scheduled nightly workflow selects the newest ROCm wheel build that has
-all pinned wheels on this index. The
+`ROCM_WHEEL_PYTHON_TAG` must agree with `python3` of `BASE_IMAGE`; the
+install stops if it does not.
+
+The index keeps nightly builds for about three months. After that, an image
+with an older `ROCM_WHEEL_VERSION` cannot be built again. The pushed image is
+the reproducible artifact.
+
+The scheduled nightly workflow builds the newest ROCm wheel build on this
+index. The
 [resolve-rocm-nightly](../.github/actions/resolve-rocm-nightly/action.yml)
 action gets the requirement list from
 `install_rocm_wheels.sh --print-requirements` and checks the wheel file
-names. If the newest build does not have a pinned wheel, the action selects
-an older build and writes a warning with the missing wheels. Notices tell
-about newer torch, torchvision, and torchaudio releases and a new ROCm
+names. If the newest build does not have a pinned wheel, the workflow fails
+with the missing wheels; then update the pins in `Dockerfile.ci`. Notices
+tell about newer torch, torchvision, and torchaudio releases and a new ROCm
 version. The job summary and the `rocm-nightly-provenance` artifact record
-the selected wheels.
+the wheels. If the staging image `nightly-<ROCM_WHEEL_VERSION>` exists, the
+ROCm build did not change, and the workflow does not build. A manual run with
+`force_build` builds it again.
 
 `ROCM_GFX_TARGETS` selects the `device-<gfx>` extras of torch and
 torchvision. These pull the architecture-specific kernel wheels
@@ -128,13 +137,30 @@ torchvision. These pull the architecture-specific kernel wheels
 The index mirrors the pure-Python dependencies of torch, so no PyPI package
 can replace a ROCm build. Then it runs `rocm-sdk init` in the same layer,
 links `/opt/rocm` to the initialized `rocm-sdk-devel` tree, and writes
-`/opt/rocm-wheel-constraints.txt`. `PIP_CONSTRAINT` applies that file to
-every later `pip` run, so AITER, diffusers, xDiT, and other dependencies
-cannot replace torch, Triton, or the ROCm wheels. It also writes the build
-identity (TheRock manifest, torch source commit, HIP and Triton versions) to
+the pinned versions to the pip constraints file
+`/opt/rocm-wheel-constraints.txt`. It also writes the build identity
+(TheRock manifest, torch source commit, HIP and Triton versions) to
 `/opt/rocm-wheel-build-info.txt`. The image environment variables
 `ROCM_WHEEL_CONSTRAINTS` and `ROCM_WHEEL_BUILD_INFO` give these two paths, and
 the record-image-versions action copies both files into the versions artifact.
+
+During the build, a build argument (`ARG PIP_CONSTRAINT` in `core`) applies
+the constraints file to the `pip` runs in `core` and `final`. Thus AITER,
+diffusers, xDiT, and other dependencies cannot replace torch, Triton, or the
+ROCm wheels. `install_rocm_wheels --check` after the package installs in
+`final` makes sure of this. The published image does not set
+`PIP_CONSTRAINT`. To keep the ROCm
+wheels in a downstream image or a container, use the file explicitly:
+
+```sh
+pip install -c "${ROCM_WHEEL_CONSTRAINTS}" <packages>
+```
+
+or, in a Dockerfile, for all later `pip` runs:
+
+```dockerfile
+ENV PIP_CONSTRAINT="${ROCM_WHEEL_CONSTRAINTS}"
+```
 
 | Target | Contents | Use |
 | --- | --- | --- |

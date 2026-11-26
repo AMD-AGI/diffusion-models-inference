@@ -71,6 +71,7 @@ RUN pip install --no-cache-dir --upgrade pip packaging setuptools wheel
 FROM base AS rocm_sdk
 ARG ROCM_WHEEL_INDEX
 ARG ROCM_WHEEL_VERSION
+ARG ROCM_WHEEL_PYTHON_TAG
 ARG ROCM_GFX_TARGETS
 ARG TORCH_VERSION
 ARG TORCHVISION_VERSION
@@ -84,8 +85,6 @@ COPY docker/setup_amdsmi.sh /usr/local/bin/setup_amdsmi
 RUN chmod +x /usr/local/bin/install_rocm_wheels \
         /usr/local/bin/setup_amdsmi \
     && install_rocm_wheels
-# Keep the ROCm wheels pinned in every later pip run.
-ENV PIP_CONSTRAINT="${ROCM_WHEEL_CONSTRAINTS}"
 # The SDK wheels ship the amd-smi Python bindings somewhere pip cannot reach;
 # link them into site-packages. Prints a RETIRE banner and does nothing once a
 # release makes `import amdsmi` work on its own.
@@ -216,6 +215,10 @@ RUN python3 /usr/local/libexec/collect_image_licenses.py \
 
 FROM rocm_sdk AS core
 ARG AITER_COMMIT
+# Keep the ROCm wheels pinned in the pip runs of this stage and of the stages
+# that start FROM core (final). An ARG is not kept in the image, so users and
+# downstream images get no pin from it.
+ARG PIP_CONSTRAINT="${ROCM_WHEEL_CONSTRAINTS}"
 # Runtime libs for FFmpeg.
 RUN apt-get update -qq && apt-get -y install --no-install-recommends \
   libaom3 \
@@ -330,6 +333,9 @@ RUN rocprof_compute_requirements="$(python3 -c 'import sysconfig; print(sysconfi
 # --no-binary avoids shipping imageio-ffmpeg's bundled GPL ffmpeg binary
 RUN pip install --no-cache-dir --no-binary :all: imageio-ffmpeg
 RUN pip install --no-cache-dir imageio
+# Make sure that no pip run above replaced a pinned ROCm, torch, or Triton
+# wheel.
+RUN install_rocm_wheels --check
 COPY LICENSE /tmp/project-license/LICENSE
 
 # install basic terminal utilities

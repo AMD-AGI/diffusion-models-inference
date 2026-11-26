@@ -23,9 +23,14 @@
 # This script is the single source of the ROCm wheel requirement list. With
 # --print-requirements, it writes that list to stdout and installs nothing.
 # The nightly resolver (.github/actions/resolve-rocm-nightly) uses this mode to
-# find the ROCm wheel builds that have all the pinned packages. Only
+# check that the newest ROCm wheel build has all the pinned packages. Only
 # ROCM_WHEEL_VERSION, ROCM_GFX_TARGETS, and the TORCH*_VERSION variables are
 # necessary for this mode.
+#
+# The install writes the pins to ROCM_WHEEL_CONSTRAINTS (a pip constraints
+# file). With --check, the script compares the installed versions with this
+# file and fails if a later pip run changed a ROCm wheel. Only
+# ROCM_WHEEL_CONSTRAINTS is necessary for this mode.
 #
 # After the install, ROCM_WHEEL_BUILD_INFO receives the build identity
 # (TheRock manifest, torch source commit, HIP and Triton versions) as
@@ -34,16 +39,42 @@
 set -euo pipefail
 
 usage() {
-    echo "usage: install_rocm_wheels [--print-requirements]" >&2
+    echo "usage: install_rocm_wheels [--print-requirements | --check]" >&2
     exit 2
 }
 
-print_only=false
+mode=install
 case "$#:${1:-}" in
     0:) ;;
-    1:--print-requirements) print_only=true ;;
+    1:--print-requirements) mode=print ;;
+    1:--check) mode=check ;;
     *) usage ;;
 esac
+
+if [[ "${mode}" == check ]]; then
+    ROCM_WHEEL_CONSTRAINTS="${ROCM_WHEEL_CONSTRAINTS:?ROCM_WHEEL_CONSTRAINTS must be set}" python3 - <<'PY'
+import importlib.metadata as metadata
+import os
+from pathlib import Path
+
+path = Path(os.environ["ROCM_WHEEL_CONSTRAINTS"])
+changed = []
+for line in path.read_text().splitlines():
+    name, _, pinned = line.strip().partition("==")
+    if not name:
+        continue
+    try:
+        installed = metadata.version(name)
+    except metadata.PackageNotFoundError:
+        installed = "(not installed)"
+    if installed != pinned:
+        changed.append(f"{name}: {installed}, pinned {pinned}")
+if changed:
+    raise SystemExit(f"A pip run changed the ROCm wheels in {path}:\n" + "\n".join(changed))
+print(f"The installed ROCm wheels agree with {path}")
+PY
+    exit 0
+fi
 
 readonly rocm_version="${ROCM_WHEEL_VERSION:?ROCM_WHEEL_VERSION must be set}"
 readonly gfx_targets="${ROCM_GFX_TARGETS:?ROCM_GFX_TARGETS must be set}"
@@ -52,17 +83,18 @@ readonly torchvision_version="${TORCHVISION_VERSION:?TORCHVISION_VERSION must be
 readonly torchaudio_version="${TORCHAUDIO_VERSION:?TORCHAUDIO_VERSION must be set}"
 readonly local_version="+rocm${rocm_version}"
 
-IFS=';' read -r -a targets <<< "${gfx_targets}"
-usable=()
-for target in "${targets[@]}"; do
+IFS=';' read -r -a listed_targets <<< "${gfx_targets}"
+targets=()
+for target in "${listed_targets[@]}"; do
     [[ -n "${target}" ]] || continue
-    usable+=("${target}")
+    targets+=("${target}")
 done
-if [[ "${#usable[@]}" -eq 0 ]]; then
+if [[ "${#targets[@]}" -eq 0 ]]; then
     echo "ROCM_GFX_TARGETS did not contain a usable target" >&2
     exit 2
 fi
-extras="$(printf 'device-%s,' "${usable[@]}")"
+readonly targets
+extras="$(printf 'device-%s,' "${targets[@]}")"
 extras="${extras%,}"
 readonly extras
 
@@ -81,7 +113,7 @@ requirements=(
     "rocm-sdk-devel==${rocm_version}"
     "rocm-profiler==${rocm_version}"
 )
-for target in "${usable[@]}"; do
+for target in "${targets[@]}"; do
     requirements+=(
         "amd-torch-device-${target}==${torch_version}${local_version}"
         "amd-torchvision-device-${target}==${torchvision_version}${local_version}"
@@ -90,15 +122,24 @@ for target in "${usable[@]}"; do
 done
 readonly requirements
 
-if [[ "${print_only}" == true ]]; then
+if [[ "${mode}" == print ]]; then
     printf '%s\n' "${requirements[@]}"
     exit 0
 fi
 
 readonly index="${ROCM_WHEEL_INDEX:?ROCM_WHEEL_INDEX must be set}"
+readonly python_tag="${ROCM_WHEEL_PYTHON_TAG:?ROCM_WHEEL_PYTHON_TAG must be set}"
 readonly constraints="${ROCM_WHEEL_CONSTRAINTS:?ROCM_WHEEL_CONSTRAINTS must be set}"
 readonly build_info="${ROCM_WHEEL_BUILD_INFO:?ROCM_WHEEL_BUILD_INFO must be set}"
 readonly rocm_link="/opt/rocm"
+
+# The nightly resolver checks the wheels for ROCM_WHEEL_PYTHON_TAG. The venv
+# Python must agree, or the resolver checks wheels that pip does not install.
+venv_python_tag="$(python3 -c 'import sys; print(f"cp{sys.version_info[0]}{sys.version_info[1]}")')"
+if [[ "${venv_python_tag}" != "${python_tag}" ]]; then
+    echo "ROCM_WHEEL_PYTHON_TAG is ${python_tag}, but python3 is ${venv_python_tag}" >&2
+    exit 2
+fi
 
 pip install --no-cache-dir --index-url "${index}" "${requirements[@]}"
 
@@ -118,20 +159,31 @@ if [[ -d "${rocm_link}/lib/rocm_sysdeps/lib" ]]; then
 fi
 ldconfig
 
-# Pins for all later pip runs (PIP_CONSTRAINT). A later dependency resolution
-# must not replace the ROCm builds with PyPI builds.
-pip freeze --exclude-editable |
-    grep -iE '^(torch|torchvision|torchaudio|triton|rocm|rocm[-_][a-z0-9_-]+|amd[-_]torch[a-z0-9_-]*)==' \
-    > "${constraints}"
+# Pins for later pip runs. A later dependency resolution must not replace the
+# ROCm builds with PyPI builds. pip constraints do not accept extras, so remove
+# them. torch pins rocm and triton, which are not in the requirement list.
+triton_version="$(python3 -c 'import importlib.metadata as m; print(m.version("triton"))')"
+{
+    printf '%s\n' "${requirements[@]/\[*\]/}"
+    echo "rocm==${rocm_version}"
+    echo "triton==${triton_version}"
+} > "${constraints}"
 echo "ROCm wheel constraints (${constraints}):"
 cat "${constraints}"
+ROCM_WHEEL_CONSTRAINTS="${constraints}" "$0" --check
 
 test -x "${rocm_link}/bin/hipcc"
 test -e "${rocm_link}/lib/libamdhip64.so"
 test -d "${rocm_link}/lib/llvm/amdgcn/bitcode"
 test -x "${rocm_link}/lib/llvm/bin/clang++"
 test -x "${rocm_link}/lib/llvm/bin/ld.lld"
+# FlyDSL and Dockerfile.rdna4 use the llvm/bin path. The SDK links llvm to
+# lib/llvm.
+test -x "${rocm_link}/llvm/bin/ld.lld"
 test -e "${rocm_link}/lib/cmake/hip-lang/hip-lang-config.cmake"
+# hipblaslt-config.cmake finds origami. Downstream CMake builds that use
+# find_package(Torch), for example vLLM, need it.
+test -e "${rocm_link}/lib/cmake/origami/origami-config.cmake"
 test -e "${rocm_link}/lib/libMIOpen.so"
 test -e "${rocm_link}/lib/librccl.so"
 test -e "${rocm_link}/lib/libhipblaslt.so"
@@ -140,8 +192,8 @@ test -e "${rocm_link}/lib/libroctracer64.so"
 test -d "${rocm_link}/share/amd_smi/amdsmi"
 test -x "${rocm_link}/bin/MIOpenDriver"
 
-ROCM_WHEEL_TARGETS="${usable[*]}" ROCM_WHEEL_INDEX_URL="${index}" \
-    ROCM_WHEEL_BUILD_INFO_PATH="${build_info}" python3 - <<PY
+# The Python step reads all values from the environment.
+ROCM_WHEEL_TARGETS="${targets[*]}" python3 - <<'PY'
 import importlib.metadata as metadata
 import json
 import os
@@ -152,18 +204,20 @@ import torchaudio
 import torchvision
 import triton
 
-local = "${local_version}"
+rocm_version = os.environ["ROCM_WHEEL_VERSION"]
+targets = os.environ["ROCM_WHEEL_TARGETS"].split()
+local = f"+rocm{rocm_version}"
 expected = {
-    torch: "${torch_version}" + local,
-    torchvision: "${torchvision_version}" + local,
-    torchaudio: "${torchaudio_version}" + local,
+    torch: os.environ["TORCH_VERSION"] + local,
+    torchvision: os.environ["TORCHVISION_VERSION"] + local,
+    torchaudio: os.environ["TORCHAUDIO_VERSION"] + local,
 }
 for module, version in expected.items():
     if module.__version__ != version:
         raise SystemExit(f"{module.__name__} {module.__version__} != {version}")
 if not torch.version.hip:
     raise SystemExit("torch is not a ROCm build")
-for target in os.environ["ROCM_WHEEL_TARGETS"].split():
+for target in targets:
     for name in (f"amd-torch-device-{target}", f"rocm-sdk-device-{target}"):
         metadata.version(name)
 
@@ -172,9 +226,9 @@ manifest = json.loads(
     Path(core.locate_file("_rocm_sdk_core/share/therock/therock_manifest.json")).read_text()
 )
 info = {
-    "rocm_wheel_index": os.environ["ROCM_WHEEL_INDEX_URL"],
-    "rocm_wheel_version": "${rocm_version}",
-    "rocm_gfx_targets": " ".join(os.environ["ROCM_WHEEL_TARGETS"].split()),
+    "rocm_wheel_index": os.environ["ROCM_WHEEL_INDEX"],
+    "rocm_wheel_version": rocm_version,
+    "rocm_gfx_targets": " ".join(targets),
     "therock_manifest.rocm_package_version": manifest.get("rocm_package_version", ""),
     "therock_manifest.the_rock_commit": manifest.get("the_rock_commit", ""),
     "therock_manifest.github_run_id": manifest.get("github_run_id", ""),
@@ -182,9 +236,9 @@ info = {
     "torch.version.hip": torch.version.hip,
     "triton": metadata.version("triton"),
 }
-if info["therock_manifest.rocm_package_version"] != "${rocm_version}":
-    raise SystemExit(f"TheRock manifest version {info['therock_manifest.rocm_package_version']} != ${rocm_version}")
-Path(os.environ["ROCM_WHEEL_BUILD_INFO_PATH"]).write_text(
+if info["therock_manifest.rocm_package_version"] != rocm_version:
+    raise SystemExit(f"TheRock manifest version {info['therock_manifest.rocm_package_version']} != {rocm_version}")
+Path(os.environ["ROCM_WHEEL_BUILD_INFO"]).write_text(
     "".join(f"{key}\t{value}\n" for key, value in info.items())
 )
 
