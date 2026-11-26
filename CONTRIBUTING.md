@@ -211,9 +211,9 @@ successful nightly. Copilot then either explains on the issue why the failure is
 out of scope, or opens a draft PR from `auto-repair/issue-<number>` and
 dispatches a repair test of
 [Nightly ROCm](.github/workflows/nightly-rocm.yml) on that branch with the same
-ROCm release. The repair test skips MIOpen tuning and the final image unless
-those failed, uses its own image tag and cache scope, and posts its result to the
-issue and PR. Each issue gets one attempt; delete the branch to retry.
+ROCm release. Nightly ROCm runs on `auto-repair/*` branches are repair tests:
+they skip MIOpen tuning and the final image unless those failed, use their own
+image tag and cache scope, and post their result to the PR and the issue. Each issue gets one attempt; delete the branch to retry.
 
 Each run is capped at 1000 AI credits, and the workflow at 3000 per day. It only
 works once `nightly-rocm.yml` with its repair inputs is on the default branch,

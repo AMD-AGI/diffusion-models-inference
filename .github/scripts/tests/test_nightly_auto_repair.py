@@ -57,6 +57,27 @@ class TestInputsTests(unittest.TestCase):
         )
 
 
+class FirstErrorExcerptTests(unittest.TestCase):
+    def test_uses_first_diagnostic_of_failed_buildkit_step(self):
+        prefix = "Build / Build images\tUNKNOWN STEP\t2026-11-26T00:29:10.9Z "
+        log = "\n".join(
+            prefix + line
+            for line in [
+                '\x1b[36;1m  echo "::error::not a real error"\x1b[0m',
+                "#16 5.8 W: GPG error: unrelated",
+                "#46 2.8 In file included from thrust/complex.h:25:",
+                "#46 2.8 thrust/libcxx.h:91:4: error: Could not find libhipcxx!",
+                "#46 2.9 type_traits.h:156:21: error: use of undeclared identifier '_THRUST_STD'",
+                "#46 ERROR: process did not complete successfully",
+            ]
+        )
+        excerpt = repair.first_error_excerpt(log)
+        self.assertTrue(excerpt.startswith("#46 2.8 In file included"))
+        self.assertIn("Could not find libhipcxx!", excerpt)
+        self.assertNotIn("GPG", excerpt)
+        self.assertNotIn("not a real error", excerpt)
+
+
 class CollectTests(unittest.TestCase):
     def collect(self, issue_number="5", branch_exists=False, labels=("nightly-failure",)):
         issue = {
@@ -112,6 +133,36 @@ class CollectTests(unittest.TestCase):
         self.assertEqual(context["dispatch"]["ref"], "auto-repair/issue-5")
         self.assertEqual(context["dispatch"]["inputs"]["rocm_release_id"], "20260328-1")
         self.assertEqual(context["dispatch"]["inputs"]["repair_issue"], "5")
+
+    def collect_latest(self, conclusion):
+        responses = {
+            f"repos/{REPO}": {"default_branch": "main"},
+            f"repos/{REPO}/actions/workflows/nightly-rocm.yml/runs?per_page=1&status=completed&branch=main": {
+                "workflow_runs": [workflow_run(300, conclusion, sha="ccc")]
+            },
+            f"repos/{REPO}/actions/workflows/nightly-rocm.yml/runs?per_page=20&status=success&branch=main": {
+                "workflow_runs": [workflow_run(250, "success", started="2026-03-28T00:00:00Z", sha="ccc")]
+            },
+            f"repos/{REPO}/pulls?state=all&per_page=1&head=o%3Aauto-repair/run-300": [],
+        }
+        with (
+            patch.object(report, "api", side_effect=lambda endpoint: responses[endpoint]),
+            patch.object(report, "gh", side_effect=subprocess.CalledProcessError(1, "gh")),
+            patch.object(report, "jobs_for", return_value=[job("Build core and untuned images", "failure", "Build")]),
+            patch.object(report, "log_for", return_value=("error: boom", None)),
+            patch.object(report, "dependency_version", return_value="20260328-1"),
+        ):
+            return repair.collect(REPO, "", latest_nightly=True)
+
+    def test_latest_nightly_mode_repairs_without_issue(self):
+        context = self.collect_latest("failure")
+        self.assertIsNone(context["issue"])
+        self.assertEqual(context["failure"]["number"], 300)
+        self.assertEqual(context["branch"], "auto-repair/run-300")
+        self.assertEqual(context["dispatch"]["ref"], "auto-repair/run-300")
+        self.assertEqual(context["dispatch"]["inputs"]["repair_issue"], "")
+        with self.assertRaisesRegex(repair.RepairRefused, "concluded success"):
+            self.collect_latest("success")
 
     def test_refuses_repeat_attempts_and_unlabelled_issues(self):
         with self.assertRaisesRegex(repair.RepairRefused, "already has a repair attempt"):

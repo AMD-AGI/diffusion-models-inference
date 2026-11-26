@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
-"""Collect the context for an automatic repair attempt on a nightly-failure issue."""
+"""Collect the context for an automatic repair attempt on a nightly-failure issue or the latest failed nightly."""
 
 import importlib.util
 import json
@@ -19,6 +19,7 @@ report = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(report)
 
 BRANCH_PREFIX = "auto-repair/issue-"
+RUN_BRANCH_PREFIX = "auto-repair/run-"
 # Nightly workflows with repair_issue/rocm_release_id dispatch inputs; nightly-auto-repair.md dispatches these.
 REPAIRABLE = {"nightly-rocm.yml"}
 MAX_COMMITS = 50
@@ -26,6 +27,13 @@ MAX_FILES = 200
 # Steps that the quick repair test skips unless they are where the nightly failed.
 TUNING_STEP = "Run MIOpen tuning"
 FINAL_JOB = "Build final tuned image"
+# The log tail of a failed image build is mostly fallout, so the context also carries the first error with surroundings.
+LOG_PREFIX = re.compile(r"^[^\t]*\t[^\t]*\t\S+Z ")
+BUILDKIT_FAILURE = re.compile(r"^(#\d+) ERROR: ")
+DIAGNOSTIC = re.compile(r"(?:^|[\s:])(?:fatal )?error:|^(?:#\d+ [\d.]+ )?(?:ERROR|Error):? |Traceback ")
+SHELL_ECHO = "\x1b[36;1m"
+LINES_BEFORE_ERROR = 30
+LINES_AFTER_ERROR = 120
 
 
 class RepairRefused(Exception):
@@ -58,11 +66,22 @@ def test_inputs(issue_number, version, jobs):
     )
     return {
         "rocm_release_id": version or "",
-        "repair_issue": str(issue_number),
+        "repair_issue": str(issue_number or ""),
         # The final image consumes the tuning results, so testing it requires tuning as well.
         "run_miopen_tuning": tuning_failed or final_failed,
         "build_final": final_failed,
     }
+
+
+def first_error_excerpt(log):
+    lines = [LOG_PREFIX.sub("", line) for line in log.splitlines() if SHELL_ECHO not in line]
+    step = next((match.group(1) for line in lines if (match := BUILDKIT_FAILURE.match(line))), None)
+    if step:
+        lines = [line for line in lines if line.startswith(f"{step} ")]
+    first = next((index for index, line in enumerate(lines) if DIAGNOSTIC.search(line)), None)
+    if first is None:
+        return ""
+    return "\n".join(lines[max(0, first - LINES_BEFORE_ERROR) : first + LINES_AFTER_ERROR])
 
 
 def branch_taken(repo, branch):
@@ -121,7 +140,7 @@ def repository_changes(repo, base, head):
     }
 
 
-def collect(repo, requested_issue):
+def issue_target(repo, requested_issue):
     issue = pick_issue(repo, requested_issue)
     number = issue["number"]
     labels = {label["name"] for label in issue["labels"]}
@@ -140,6 +159,40 @@ def collect(repo, requested_issue):
             break
     else:
         raise RepairRefused(f"#{number} links no failed nightly run.")
+    summary = {
+        "number": number,
+        "title": issue["title"],
+        "url": issue["html_url"],
+        "body": issue["body"] or "",
+        "comments": [{"author": c["user"]["login"], "body": c["body"]} for c in comments[-10:]],
+    }
+    return summary, run, nightly, branch
+
+
+def latest_run_target(repo):
+    nightly = next(nightly for nightly in report.NIGHTLIES if nightly["workflow"] in REPAIRABLE)
+    default_branch = report.api(f"repos/{repo}")["default_branch"]
+    endpoint = (
+        f"repos/{repo}/actions/workflows/{nightly['workflow']}/runs"
+        f"?per_page=1&status=completed&branch={quote(default_branch, safe='')}"
+    )
+    runs = report.api(endpoint)["workflow_runs"]
+    if not runs:
+        raise RepairRefused(f"{nightly['name']} has no completed run on {default_branch}.")
+    run = runs[0]
+    if run["conclusion"] != "failure":
+        raise RepairRefused(f"The latest {nightly['name']} run ({run['html_url']}) concluded {run['conclusion']}.")
+    branch = f"{RUN_BRANCH_PREFIX}{run['id']}"
+    if branch_taken(repo, branch):
+        raise RepairRefused(f"Run {run['id']} already has a repair attempt on {branch}; delete it to retry.")
+    return None, run, nightly, branch
+
+
+def collect(repo, requested_issue, latest_nightly=False):
+    if latest_nightly:
+        issue, run, nightly, branch = latest_run_target(repo)
+    else:
+        issue, run, nightly, branch = issue_target(repo, requested_issue)
     if nightly["workflow"] not in REPAIRABLE:
         raise RepairRefused(f"{nightly['name']} has no repair test mode yet.")
 
@@ -159,20 +212,16 @@ def collect(repo, requested_issue):
     )
     if error:
         failure["benchmark_log_error"] = error
+    log, _ = report.log_for(repo, run["id"], failed=True)
+    failure["first_error_excerpt"] = first_error_excerpt(log)
     return {
-        "issue": {
-            "number": number,
-            "title": issue["title"],
-            "url": issue["html_url"],
-            "body": issue["body"] or "",
-            "comments": [{"author": c["user"]["login"], "body": c["body"]} for c in comments[-10:]],
-        },
+        "issue": issue,
         "failure": failure,
         "changes_since_last_success": repository_changes(repo, previous and previous["head_sha"], run["head_sha"]),
         "branch": branch,
         "dispatch": {
             "ref": branch,
-            "inputs": test_inputs(number, version, jobs),
+            "inputs": test_inputs(issue and issue["number"], version, jobs),
         },
     }
 
@@ -182,12 +231,17 @@ def main():
     output = Path(os.environ.get("REPAIR_CONTEXT_DIR", "/tmp/gh-aw/agent"))
     output.mkdir(parents=True, exist_ok=True)
     try:
-        context = collect(repo, os.environ.get("ISSUE_NUMBER", "").strip())
+        context = collect(
+            repo,
+            os.environ.get("ISSUE_NUMBER", "").strip(),
+            latest_nightly=os.environ.get("REPAIR_LATEST_NIGHTLY") == "true",
+        )
     except RepairRefused as refusal:
         print(f"::error::Repair not attempted: {refusal}", file=sys.stderr)
         sys.exit(1)
     (output / "repair-context.json").write_text(json.dumps(context, indent=2))
-    print(f"Repair context for #{context['issue']['number']} written; fix branch {context['branch']}.")
+    target = f"#{context['issue']['number']}" if context["issue"] else context["failure"]["url"]
+    print(f"Repair context for {target} written; fix branch {context['branch']}.")
 
 
 if __name__ == "__main__":

@@ -2,20 +2,20 @@
 # SPDX-License-Identifier: MIT
 
 name: Nightly ROCm Build and Benchmark
-run-name: "Nightly ROCm ${{ inputs.repair_issue && format('repair test for #{0}', inputs.repair_issue) || github.event_name == 'schedule' && github.event.schedule || 'manual' }}"
+run-name: "Nightly ROCm ${{ startsWith(github.ref_name, 'auto-repair/') && format('repair test on {0}', github.ref_name) || github.event_name == 'schedule' && github.event.schedule || 'manual' }}"
 
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
-    # The repair inputs are set by the nightly-auto-repair agentic workflow to rerun a failed nightly on a fix branch.
+    # Runs on auto-repair/* branches are isolated repair tests dispatched by the nightly-auto-repair agentic workflow.
     inputs:
       rocm_release_id:
         description: 'ROCm nightly release ID to build, e.g. 20261125-1; leave empty for the latest'
         required: false
         default: ''
       repair_issue:
-        description: 'Issue number being repaired; makes this an isolated repair test that reports back to the PR and issue'
+        description: 'Issue to report a repair test result to, in addition to the repair pull request'
         required: false
         default: ''
       run_miopen_tuning:
@@ -34,7 +34,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: ${{ inputs.repair_issue && format('nightly-rocm-repair-{0}', inputs.repair_issue) || 'nightly-rocm-build-and-benchmark' }}
+  group: ${{ startsWith(github.ref_name, 'auto-repair/') && format('nightly-rocm-{0}', github.ref_name) || 'nightly-rocm-build-and-benchmark' }}
   cancel-in-progress: false
 
 jobs:
@@ -44,7 +44,7 @@ jobs:
     outputs:
       release_id: ${{ steps.resolve.outputs.release_id }}
       # Repair tests use their own tag so they never overwrite the real nightly image.
-      image_tag: ${{ inputs.repair_issue && format('nightly-{0}-repair-{1}', steps.resolve.outputs.release_id, github.run_id) || format('nightly-{0}', steps.resolve.outputs.release_id) }}
+      image_tag: ${{ startsWith(github.ref_name, 'auto-repair/') && format('nightly-{0}-repair-{1}', steps.resolve.outputs.release_id, github.run_id) || format('nightly-{0}', steps.resolve.outputs.release_id) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -77,7 +77,7 @@ jobs:
             {
               "ROCm package": {
                 "release_id": "${{ steps.resolve.outputs.release_id }}",
-                "image_tag": "${{ inputs.repair_issue && format('nightly-{0}-repair-{1}', steps.resolve.outputs.release_id, github.run_id) || format('nightly-{0}', steps.resolve.outputs.release_id) }}"
+                "image_tag": "${{ startsWith(github.ref_name, 'auto-repair/') && format('nightly-{0}-repair-{1}', steps.resolve.outputs.release_id, github.run_id) || format('nightly-{0}', steps.resolve.outputs.release_id) }}"
               }
             }
 
@@ -96,7 +96,7 @@ jobs:
       create_miopen_db_branch: false
       disable_docker_cache: true
       export_docker_cache: false
-      cache_scope: ${{ inputs.repair_issue && 'nightly-rocm-repair' || 'nightly-rocm' }}
+      cache_scope: ${{ startsWith(github.ref_name, 'auto-repair/') && 'nightly-rocm-repair' || 'nightly-rocm' }}
       benchmark_flags: "--tag nightly"
       docker_build_args: |
         ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
@@ -108,7 +108,7 @@ jobs:
   report-repair-result:
     name: Report repair test result
     needs: [resolve-rocm, build-and-benchmark]
-    if: ${{ always() && inputs.repair_issue }}
+    if: ${{ always() && startsWith(github.ref_name, 'auto-repair/') }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -131,7 +131,9 @@ jobs:
             verdict="❌ **The repair test did not pass** (result: \`${RESULT}\`)."
           fi
           body="${verdict} Nightly ROCm \`${RELEASE_ID}\` was rebuilt and benchmarked from \`${BRANCH}\`: ${RUN_URL}"
-          gh issue comment "$ISSUE" --body "$body"
+          if [[ -n "$ISSUE" ]]; then
+            gh issue comment "$ISSUE" --body "$body"
+          fi
           pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
           if [[ -n "$pr" ]]; then
             gh pr comment "$pr" --body "$body"
