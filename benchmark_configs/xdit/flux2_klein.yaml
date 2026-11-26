@@ -19,6 +19,11 @@
     attention_backend: aiter
     memory_efficient_replicated_load: true
     use_parallel_vae: true
+    enable_tiling: true
+    vae_tile_size_height: 192
+    vae_tile_size_width: 2048
+    vae_tile_overlap_height: 64
+    vae_tile_overlap_width: 0
 
 - name: flux2_klein.default.hopper
   tags: [hopper, h100, h200]
