@@ -52,8 +52,11 @@ safe-outputs:
     allowed-branches: ["auto-repair/issue-*", "auto-repair/run-*"]
     # The dispatched repair test needs to know the exact branch name.
     preserve-branch-name: true
+    # gh-aw otherwise bases the fix on the default branch, even on push; the fix must build on the workflow's own branch.
+    base-branch: ${{ github.ref_name }}
     if-no-changes: error
-    fallback-as-issue: false
+    # Where the organization blocks PR creation by Actions, the branch is still pushed and an issue links to it instead.
+    fallback-as-issue: true
   dispatch-workflow:
     workflows: [nightly-rocm]
     allowed-refs: ["auto-repair/issue-*", "auto-repair/run-*"]
@@ -124,10 +127,12 @@ do not dig through long history.
    `git diff`.
 2. Call `create_pull_request` with `branch` set to the context's `branch`, a
    title naming the component and symptom, and a body containing: a link to the
-   issue, if there is one, and the failed run; the dependency version under test; the observed
-   error; the root cause, labelled as a hypothesis where not proven; what the
-   change does and why; what you could and could not verify locally; and a note
-   that a repair test run has been dispatched and will report back on this PR.
+   issue, if there is one, and the failed run; the dependency version under
+   test; the observed error; the root cause, labelled as a hypothesis where not
+   proven; what the change does and why; what you could and could not verify
+   locally; and a note that a repair test run has been dispatched and will
+   report back. If pull request creation is blocked, the branch is still pushed
+   and this body becomes an issue instead, so write it to make sense either way.
 3. After `create_pull_request`, call the `nightly_rocm` tool with `ref` set to
    the context's `dispatch.ref` and each field of `dispatch.inputs` passed as a
    top-level argument with exactly the given value. If the branch could not be

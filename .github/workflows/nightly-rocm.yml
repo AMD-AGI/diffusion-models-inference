@@ -114,7 +114,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - name: Comment on the repair pull request and issue
+      - name: Comment on the repair pull request or fallback issue, and the issue
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -137,6 +137,13 @@ jobs:
           pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
           if [[ -n "$pr" ]]; then
             gh pr comment "$pr" --body "$body"
+            exit 0
+          fi
+          # Without a PR, the fix is described in the issue gh-aw opens when it is not allowed to create pull requests.
+          fallback=$(gh issue list --state open --search "\"${BRANCH}\" in:body" --json number \
+            --jq "[.[] | select(.number != (\"${ISSUE}\" | tonumber? // 0))][0].number // empty")
+          if [[ -n "$fallback" ]]; then
+            gh issue comment "$fallback" --body "$body"
           else
-            echo "::warning::No open pull request found for ${BRANCH}"
+            echo "::warning::No open pull request or fallback issue found for ${BRANCH}"
           fi
