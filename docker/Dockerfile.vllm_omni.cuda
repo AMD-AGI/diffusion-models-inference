@@ -13,8 +13,8 @@
 ARG BASE_IMAGE=vllm/vllm-openai:v0.34.0
 FROM ${BASE_IMAGE} AS base
 
-ARG VLLM_OMNI_REPO=https://github.com/kTorp/vllm-omni.git
-ARG VLLM_OMNI_COMMIT="57a2a80" # v0.31.0 pre-release custom branch
+ARG VLLM_OMNI_REPO=https://github.com/vllm-project/vllm-omni.git
+ARG VLLM_OMNI_COMMIT="d27046415" # upstream main (2026-11-26)
 
 WORKDIR /app
 
