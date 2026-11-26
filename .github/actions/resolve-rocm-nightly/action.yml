@@ -2,64 +2,54 @@
 # SPDX-License-Identifier: MIT
 
 name: Resolve ROCm Nightly
-description: Resolves the latest TheRock nightly ROCm wheel version that also has the pinned torch wheel
+description: >-
+  Selects the newest TheRock nightly ROCm wheel build that has all the wheels
+  that docker/install_rocm_wheels.sh pins. Warns when the newest build does
+  not have them, and writes the version provenance.
 
 inputs:
   dockerfile:
-    description: 'Dockerfile that pins TORCH_VERSION'
+    description: 'Dockerfile with the ROCm wheel and torch pins (ARG defaults)'
     required: false
     default: 'docker/Dockerfile.ci'
+  install_script:
+    description: 'Script that prints the ROCm wheel requirement list'
+    required: false
+    default: 'docker/install_rocm_wheels.sh'
+  python_tag:
+    description: 'CPython tag of the image venv (ubuntu:24.04 python3 is cp312)'
+    required: false
+    default: 'cp312'
+  provenance_file:
+    description: 'Path for the provenance JSON'
+    required: false
+    default: 'rocm-nightly-provenance.json'
 
 outputs:
   rocm_wheel_version:
-    description: 'Latest ROCm nightly wheel version, for example 10.3.0a20261108'
+    description: 'Selected ROCm nightly wheel version, for example 10.3.0a20261108'
     value: ${{ steps.resolve.outputs.rocm_wheel_version }}
+  newest_rocm_wheel_version:
+    description: 'Newest rocm-sdk-core build on the index'
+    value: ${{ steps.resolve.outputs.newest_rocm_wheel_version }}
+  pins_available_in_newest:
+    description: "'true' if the newest build has all pinned wheels"
+    value: ${{ steps.resolve.outputs.pins_available_in_newest }}
 
 runs:
   using: composite
   steps:
-    - name: Resolve latest ROCm nightly
+    - name: Resolve ROCm nightly wheel build
       id: resolve
       shell: bash
       env:
         DOCKERFILE: ${{ inputs.dockerfile }}
-        ROCM_WHEEL_INDEX: https://nightly.repo.amd.com/rocm/whl-next
-      run: |
-        set -euo pipefail
-
-        torch_version=$(sed -nE 's/^ARG TORCH_VERSION="([^"]+)"$/\1/p' "${DOCKERFILE}")
-        if [[ ! "$torch_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "::error::Could not read TORCH_VERSION from ${DOCKERFILE}"
-          exit 1
-        fi
-
-        # ROCm SDK builds on the index. The wheel version encodes the build
-        # date (10.3.0a20261108), and the minor version moves over time, so
-        # read it from the index.
-        sdk_versions=$(
-          curl --fail --silent --show-error --location "${ROCM_WHEEL_INDEX}/rocm-sdk-core/" |
-            grep -oE 'rocm_sdk_core-[0-9]+\.[0-9]+\.[0-9]+a[0-9]{8}-py3-none-linux_x86_64\.whl' |
-            sed -E 's/^rocm_sdk_core-//; s/-py3-none-linux_x86_64\.whl$//' |
-            sort -u
-        )
-        # Builds of the pinned torch version for the image Python (cp312).
-        torch_pattern="torch-${torch_version//./\\.}(%2B|\\+)rocm[0-9]+\\.[0-9]+\\.[0-9]+a[0-9]{8}-cp312-cp312-linux_x86_64\\.whl"
-        torch_rocm_versions=$(
-          curl --fail --silent --show-error --location "${ROCM_WHEEL_INDEX}/torch/" |
-            grep -oE "${torch_pattern}" |
-            sed -E 's/^.*rocm//; s/-cp312-cp312-linux_x86_64\.whl$//' |
-            sort -u
-        )
-
-        rocm_wheel_version=$(
-          comm -12 <(echo "${sdk_versions}") <(echo "${torch_rocm_versions}") |
-            sort -V |
-            tail -n 1
-        )
-        if [[ ! "$rocm_wheel_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+a[0-9]{8}$ ]]; then
-          echo "::error::Could not resolve a ROCm nightly wheel version with torch ${torch_version}"
-          exit 1
-        fi
-
-        echo "Resolved ROCm nightly wheel version: ${rocm_wheel_version} (torch ${torch_version})"
-        echo "rocm_wheel_version=${rocm_wheel_version}" >> "$GITHUB_OUTPUT"
+        INSTALL_SCRIPT: ${{ inputs.install_script }}
+        PYTHON_TAG: ${{ inputs.python_tag }}
+        PROVENANCE_FILE: ${{ inputs.provenance_file }}
+      run: >-
+        python3 "${GITHUB_ACTION_PATH}/scripts/resolve_rocm_nightly.py"
+        --dockerfile "${DOCKERFILE}"
+        --install-script "${INSTALL_SCRIPT}"
+        --python-tag "${PYTHON_TAG}"
+        --provenance "${PROVENANCE_FILE}"

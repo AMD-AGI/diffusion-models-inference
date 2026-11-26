@@ -108,8 +108,16 @@ TheRock Python wheels from the
 version, so all ROCm packages come from the same build. `TORCH_VERSION`,
 `TORCHVISION_VERSION`, and `TORCHAUDIO_VERSION` select the framework
 releases; the install adds the `+rocm${ROCM_WHEEL_VERSION}` local version.
-The scheduled nightly workflow selects the latest ROCm wheel version that has
-a `TORCH_VERSION` build on this index.
+The scheduled nightly workflow selects the newest ROCm wheel build that has
+all pinned wheels on this index. The
+[resolve-rocm-nightly](../.github/actions/resolve-rocm-nightly/action.yml)
+action gets the requirement list from
+`install_rocm_wheels.sh --print-requirements` and checks the wheel file
+names. If the newest build does not have a pinned wheel, the action selects
+an older build and writes a warning with the missing wheels. Notices tell
+about newer torch, torchvision, and torchaudio releases and a new ROCm
+version. The job summary and the `rocm-nightly-provenance` artifact record
+the selected wheels.
 
 `ROCM_GFX_TARGETS` selects the `device-<gfx>` extras of torch and
 torchvision. These pull the architecture-specific kernel wheels
@@ -122,7 +130,11 @@ can replace a ROCm build. Then it runs `rocm-sdk init` in the same layer,
 links `/opt/rocm` to the initialized `rocm-sdk-devel` tree, and writes
 `/opt/rocm-wheel-constraints.txt`. `PIP_CONSTRAINT` applies that file to
 every later `pip` run, so AITER, diffusers, xDiT, and other dependencies
-cannot replace torch, Triton, or the ROCm wheels.
+cannot replace torch, Triton, or the ROCm wheels. It also writes the build
+identity (TheRock manifest, torch source commit, HIP and Triton versions) to
+`/opt/rocm-wheel-build-info.txt`. The image environment variables
+`ROCM_WHEEL_CONSTRAINTS` and `ROCM_WHEEL_BUILD_INFO` give these two paths, and
+the record-image-versions action copies both files into the versions artifact.
 
 | Target | Contents | Use |
 | --- | --- | --- |
@@ -143,8 +155,12 @@ docker build -f docker/Dockerfile.ci --target final \
     -t pytorch-xdit-nightly .
 ```
 
-A `ROCM_WHEEL_VERSION` override needs a `TORCH_VERSION` build for the same
-ROCm wheel version on the index. The image does not build ROCm or PyTorch
+A `ROCM_WHEEL_VERSION` override needs builds of all pinned wheels for the
+same ROCm wheel version on the index. To see the list, run
+`ROCM_WHEEL_VERSION=... ROCM_GFX_TARGETS=... TORCH_VERSION=...
+TORCHVISION_VERSION=... TORCHAUDIO_VERSION=...
+docker/install_rocm_wheels.sh --print-requirements`.
+The image does not build ROCm or PyTorch
 from source. Changes that are not available in a published wheel build must
 first be published on the index.
 

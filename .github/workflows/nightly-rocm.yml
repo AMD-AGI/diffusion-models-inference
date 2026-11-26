@@ -30,6 +30,15 @@ jobs:
       - name: Resolve latest ROCm nightly
         id: resolve
         uses: ./.github/actions/resolve-rocm-nightly
+        with:
+          provenance_file: ${{ runner.temp }}/rocm-nightly/provenance.json
+
+      - name: Upload ROCm nightly provenance
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocm-nightly-provenance
+          path: ${{ runner.temp }}/rocm-nightly/provenance.json
+          if-no-files-found: error
 
       - name: Write workflow summary
         uses: ./.github/actions/write-workflow-summary
@@ -39,6 +48,8 @@ jobs:
             {
               "ROCm wheels": {
                 "rocm_wheel_version": "${{ steps.resolve.outputs.rocm_wheel_version }}",
+                "newest_rocm_wheel_version": "${{ steps.resolve.outputs.newest_rocm_wheel_version }}",
+                "pins_available_in_newest": "${{ steps.resolve.outputs.pins_available_in_newest }}",
                 "image_tag": "nightly-${{ steps.resolve.outputs.rocm_wheel_version }}"
               }
             }
