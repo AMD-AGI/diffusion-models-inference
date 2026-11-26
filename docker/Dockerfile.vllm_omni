@@ -9,7 +9,7 @@
 #     .
 #
 
-ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.10.1"
+ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.11.2"
 
 FROM ${BASE_IMAGE}
 
