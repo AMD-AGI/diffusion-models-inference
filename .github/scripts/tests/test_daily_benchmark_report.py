@@ -119,7 +119,10 @@ class DailyBenchmarkReportTests(unittest.TestCase):
             run(23, "cancelled"),
             run(24, None),
         ]
-        nightly_runs = [run(30, "failure", "main", "Nightly ROCm 0 0 * * *")]
+        nightly_runs = [
+            run(30, "failure", "main", "Nightly ROCm 0 0 * * *"),
+            run(31, "failure", "auto-repair/issue-5", "Nightly ROCm repair test for #5"),
+        ]
         jobs = [
             {
                 "id": 1,
@@ -143,6 +146,7 @@ class DailyBenchmarkReportTests(unittest.TestCase):
                         datetime(2026, 3, 29, 6, tzinfo=timezone.utc),
                     ),
                 ),
+                patch.object(report, "api", return_value={"default_branch": "main"}),
                 patch.object(report, "api_pages", return_value=[[{"name": "release/v1.0"}, {"name": "release/v1.1"}]]),
                 patch.object(
                     report,
@@ -172,7 +176,7 @@ class DailyBenchmarkReportTests(unittest.TestCase):
             text = summary.read_text()
             failures = json.loads((Path(directory) / "benchmark-failures.json").read_text())
 
-        self.assertIn("**5 runs: 1 succeeded, 3 failed, 1 cancelled.**", text)
+        self.assertIn("**6 runs: 1 succeeded, 4 failed, 1 cancelled.**", text)
         self.assertIn("1 run(s) still in progress are not included.", text)
         sections = text.split("\n## ")
         release, nightly, dev = sections[1], sections[2], sections[3]
@@ -180,12 +184,14 @@ class DailyBenchmarkReportTests(unittest.TestCase):
         self.assertIn("Baseline release/v1.0", release)
         self.assertIn("previous release/v1.1 run", release)
         self.assertIn("run #30", nightly)
+        self.assertNotIn("run #31", nightly)
+        self.assertIn("run #31", dev)
         self.assertIn("`20260328-1`", nightly)
         self.assertIn("run #23", dev)
         self.assertIn("Cancelled; not analysed.", dev)
         self.assertNotIn("run #24", text)
         allowed = {entry["number"]: entry["create_issue_allowed"] for entry in failures}
-        self.assertEqual(allowed, {20: False, 30: True, 22: False})
+        self.assertEqual(allowed, {20: False, 30: True, 22: False, 31: False})
         nightly_entry = next(entry for entry in failures if entry["number"] == 30)
         self.assertEqual(nightly_entry["open_issues"], [{"number": 5, "title": "known"}])
         self.assertEqual(nightly_entry["last_success"]["version"], "20260327-1")

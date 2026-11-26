@@ -2,19 +2,39 @@
 # SPDX-License-Identifier: MIT
 
 name: Nightly ROCm Build and Benchmark
-run-name: "Nightly ROCm ${{ github.event_name == 'schedule' && github.event.schedule || 'manual' }}"
+run-name: "Nightly ROCm ${{ inputs.repair_issue && format('repair test for #{0}', inputs.repair_issue) || github.event_name == 'schedule' && github.event.schedule || 'manual' }}"
 
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+    # The repair inputs are set by the nightly-auto-repair agentic workflow to rerun a failed nightly on a fix branch.
+    inputs:
+      rocm_release_id:
+        description: 'ROCm nightly release ID to build, e.g. 20261125-1; leave empty for the latest'
+        required: false
+        default: ''
+      repair_issue:
+        description: 'Issue number being repaired; makes this an isolated repair test that reports back to the PR and issue'
+        required: false
+        default: ''
+      run_miopen_tuning:
+        description: 'Run MIOpen tuning'
+        type: boolean
+        required: false
+        default: true
+      build_final:
+        description: 'Build the final tuned image'
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
   actions: write
 
 concurrency:
-  group: nightly-rocm-build-and-benchmark
+  group: ${{ inputs.repair_issue && format('nightly-rocm-repair-{0}', inputs.repair_issue) || 'nightly-rocm-build-and-benchmark' }}
   cancel-in-progress: false
 
 jobs:
@@ -23,13 +43,31 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.resolve.outputs.release_id }}
+      # Repair tests use their own tag so they never overwrite the real nightly image.
+      image_tag: ${{ inputs.repair_issue && format('nightly-{0}-repair-{1}', steps.resolve.outputs.release_id, github.run_id) || format('nightly-{0}', steps.resolve.outputs.release_id) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
       - name: Resolve latest ROCm nightly
-        id: resolve
+        id: latest
+        if: ${{ !inputs.rocm_release_id }}
         uses: ./.github/actions/resolve-rocm-nightly
+
+      - name: Select ROCm nightly
+        id: resolve
+        env:
+          PINNED: ${{ inputs.rocm_release_id }}
+          LATEST: ${{ steps.latest.outputs.release_id }}
+        run: |
+          release_id="${PINNED:-$LATEST}"
+          if [[ ! "$release_id" =~ ^[0-9]{8}-[0-9]+$ ]]; then
+            echo "::error::Invalid ROCm nightly release ID: ${release_id}"
+            exit 1
+          fi
+          # The daily benchmark report reads this line to identify the dependency under test.
+          echo "Resolved ROCm nightly release: ${release_id}"
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
 
       - name: Write workflow summary
         uses: ./.github/actions/write-workflow-summary
@@ -39,7 +77,7 @@ jobs:
             {
               "ROCm package": {
                 "release_id": "${{ steps.resolve.outputs.release_id }}",
-                "image_tag": "nightly-${{ steps.resolve.outputs.release_id }}"
+                "image_tag": "${{ inputs.repair_issue && format('nightly-{0}-repair-{1}', steps.resolve.outputs.release_id, github.run_id) || format('nightly-{0}', steps.resolve.outputs.release_id) }}"
               }
             }
 
@@ -49,15 +87,16 @@ jobs:
     uses: ./.github/workflows/build-and-benchmark.yml
     with:
       git_branch: ${{ github.ref_name }}
-      image_tag: nightly-${{ needs.resolve-rocm.outputs.release_id }}
+      image_tag: ${{ needs.resolve-rocm.outputs.image_tag }}
       rebuild: true
-      run_miopen_tuning: true
+      # Inputs are empty on schedule, so check the event rather than relying on the boolean defaults.
+      run_miopen_tuning: ${{ github.event_name != 'workflow_dispatch' || inputs.run_miopen_tuning }}
       run_benchmarks: true
-      build_final: true
+      build_final: ${{ github.event_name != 'workflow_dispatch' || inputs.build_final }}
       create_miopen_db_branch: false
       disable_docker_cache: true
       export_docker_cache: false
-      cache_scope: 'nightly-rocm'
+      cache_scope: ${{ inputs.repair_issue && 'nightly-rocm-repair' || 'nightly-rocm' }}
       benchmark_flags: "--tag nightly"
       docker_build_args: |
         ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
@@ -65,3 +104,37 @@ jobs:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  report-repair-result:
+    name: Report repair test result
+    needs: [resolve-rocm, build-and-benchmark]
+    if: ${{ always() && inputs.repair_issue }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Comment on the repair pull request and issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.repair_issue }}
+          BRANCH: ${{ github.ref_name }}
+          RESULT: ${{ needs.build-and-benchmark.result }}
+          RELEASE_ID: ${{ needs.resolve-rocm.outputs.release_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$RESULT" == "success" ]]; then
+            verdict="✅ **The repair test passed.**"
+          else
+            verdict="❌ **The repair test did not pass** (result: \`${RESULT}\`)."
+          fi
+          body="${verdict} Nightly ROCm \`${RELEASE_ID}\` was rebuilt and benchmarked from \`${BRANCH}\`: ${RUN_URL}"
+          gh issue comment "$ISSUE" --body "$body"
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [[ -n "$pr" ]]; then
+            gh pr comment "$pr" --body "$body"
+          else
+            echo "::warning::No open pull request found for ${BRANCH}"
+          fi

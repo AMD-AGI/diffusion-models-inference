@@ -382,11 +382,14 @@ def main():
     newest_release = releases[0] if releases else None
 
     build_runs, build_in_progress = select_runs(repo, recent_runs(repo, BUILD_WORKFLOW, since), start, end)
+    default_branch = api(f"repos/{repo}")["default_branch"]
     nightly_runs = []
     in_progress = build_in_progress
     for nightly in NIGHTLIES:
         selected, pending = select_runs(repo, recent_runs(repo, nightly["workflow"], since), start, end)
-        nightly_runs.append((nightly, selected))
+        # Nightly workflows run on other branches (e.g. auto-repair tests) are watched by hand, so report them as development runs.
+        nightly_runs.append((nightly, [item for item in selected if item[0]["head_branch"] == default_branch]))
+        build_runs += [item for item in selected if item[0]["head_branch"] != default_branch]
         in_progress += pending
     release_runs = [(run, jobs) for run, jobs in build_runs if release_version(run["head_branch"])]
     dev_runs = [(run, jobs) for run, jobs in build_runs if not release_version(run["head_branch"])]
@@ -490,7 +493,10 @@ def main():
 
 
 def last_nightly_success(repo, nightly, run):
-    endpoint = f"repos/{repo}/actions/workflows/{nightly['workflow']}/runs?per_page=20&status=success"
+    endpoint = (
+        f"repos/{repo}/actions/workflows/{nightly['workflow']}/runs"
+        f"?per_page=20&status=success&branch={quote(run['head_branch'], safe='')}"
+    )
     candidates = [
         candidate
         for candidate in api(endpoint)["workflow_runs"]

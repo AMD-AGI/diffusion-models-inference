@@ -187,6 +187,8 @@ cancelled runs are counted but not analysed, and in-progress runs are excluded.
   nightlies are added to `NIGHTLIES` in
   [the collector](.github/scripts/daily-benchmark-report.py).
 - **Development branches**: same as nightlies, but no issues are created.
+  Nightly workflow runs on branches other than the default branch, such as
+  repair tests, are reported here.
 
 Comparisons only use runs of the same framework and skip baselines without
 benchmark results. Latency changes of 5% or more are highlighted as
@@ -198,6 +200,26 @@ the workflow's frontmatter, regenerate its lock file with
 `gh aw compile daily-benchmark-report`; commit both files. Run the report's
 focused tests with `python3 -m unittest discover -s .github/scripts/tests -p
 'test_daily_benchmark_report.py'`.
+
+### Nightly auto-repair
+
+The [auto-repair workflow](.github/workflows/nightly-auto-repair.md) is started
+manually with an open `nightly-failure` issue number, or without one to pick the
+newest issue that has no repair attempt. [Its collector](.github/scripts/nightly-auto-repair.py)
+gathers the linked failed nightly run, its logs, and the commits since the last
+successful nightly. Copilot then either explains on the issue why the failure is
+out of scope, or opens a draft PR from `auto-repair/issue-<number>` and
+dispatches a repair test of
+[Nightly ROCm](.github/workflows/nightly-rocm.yml) on that branch with the same
+ROCm release. The repair test skips MIOpen tuning and the final image unless
+those failed, uses its own image tag and cache scope, and posts its result to the
+issue and PR. Each issue gets one attempt; delete the branch to retry.
+
+Each run is capped at 1000 AI credits, and the workflow at 3000 per day. It only
+works once `nightly-rocm.yml` with its repair inputs is on the default branch,
+because the dispatched run uses the workflow file from the fix branch. Run its
+focused tests with `python3 -m unittest discover -s .github/scripts/tests -p
+'test_nightly_auto_repair.py'`.
 
 ## Common contribution patterns
 
