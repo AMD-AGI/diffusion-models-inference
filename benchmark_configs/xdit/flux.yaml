@@ -150,6 +150,7 @@
     num_iterations: 25
     attention_backend: cudnn
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
 
 - name: flux.usp_2k.blackwell
   tags: [blackwell, b200, b300]
@@ -169,6 +170,7 @@
     num_iterations: 25
     attention_backend: cudnn
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
 
 - name: flux.single_gpu_2k
   tags: [release, instinct, gfx942, gfx950]
