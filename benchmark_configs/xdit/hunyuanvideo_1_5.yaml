@@ -59,6 +59,7 @@
     enable_slicing: true
     use_torch_compile: true
     attention_backend: flash_3
+    use_parallel_vae: true
 
 - name: hunyuanvideo_1_5.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -78,3 +79,4 @@
     enable_slicing: true
     use_torch_compile: true
     attention_backend: cudnn
+    use_parallel_vae: true
