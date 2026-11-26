@@ -14,7 +14,7 @@ ARG BASE_IMAGE="amdsiloai/pytorch-xdit:v26.11.2"
 FROM ${BASE_IMAGE}
 
 ARG VLLM_REPO=https://github.com/vllm-project/vllm.git
-ARG VLLM_COMMIT="db9527a" # v0.31.0 release
+ARG VLLM_COMMIT="62d4bc3" # v0.34.0 release
 
 ARG VLLM_OMNI_REPO=https://github.com/kTorp/vllm-omni.git
 ARG VLLM_OMNI_COMMIT="57a2a80" # v0.31.0 pre-release custom branch
