@@ -219,6 +219,21 @@ use their own image tag and cache scope, and post their result to the PR, or
 the fallback issue, and to the `nightly-failure` issue. Each issue gets one
 attempt; delete the branch to retry.
 
+The agent runs on the self-hosted `gfx950` runner label with AWF still enabled.
+Its network allowlist includes GitHub, the default infrastructure domains, and HTTPS access
+to `nightly.repo.amd.com`. It can inspect upstream sources and compare nightly
+package indexes, archive contents and headers without installing ROCm. Runner
+GPU access is not assumed inside AWF; GPU validation remains in the dispatched
+repair test with the existing Brr integration.
+
+Before declining a repair, the agent must investigate the first diagnostic and
+publish concrete evidence, hypotheses and next steps. When there is no source
+issue, it opens an `auto-repair` diagnosis issue instead of silently recording a
+no-op. Blocked investigations are reported as incomplete. An evidence-backed
+repair does not require local reproduction before its test is dispatched.
+After editing the workflow, regenerate its lock file with
+`gh aw compile nightly-auto-repair` and commit both files.
+
 Each run is capped at 1000 AI credits, and the workflow at 3000 per day. It only
 works once `nightly-rocm.yml` with its repair inputs is on the default branch,
 because the dispatched run uses the workflow file from the fix branch. Run its
