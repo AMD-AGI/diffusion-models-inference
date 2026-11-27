@@ -284,8 +284,6 @@ docker build -f docker/Dockerfile.ci --target rocm_sdk . --progress=plain 2>&1 \
     | grep -i 'setup_amdsmi'
 ```
 
-If `import amdsmi` resolves outside `/opt/rocm`, the banner says the bindings
-are probably from a PyPI `amdsmi` wheel. A future `rocm-sdk-core` that installs
-`amdsmi` directly into `site-packages` also triggers this note. To tell the two
-apart, look for `libamd_smi_python.so` next to the resolved `amdsmi` package.
-Only the PyPI wheel ships that file.
+If a PyPI `amdsmi` wheel causes the import to resolve, the banner says so and
+tells you to remove that dependency instead of the shim. The script identifies
+that wheel by the `libamd_smi_python.so` file next to the bindings.

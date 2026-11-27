@@ -4,10 +4,11 @@
 #
 # Make `import amdsmi` work inside the venv.
 #
-# The amd-smi CLI lives at ${ROCM_HOME}/bin and is unaffected by this script.
-# The ROCm SDK wheels put the Python bindings at ${ROCM_HOME}/share/amd_smi/amdsmi
-# with no setup.py or pyproject.toml, so pip refuses to install them and they
-# land nowhere on sys.path. torch.cuda wants them for device_count() and for
+# The amd-smi CLI is in ${ROCM_HOME}/bin and /venv/bin and needs no shim.
+# The rocm-sdk-core wheel installs the Python bindings in its private tree
+# (_rocm_sdk_core/share/amd_smi/amdsmi), and `rocm-sdk init` mirrors them to
+# ${ROCM_HOME}/share/amd_smi/amdsmi. Neither location is on sys.path, so
+# `import amdsmi` fails. torch.cuda wants them for device_count() and for
 # utilization/memory_usage/temperature/power_draw/clock_rate; accelerate wants
 # them for set_numa_affinity under ACCELERATE_CPU_AFFINITY.
 #
@@ -48,23 +49,31 @@ fi
 origin="$(probe_origin)"
 if [[ -n "${origin}" ]]; then
     echo "==============================================================" >&2
-    echo " setup_amdsmi: RETIRE THIS SHIM" >&2
-    echo " \`import amdsmi\` already resolves without it, from" >&2
-    echo "     ${origin}" >&2
-    if [[ "${origin}" != "${rocm_root}/"* ]]; then
-        echo " Note: that path is outside ${rocm_root}, so the bindings are" >&2
-        echo " probably a PyPI amdsmi wheel rather than the ROCm SDK copy." >&2
-        echo " Those bundle their own libamd_smi and can skew from ROCm." >&2
+    # Only the PyPI amdsmi wheel ships libamd_smi_python.so next to the
+    # wrapper. A path outside ${rocm_root} alone does not identify it: a
+    # rocm-sdk-core that installs amdsmi into site-packages is also outside.
+    if [[ -e "$(dirname "$(readlink -f "${origin}")")/libamd_smi_python.so" ]]; then
+        echo " setup_amdsmi: PYPI AMDSMI WHEEL FOUND" >&2
+        echo " \`import amdsmi\` resolves to a PyPI amdsmi wheel, from" >&2
+        echo "     ${origin}" >&2
+        echo " That wheel bundles its own libamd_smi and can skew from ROCm." >&2
+        echo " Find the requirement that installs amdsmi and remove it." >&2
+        echo " Keep docker/setup_amdsmi.sh." >&2
+    else
+        echo " setup_amdsmi: RETIRE THIS SHIM" >&2
+        echo " \`import amdsmi\` already resolves without it, from" >&2
+        echo "     ${origin}" >&2
+        echo " No symlink was created. Delete docker/setup_amdsmi.sh and its" >&2
+        echo " COPY/RUN in docker/Dockerfile.ci." >&2
     fi
-    echo " No symlink was created. Delete docker/setup_amdsmi.sh and its" >&2
-    echo " COPY/RUN in docker/Dockerfile.ci." >&2
     echo "==============================================================" >&2
     exit 0
 fi
 
 if [[ ! -d "${src}" ]]; then
     echo "amdsmi is not importable and ${src} does not exist;" >&2
-    echo "is the rocm-sdk-devel wheel installed and initialized in this layer?" >&2
+    echo "are rocm-sdk-core and rocm-sdk-devel installed, and did" >&2
+    echo "\`rocm-sdk init\` run in this layer?" >&2
     exit 1
 fi
 
