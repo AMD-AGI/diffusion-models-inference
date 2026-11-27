@@ -2,35 +2,30 @@
 # SPDX-License-Identifier: MIT
 
 name: Resolve ROCm Nightly
-description: Resolves the latest ROCm nightly release ID from the package index
+description: >-
+  Selects the newest TheRock nightly ROCm wheel build and checks that it has
+  all the wheels that docker/install_rocm_wheels.sh pins. Fails when a pinned
+  wheel is missing, and writes the version provenance.
+
+inputs:
+  provenance_file:
+    description: 'Path for the provenance JSON'
+    required: false
+    default: 'rocm-nightly-provenance.json'
 
 outputs:
-  release_id:
-    description: 'Latest ROCm nightly release ID'
-    value: ${{ steps.resolve.outputs.release_id }}
+  rocm_wheel_version:
+    description: 'Newest ROCm nightly wheel version, for example 10.3.0a20261108'
+    value: ${{ steps.resolve.outputs.rocm_wheel_version }}
 
 runs:
   using: composite
   steps:
-    - name: Resolve latest ROCm nightly
+    - name: Resolve ROCm nightly wheel build
       id: resolve
       shell: bash
       env:
-        ROCM_NIGHTLY_ROOT: https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404
-      run: |
-        set -euo pipefail
-
-        release_id=$(
-          curl --fail --silent --show-error --location "${ROCM_NIGHTLY_ROOT}/" |
-            grep -oE '[0-9]{8}-[0-9]+/index\.html' |
-            sed 's#/index\.html##' |
-            sort -V |
-            tail -n 1
-        )
-        if [[ ! "$release_id" =~ ^[0-9]{8}-[0-9]+$ ]]; then
-          echo "::error::Could not resolve a valid ROCm nightly release ID"
-          exit 1
-        fi
-
-        echo "Resolved ROCm nightly release: ${release_id}"
-        echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+        PROVENANCE_FILE: ${{ inputs.provenance_file }}
+      run: >-
+        python3 "${GITHUB_ACTION_PATH}/scripts/resolve_rocm_nightly.py"
+        --provenance "${PROVENANCE_FILE}"

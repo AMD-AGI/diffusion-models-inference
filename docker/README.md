@@ -98,109 +98,192 @@ require the runner's architecture tag, such as `gfx942` or `gfx950`.
 MIOpen tuning continues to use downstream workload files, independently of this
 benchmark config choice.
 
-### ROCm nightly packages
+### ROCm and PyTorch wheels
 
-`Dockerfile.ci` installs TheRock nightly debs from the
-[Ubuntu 24.04 native index](https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/).
-`ROCM_RELEASE_ID` pins the snapshot and defaults to `20261108-42427827092`.
-The package series is derived from the snapshot's `amdrocm-runtime-dev`
-metadata. The scheduled nightly workflow selects the latest snapshot from
-this same index.
-`ROCM_GFX_TARGETS` controls which architecture-specific package shards are
-installed. `PYTORCH_ROCM_ARCH` controls the architectures built into PyTorch
-and related wheels; it defaults to `ROCM_GFX_TARGETS` but can be overridden
-independently.
+`Dockerfile.ci` installs ROCm, PyTorch, torchvision, torchaudio, and Triton as
+TheRock Python wheels from the
+[nightly wheel index](https://nightly.repo.amd.com/rocm/whl-next/).
+`ROCM_WHEEL_VERSION` selects one TheRock build (see its `ARG` default in
+`Dockerfile.ci`). torch pins `rocm[libraries]` and `triton` to that exact
+version, so all ROCm packages come from the same build. `TORCH_VERSION`,
+`TORCHVISION_VERSION`, and `TORCHAUDIO_VERSION` select the framework
+releases; the install adds the `+rocm${ROCM_WHEEL_VERSION}` local version.
+`ROCM_WHEEL_PYTHON_TAG` must agree with `python3` of `BASE_IMAGE`; the
+install stops if it does not.
 
-Leaf packages install under `/opt/rocm/core-<series>`. `rocm_devel` registers
-the unversioned `/opt/rocm/{bin,lib,include,...}` links that the
-`amdrocm-core` postinst would have created, and keeps the LLVM static
-archives those packages install.
+The index keeps nightly builds for about three months. After that, an image
+with an older `ROCM_WHEEL_VERSION` cannot be built again. The pushed image is
+the reproducible artifact.
 
-| Target | Packages | Use |
+The scheduled nightly workflow builds the newest ROCm wheel build on this
+index. The
+[resolve-rocm-nightly](../.github/actions/resolve-rocm-nightly/action.yml)
+action gets the requirement list from
+`install_rocm_wheels.sh --print-requirements` and checks the wheel file
+names. If the newest build does not have a pinned wheel, the workflow fails
+with the missing wheels; then update the pins in `Dockerfile.ci`. Notices
+tell about newer torch, torchvision, and torchaudio releases and a new ROCm
+version. The job summary and the `rocm-nightly-provenance` artifact record
+the wheels. If the staging image `nightly-<ROCM_WHEEL_VERSION>` exists, the
+ROCm build did not change, and the workflow does not build. A manual run with
+`force_build` builds it again.
+
+`ROCM_GFX_TARGETS` selects the `device-<gfx>` extras of torch and
+torchvision. These pull the architecture-specific kernel wheels
+(`amd-torch-device-<gfx>`, `amd-torchvision-device-<gfx>`, and
+`rocm-sdk-device-<gfx>`). The same targets go to `MORI_GPU_ARCHS`.
+
+`docker/install_rocm_wheels.sh` installs the wheels from the AMD index only.
+The index mirrors the pure-Python dependencies of torch, so no PyPI package
+can replace a ROCm build. Then it runs `rocm-sdk init` in the same layer,
+links `/opt/rocm` to the initialized `rocm-sdk-devel` tree, and writes
+the pinned versions to the pip constraints file
+`/opt/rocm-wheel-constraints.txt`. It also writes the build identity to
+`/opt/rocm-wheel-build-info.txt` and a copy of the TheRock manifest to
+`/opt/rocm-wheel-therock-manifest.json` (see
+[ROCm and PyTorch provenance](#rocm-and-pytorch-provenance)). The image
+environment variables `ROCM_WHEEL_CONSTRAINTS`, `ROCM_WHEEL_BUILD_INFO`, and
+`ROCM_WHEEL_THEROCK_MANIFEST` give these paths, and the record-image-versions
+action copies the files into the versions artifact.
+
+During the build, a build argument (`ARG PIP_CONSTRAINT` in `core`) applies
+the constraints file to the `pip` runs in `core` and `final`. Thus AITER,
+diffusers, xDiT, and other dependencies cannot replace torch, Triton, or the
+ROCm wheels. `install_rocm_wheels --check` after the package installs in
+`final` makes sure of this. The published image does not set
+`PIP_CONSTRAINT`. To keep the ROCm
+wheels in a downstream image or a container, use the file explicitly:
+
+```sh
+pip install -c "${ROCM_WHEEL_CONSTRAINTS}" <packages>
+```
+
+or, in a Dockerfile, for all later `pip` runs:
+
+```dockerfile
+ENV PIP_CONSTRAINT="${ROCM_WHEEL_CONSTRAINTS}"
+```
+
+| Target | Contents | Use |
 | --- | --- | --- |
-| `rocm_devel` | HIP/`hipcc`, BLAS, MIOpen, RCCL, FFT, RAND, sparse, and solver for each arch in `ROCM_GFX_TARGETS`, plus headers, developer-tools, RDC, OpenCL, and blas/rccl tests. LLVM static archives kept | Parent of `torch_build_base`, `build_mori`, and `core` |
+| `rocm_sdk` | ROCm SDK (`rocm-sdk-core`, `-libraries`, `-devel`, `rocm-profiler`, and device wheels for each arch in `ROCM_GFX_TARGETS`), torch, torchvision, torchaudio, Triton. `/opt/rocm` links to the devel tree | Parent of `build_mori` and `core` |
 
-`amdrocm-developer-tools` pulls the profiler, emulator, and debugger. It does
-not depend on `amdrocm-core`. `torch_build_base` fetches TheRock.
-`build_triton` and `build_pytorch` compile in series, then `build_vision`
-and `build_audio` compile in parallel. `build_torch_stack`
-gathers those wheels. `core` installs the wheels built by `build_torch_stack`.
-`build_mori` builds the MORI wheel from `rocm_devel` without UMBP, and `core`
+`build_mori` builds the MORI wheel from `rocm_sdk` without UMBP, and `core`
 installs it after AITER; MORI provides the symmetric memory behind AITER's
 intranode attention A2A.
 `final` installs rocprofiler-compute's Python requirements.
 
 ```sh
-# pinned native Ubuntu 24.04 snapshot
+# pinned ROCm wheel build
 docker build -f docker/Dockerfile.ci --target final -t pytorch-xdit-dev .
 
-# override the native Ubuntu 24.04 snapshot
+# override the ROCm wheel build
 docker build -f docker/Dockerfile.ci --target final \
-    --build-arg ROCM_RELEASE_ID=20261013-38325106112 \
-    -t pytorch-xdit-native .
+    --build-arg ROCM_WHEEL_VERSION=10.3.0a20261124 \
+    -t pytorch-xdit-nightly .
 ```
 
-The image does not build ROCm from source and does not support
-`rocm-libraries` or `rocm-systems` commit overrides. Changes that are not
-available in the pinned nightly must first be published in a nightly snapshot.
+A `ROCM_WHEEL_VERSION` override needs builds of all pinned wheels for the
+same ROCm wheel version on the index. To see the list, run
+`ROCM_WHEEL_VERSION=... ROCM_GFX_TARGETS=... TORCH_VERSION=...
+TORCHVISION_VERSION=... TORCHAUDIO_VERSION=...
+docker/install_rocm_wheels.sh --print-requirements`.
+The image does not build ROCm or PyTorch
+from source. Changes that are not available in a published wheel build must
+first be published on the index.
+
+### ROCm and PyTorch provenance
+
+`ROCM_WHEEL_VERSION` (for example `10.3.0a20261108`) identifies one TheRock
+nightly build. That build sets the source of all ROCm and PyTorch packages in
+the image. The torch, torchvision, and torchaudio wheel versions are
+`<*_VERSION>+rocm<ROCM_WHEEL_VERSION>`, for example
+`torch 2.14.0+rocm10.3.0a20261108`. TheRock builds these wheels and Triton
+again for each ROCm wheel build, from the ROCm/pytorch release branch and the
+torchvision, torchaudio, and Triton commits that it pins (`related_commits`
+and `.ci/docker/ci_commit_pins/triton.txt`). Thus a new `ROCM_WHEEL_VERSION`
+can contain different commits even when the `*_VERSION` pins do not change.
+
+The build info file (`$ROCM_WHEEL_BUILD_INFO`) gives each source commit as a
+`key<TAB>value` line:
+
+| Component | Build info key | Repository |
+| --- | --- | --- |
+| TheRock | `therock_manifest.the_rock_commit`; `therock_manifest.github_run_id` is the TheRock CI run | [ROCm/TheRock](https://github.com/ROCm/TheRock) |
+| ROCm components (rocm-systems, rocm-libraries, llvm-project, and the other TheRock submodules) | `therock_manifest.submodule.<path>`; the value is `<commit> <repository>` | The repository in the value |
+| torch | `torch.version.git_version` | [ROCm/pytorch](https://github.com/ROCm/pytorch) |
+| torchvision | `torchvision.version.git_version` | [ROCm/vision](https://github.com/ROCm/vision) |
+| torchaudio | `torchaudio.version.git_version` | [ROCm/audio](https://github.com/ROCm/audio) |
+| Triton | `triton.git_version` (short commit) | [triton-lang/triton](https://github.com/triton-lang/triton) |
+
+The TheRock manifest (`$ROCM_WHEEL_THEROCK_MANIFEST`) is the full record of
+the TheRock build. It also lists the TheRock patches of each submodule and
+the build flags.
+
+**From an image:**
+
+```sh
+docker run --rm IMAGE sh -c 'cat "$ROCM_WHEEL_BUILD_INFO"'
+docker run --rm IMAGE sh -c 'cat "$ROCM_WHEEL_THEROCK_MANIFEST"'
+```
+
+CI runs that build or benchmark an image upload the same data in the
+`<run_number>-versions-<arch>` artifact: the build info in `rocm.txt`
+(section "ROCm wheel build info") and the manifest in
+`therock-manifest.json`.
+
+**From the wheel index, without an image:** the index keeps a build for about
+three months. The `rocm-sdk-core` wheel contains the TheRock manifest, and the
+torch, torchvision, and torchaudio wheels contain their source commits. The
+torch wheel metadata gives the exact Triton build. The download is about
+700 MB.
+
+```sh
+version=10.3.0a20261108                    # ROCM_WHEEL_VERSION
+torch=2.14.0 vision=0.29.0 audio=2.11.0.3  # *_VERSION pins of the same Dockerfile.ci
+wheels="$(mktemp -d)"
+pip download --no-deps --only-binary=:all: \
+    --python-version 3.12 --platform linux_x86_64 \
+    --index-url https://nightly.repo.amd.com/rocm/whl-next -d "$wheels" \
+    "rocm-sdk-core==${version}" "torch==${torch}+rocm${version}" \
+    "torchvision==${vision}+rocm${version}" "torchaudio==${audio}+rocm${version}"
+unzip -p "$wheels"/rocm_sdk_core-*.whl \
+    _rocm_sdk_core/share/therock/therock_manifest.json
+echo
+for package in torch torchvision torchaudio; do
+    unzip -p "$wheels/${package}"-*.whl "${package}/version.py" | grep '^git_version'
+done
+unzip -p "$wheels"/torch-*.whl 'torch-*.dist-info/METADATA' |
+    grep '^Requires-Dist: triton'
+```
+
+`--python-version` must agree with `ROCM_WHEEL_PYTHON_TAG` (`cp312` is
+3.12).
 
 ### amd-smi Python bindings
 
-`docker/setup_amdsmi.sh` links the ROCm Python bindings into the venv, because
-the nightly debs ship them under `${ROCM_HOME}/share/amd_smi/amdsmi` with no
-`setup.py`, where pip cannot install them and nothing can import them. It runs
-in `rocm_devel`; the script header explains why a symlink is the only correct
-mechanism.
+`docker/setup_amdsmi.sh` links the amd-smi Python bindings into the venv. The
+`rocm-sdk-core` wheel installs them in its private tree
+(`_rocm_sdk_core/share/amd_smi/amdsmi`), and `rocm-sdk init` mirrors them into
+the `rocm-sdk-devel` tree that `/opt/rocm` links to. Neither location is on
+`sys.path`, so without the link `import amdsmi` fails. The `amd-smi` command
+needs no shim: it is in both `/opt/rocm/bin` and `/venv/bin`.
 
-If a future nightly puts the bindings on `sys.path` itself, a build log prints
+The script runs in `rocm_sdk` and links `site-packages/amdsmi` to
+`/opt/rocm/share/amd_smi/amdsmi`. The wrapper finds
+`libamd_smi.so.<SOVERSION>` relative to the resolved path of its own file, so
+the link loads the library from the same ROCm tree. The script header explains
+why a copy or a `sys.path` entry is wrong.
+
+If a future ROCm build puts the bindings on `sys.path` itself, a build log prints
 a `setup_amdsmi: RETIRE THIS SHIM` banner and the script makes no changes —
-delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping `ROCM_RELEASE_ID`:
+delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping `ROCM_WHEEL_VERSION`:
 
 ```sh
-docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
+docker build -f docker/Dockerfile.ci --target rocm_sdk . --progress=plain 2>&1 \
     | grep -i 'setup_amdsmi'
 ```
 
-### LLVM classic toolkit path
-
-`docker/setup_rocm_llvm_layout.sh` links `${ROCM_PATH}/lib/llvm/bin` tools into
-`${ROCM_PATH}/llvm/bin`. Nightly debs install `ld.lld` under `lib/llvm/bin` and
-leave `llvm/bin` as clang `.cfg` stubs; FlyDSL/MLIR still invoke
-`$ROCM_PATH/llvm/bin/ld.lld`. It runs in `rocm_devel` after the ROCm `ENV`
-block, which also puts `lib/llvm/bin` on `PATH`.
-
-If a future nightly ships an executable `ld.lld` at the classic path, a build
-log prints a `setup_rocm_llvm_layout: RETIRE THIS SHIM` banner and the script
-makes no changes — delete it and its `COPY`/`RUN` at that point. Keep the
-`PATH=/opt/rocm/lib/llvm/bin` `ENV` unless the nightly also puts that directory
-on `PATH`. The shim can also be deleted if FlyDSL (or its bundled MLIR) stops
-looking for `$ROCM_PATH/llvm/bin/ld.lld` and uses `lib/llvm/bin`,
-`HIP_CLANG_PATH`, `TRITON_HIP_LLD_PATH`, or `PATH` instead; that will not
-print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
-
-```sh
-docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
-    | grep -i 'setup_rocm_llvm_layout'
-```
-
-### Origami CMake package
-
-`docker/setup_origami_cmake.sh` writes `${ROCM_HOME}/lib/cmake/origami/origami-config.cmake`
-so `find_package(hipblaslt)` can configure. hipBLASLt's installed package config
-requires `find_package(origami)` in a sibling `lib/cmake/origami` directory
-(`NO_DEFAULT_PATH`, so `CMAKE_PREFIX_PATH` does not help). Nightly debs ship
-`liborigami.so` in the BLAS host package but omit that CMake package from
-BLAS devel. It runs in `rocm_devel` after the `-dev` debs, which is when
-hipBLASLt's CMake files land. The script header explains why a stub imported
-target is the only correct mechanism.
-
-If a future nightly ships `origami-config.cmake` (or `origamiConfig.cmake`) next
-to hipBLASLt, a build log prints a `setup_origami_cmake: RETIRE THIS SHIM`
-banner and the script makes no changes — delete it and its `COPY`/`RUN` at that
-point. The shim can also be deleted if hipBLASLt stops `find_dependency(origami)`;
-that will not print the banner. Watch for the banner when bumping `ROCM_RELEASE_ID`:
-
-```sh
-docker build -f docker/Dockerfile.ci --target rocm_devel . --progress=plain 2>&1 \
-    | grep -i 'setup_origami_cmake'
-```
+If a PyPI `amdsmi` wheel causes the import to resolve, the banner says so and
+tells you to remove that dependency instead of the shim. The script identifies
+that wheel by the `libamd_smi_python.so` file next to the bindings.

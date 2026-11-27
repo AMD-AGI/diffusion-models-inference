@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Build and benchmark also when the nightly image of the ROCm build exists'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -22,7 +27,10 @@ jobs:
     name: Resolve latest ROCm nightly
     runs-on: ubuntu-latest
     outputs:
-      release_id: ${{ steps.resolve.outputs.release_id }}
+      rocm_wheel_version: ${{ steps.resolve.outputs.rocm_wheel_version }}
+      build: ${{ steps.existing.outputs.build }}
+    env:
+      STAGING_IMAGE: ${{ vars.STAGING_IMAGE || 'amdsiloai/pytorch-xdit-staging' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -30,6 +38,39 @@ jobs:
       - name: Resolve latest ROCm nightly
         id: resolve
         uses: ./.github/actions/resolve-rocm-nightly
+        with:
+          provenance_file: ${{ runner.temp }}/rocm-nightly/provenance.json
+
+      - name: Upload ROCm nightly provenance
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocm-nightly-provenance
+          path: ${{ runner.temp }}/rocm-nightly/provenance.json
+          if-no-files-found: error
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_ORGANIZATION }}
+          password: ${{ secrets.DOCKERHUB_OAT }}
+
+      # build-and-benchmark pushes the final staging image after a complete
+      # run. If the image exists, this ROCm build is done and the run stops.
+      - name: Check for an existing nightly image
+        id: existing
+        env:
+          IMAGE: ${{ env.STAGING_IMAGE }}:nightly-${{ steps.resolve.outputs.rocm_wheel_version }}
+          FORCE_BUILD: ${{ inputs.force_build || false }}
+        run: |
+          if [[ "${FORCE_BUILD}" == "true" ]]; then
+            echo "Force build requested"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif docker manifest inspect "${IMAGE}" > /dev/null 2>&1; then
+            echo "::notice::${IMAGE} exists. The ROCm build did not change, so the build is skipped."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Write workflow summary
         uses: ./.github/actions/write-workflow-summary
@@ -37,19 +78,21 @@ jobs:
           title: 'Resolved ROCm Nightly'
           tables: |
             {
-              "ROCm package": {
-                "release_id": "${{ steps.resolve.outputs.release_id }}",
-                "image_tag": "nightly-${{ steps.resolve.outputs.release_id }}"
+              "ROCm wheels": {
+                "rocm_wheel_version": "${{ steps.resolve.outputs.rocm_wheel_version }}",
+                "image_tag": "nightly-${{ steps.resolve.outputs.rocm_wheel_version }}",
+                "build": "${{ steps.existing.outputs.build }}"
               }
             }
 
   build-and-benchmark:
     name: Build and benchmark latest ROCm nightly
     needs: [resolve-rocm]
+    if: ${{ needs.resolve-rocm.outputs.build == 'true' }}
     uses: ./.github/workflows/build-and-benchmark.yml
     with:
       git_branch: ${{ github.ref_name }}
-      image_tag: nightly-${{ needs.resolve-rocm.outputs.release_id }}
+      image_tag: nightly-${{ needs.resolve-rocm.outputs.rocm_wheel_version }}
       rebuild: true
       run_miopen_tuning: true
       run_benchmarks: true
@@ -60,7 +103,7 @@ jobs:
       cache_scope: 'nightly-rocm'
       benchmark_flags: "--tag nightly"
       docker_build_args: |
-        ROCM_RELEASE_ID=${{ needs.resolve-rocm.outputs.release_id }}
+        ROCM_WHEEL_VERSION=${{ needs.resolve-rocm.outputs.rocm_wheel_version }}
     secrets:
       DOCKERHUB_ORGANIZATION: ${{ secrets.DOCKERHUB_ORGANIZATION }}
       DOCKERHUB_OAT: ${{ secrets.DOCKERHUB_OAT }}

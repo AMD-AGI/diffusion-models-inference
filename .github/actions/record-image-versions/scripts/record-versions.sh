@@ -5,6 +5,11 @@
 set -euo pipefail
 
 # Copy ROCm identity out of IMAGE into OUTPUT_DIR using a created container.
+# Images with ROCm wheels (docker/install_rocm_wheels.sh) also get the wheel
+# pins, the build identity, and the TheRock manifest. The image config gives
+# their paths in ROCM_WHEEL_CONSTRAINTS, ROCM_WHEEL_BUILD_INFO, and
+# ROCM_WHEEL_THEROCK_MANIFEST. The manifest goes to
+# OUTPUT_DIR/therock-manifest.json.
 # Expects env vars: IMAGE, OUTPUT_DIR, CONTAINER_NAME
 
 IMAGE="${IMAGE:?IMAGE is required}"
@@ -58,6 +63,29 @@ version_files=(
   "/opt/rocm/share/hip/version:$extract_dir/hip-version"
 )
 
+# Wheel images: the paths come from the image config. Deb images do not set
+# them. A set path that cannot be copied is an error.
+image_env="$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGE")"
+image_env_value() {
+  sed -n "s/^$1=//p" <<< "${image_env}" | tail -n 1
+}
+wheels=""
+wheel_build_info=""
+constraints_path="$(image_env_value ROCM_WHEEL_CONSTRAINTS)"
+if [[ -n "${constraints_path}" ]]; then
+  docker cp "${CONTAINER_NAME}:${constraints_path}" "$extract_dir/rocm-wheel-constraints.txt"
+  wheels="$(sort -f "$extract_dir/rocm-wheel-constraints.txt")"
+fi
+build_info_path="$(image_env_value ROCM_WHEEL_BUILD_INFO)"
+if [[ -n "${build_info_path}" ]]; then
+  docker cp "${CONTAINER_NAME}:${build_info_path}" "$extract_dir/rocm-wheel-build-info.txt"
+  wheel_build_info="$(cat "$extract_dir/rocm-wheel-build-info.txt")"
+fi
+manifest_path="$(image_env_value ROCM_WHEEL_THEROCK_MANIFEST)"
+if [[ -n "${manifest_path}" ]]; then
+  docker cp "${CONTAINER_NAME}:${manifest_path}" "$OUTPUT_DIR/therock-manifest.json"
+fi
+
 # TheRock debian versions encode the channel (stable X.Y.Z,
 # nightly X.Y.Z~YYYYMMDD, prerelease X.Y.Z~preN, dev X.Y.Z~devYYYYMMDD).
 # Classic ROCm apt uses rocm-* names; TheRock uses amdrocm-*.
@@ -73,8 +101,9 @@ packages="$(awk '
   /^$/ { emit() }
   END { emit() }
 ' "$extract_dir/dpkg-status")"
-# Source-built ROCm images can provide version files without Debian packages.
-if [[ -z "${packages}" ]]; then
+# Source-built ROCm images can provide version files without Debian packages
+# or ROCm wheels.
+if [[ -z "${packages}" && -z "${wheels}" ]]; then
   found_version=
   for entry in "${version_files[@]}"; do
     dest="${entry#*:}"
@@ -84,10 +113,10 @@ if [[ -z "${packages}" ]]; then
     fi
   done
   if [[ -z "$found_version" ]]; then
-    echo "::error::No ROCm packages or version files found in ${IMAGE}" >&2
+    echo "::error::No ROCm packages, ROCm wheels, or version files found in ${IMAGE}" >&2
     exit 1
   fi
-  echo "::notice::No ROCm Debian packages found; recording version files instead." >&2
+  echo "::notice::No ROCm Debian packages or wheels found; recording version files instead." >&2
   packages="(no amdrocm-* or rocm-* packages found)"
 fi
 
@@ -102,7 +131,13 @@ fi
   fi
   echo
   echo "=== installed ROCm packages ==="
-  echo "${packages}"
+  echo "${packages:-(none found)}"
+  echo
+  echo "=== installed ROCm wheels ==="
+  echo "${wheels:-(none found)}"
+  echo
+  echo "=== ROCm wheel build info ==="
+  echo "${wheel_build_info:-(none found)}"
   echo
   echo "=== ROCm version files ==="
   found=

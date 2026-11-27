@@ -25,6 +25,9 @@ Complete the shared [repository skill preflight](../preflight/SKILL.md) before c
         convert a historical `#N` subject into a public PR link without API confirmation.
    2.4. [Diff dependency pins](./commands.md#diff-dependency-pins) in `docker/Dockerfile.ci`
    2.5. For each changed commit hash, [look up upstream changes](./commands.md#look-up-upstream-changes) using the repo mapping
+   2.6. If `ROCM_WHEEL_VERSION` or a `*_VERSION` wheel pin changed, get the TheRock, ROCm component,
+        torch, torchvision, torchaudio, and Triton commits of both releases per
+        [ROCm wheel provenance](./commands.md#rocm-wheel-provenance), and look up each changed commit
 3. **Categorize each PR** by changed file paths per [categorization rules](./categorization.md)
    3.1. Included (affect image): New Model, Performance, Docker/Environment, Benchmark Configs, Libraries
    3.2. Excluded (don't affect the ROCm image): CI, Docs, Scripts, MIOpen, MAD
