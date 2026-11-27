@@ -128,7 +128,7 @@ gathers those wheels. `core` installs the wheels built by `build_torch_stack`.
 `build_mori` builds the MORI wheel from `rocm_devel` without UMBP, and `core`
 installs it after AITER; MORI provides the symmetric memory behind AITER's
 intranode attention A2A.
-`deps` installs rocprofiler-compute's Python requirements.
+`final` installs rocprofiler-compute's Python requirements.
 
 ```sh
 # pinned native Ubuntu 24.04 snapshot

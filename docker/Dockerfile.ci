@@ -24,7 +24,7 @@ ARG PYTORCH_COMMIT="4a9b2dfc02105f30e8bdcb78bcd2cf2167815c6e"
 ARG PYTORCH_VISION_COMMIT="b7d540b22fab0df4673898fb0aec2fc6954cddac"
 ARG PYTORCH_AUDIO_COMMIT="4c8abfdd423f40e5d04c073a4af5beec564ac630"
 ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
-# deps image arguments
+# final image arguments
 ARG AITER_COMMIT="04913fc854631d74147a926ad8be005c8a0bb133"
 ARG LONGCONTEXTATTENTION_COMMIT="631bdfd"
 ARG DIFFUSERS_COMMIT="51349f7ac2da4853852efdc1befc92669946e68a"
@@ -413,12 +413,16 @@ COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/to
 COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
 COPY --from=evidence_mori /evidence/mori /opt/license-evidence/mori-build-sources
 
-FROM core AS deps
+FROM core AS final
 ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG PYAV_VERSION
+# Keep the pip cache out of the image layers. The environment variable also
+# reaches the pip subprocesses of editable installs, which --no-cache-dir does
+# not. An ARG is not kept in the image, so users get the default pip cache.
+ARG PIP_NO_CACHE_DIR=1
 
 # setup
 WORKDIR /app/external
@@ -463,17 +467,15 @@ RUN --mount=type=bind,source=patches,target=/patches \
     pip install -c constraints.txt -e .
 # rocprofiler-compute ships with rocm_devel.
 # Due to https://github.com/ROCm/rocm-systems/pull/2821 drop numpy to avoid installing numpy<2
-RUN sed -i '/numpy/d' "${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt" && \
-    pip install --no-cache-dir -r "${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt"
+# Filter a copy, so that the ROCm tree in the image stays unchanged.
+RUN sed '/numpy/d' "${ROCM_PATH}/libexec/rocprofiler-compute/requirements.txt" \
+        > /tmp/rocprof-compute-requirements.txt && \
+    pip install --no-cache-dir -r /tmp/rocprof-compute-requirements.txt && \
+    rm /tmp/rocprof-compute-requirements.txt
 # imageio + imageio-ffmpeg for diffusers export_to_video H.264 encoding
 # --no-binary avoids shipping imageio-ffmpeg's bundled GPL ffmpeg binary
 RUN pip install --no-cache-dir --no-binary :all: imageio-ffmpeg
 RUN pip install --no-cache-dir imageio
-
-FROM core AS final
-# by copying from the deps stage we leave behind all cache and temporary files created during installation
-COPY --from=deps /venv /venv
-COPY --from=deps /app /app
 COPY LICENSE /tmp/project-license/LICENSE
 
 # install basic terminal utilities
