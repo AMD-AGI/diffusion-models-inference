@@ -1,3 +1,2 @@
 .ci/spdx_exclude.txt
-data/miopen/prefixes.txt
 patches/

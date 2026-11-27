@@ -2,18 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 import json
-import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-
-sys.path.insert(0, str(Path(__file__).parents[1]))
-
-from miopen_driver_commands import (  # noqa: E402
-    MIOpenDriverCommandCollector,
-    env_enabled,
-)
+from miopen_tuning.collection import MIOpenDriverCommandCollector, env_enabled
 
 
 class TestEnvEnabled(unittest.TestCase):
@@ -100,7 +93,7 @@ class TestMIOpenDriverCommandCollector(unittest.TestCase):
     def test_records_collection_error_without_raising(self):
         collector = MIOpenDriverCommandCollector(self.results_directory, ["missing.default"])
 
-        with self.assertLogs("miopen_driver_commands", level="WARNING"):
+        with self.assertLogs("miopen_tuning.collection", level="WARNING"):
             collector.collect(
                 "missing.default",
                 self.results_directory / "missing-stderr.txt",

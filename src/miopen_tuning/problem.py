@@ -283,7 +283,7 @@ class MIOpenConvolution:
         """
         Normalize for comparison.
 
-        Note: Bias field is excluded, doesn't seem to be in commands
+        Bias is included because it is part of both MIOpen DB key formats.
         """
         self.normalize_layouts()
 
@@ -308,6 +308,7 @@ class MIOpenConvolution:
                 self.dilation_h,
                 self.dilation_w,
                 self.group_count,
+                self.bias,
                 self.in_layout,
                 self.fil_layout,
                 self.out_layout,
@@ -330,6 +331,7 @@ class MIOpenConvolution:
                 self.dilation_h,
                 self.dilation_w,
                 self.group_count,
+                self.bias,
                 self.in_layout,
                 self.fil_layout,
                 self.out_layout,
@@ -445,6 +447,68 @@ class MIOpenConvolution:
         parsed = cls.fdb_key_to_dict(db_key)
         return cls._from_parsed_dict(parsed)
 
+    @staticmethod
+    def _output_size(size: int, padding: int, dilation: int, filter_size: int, stride: int) -> int:
+        return (size + 2 * padding - dilation * (filter_size - 1) - 1) // stride + 1
+
+    def to_find_db_key(self) -> str:
+        """Render the MIOpen find DB key for this problem."""
+        self.normalize_layouts()
+        if len({self.in_layout, self.fil_layout, self.out_layout}) != 1:
+            raise ValueError("Mixed tensor layouts are not supported in find DB keys")
+
+        if self.spatial_dim == 3:
+            output = [
+                self._output_size(self.in_d, self.pad_d, self.dilation_d, self.fil_d, self.conv_stride_d),
+                self._output_size(self.in_h, self.pad_h, self.dilation_h, self.fil_h, self.conv_stride_h),
+                self._output_size(self.in_w, self.pad_w, self.dilation_w, self.fil_w, self.conv_stride_w),
+            ]
+            first = [self.in_channels, self.in_d, self.in_h, self.in_w]
+            second = [self.out_channels, *output]
+            if self.direction != "F":
+                first, second = second, first
+            tokens = [
+                *first,
+                f"{self.fil_d}x{self.fil_h}x{self.fil_w}",
+                *second,
+                self.batchsize,
+                f"{self.pad_d}x{self.pad_h}x{self.pad_w}",
+                f"{self.conv_stride_d}x{self.conv_stride_h}x{self.conv_stride_w}",
+                f"{self.dilation_d}x{self.dilation_h}x{self.dilation_w}",
+                self.bias,
+                self.in_layout,
+                self.precision,
+                self.direction,
+            ]
+        else:
+            output = [
+                self._output_size(self.in_h, self.pad_h, self.dilation_h, self.fil_h, self.conv_stride_h),
+                self._output_size(self.in_w, self.pad_w, self.dilation_w, self.fil_w, self.conv_stride_w),
+            ]
+            first = [self.in_channels, self.in_h, self.in_w]
+            second = [self.out_channels, *output]
+            if self.direction != "F":
+                first, second = second, first
+            tokens = [
+                *first,
+                f"{self.fil_h}x{self.fil_w}",
+                *second,
+                self.batchsize,
+                f"{self.pad_h}x{self.pad_w}",
+                f"{self.conv_stride_h}x{self.conv_stride_w}",
+                f"{self.dilation_h}x{self.dilation_w}",
+                self.bias,
+                self.in_layout,
+                self.precision,
+                self.direction,
+            ]
+        key = "-".join(str(token) for token in tokens)
+        return f"{key}_g{self.group_count}" if self.group_count != 1 else key
+
+    def to_perf_db_key(self) -> str:
+        """Render the MIOpen performance DB key for this problem."""
+        return find_db_key_to_perf_db_key(self.to_find_db_key())
+
     @classmethod
     def from_miopendriver_command(cls, command: str) -> "MIOpenConvolution":
         """Create MIOpenConvolution from a MIOpenDriver command.
@@ -533,3 +597,43 @@ class MIOpenConvolution:
                 kwargs[layout_key] = params[layout_key]
 
         return cls(**kwargs)
+
+
+def find_db_key_to_perf_db_key(find_db_key: str) -> str:
+    """Convert a find DB key to the performance DB key used by MIOpen."""
+    base, separator, optional = find_db_key.partition("_g")
+    group_count = int(optional) if separator else 1
+    tokens = base.split("-")
+    if len(tokens) == 15:
+        channels, height, width = tokens[0:3]
+        filter_h, filter_w = tokens[3].split("x")
+        out_channels = tokens[4]
+        batch = tokens[7]
+        pad_h, pad_w = tokens[8].split("x")
+        stride_h, stride_w = tokens[9].split("x")
+        dilation_h, dilation_w = tokens[10].split("x")
+        bias = tokens[11]
+        layout, precision, direction = tokens[12:15]
+        values = [
+            2, channels, height, width, 1, filter_h, filter_w, 1, out_channels, batch,
+            pad_h, pad_w, 0, stride_h, stride_w, 0, dilation_h, dilation_w, 0,
+            bias, group_count, layout, precision, direction,
+        ]
+    elif len(tokens) == 17:
+        channels, depth, height, width = tokens[0:4]
+        filter_d, filter_h, filter_w = tokens[4].split("x")
+        out_channels = tokens[5]
+        batch = tokens[9]
+        pad_d, pad_h, pad_w = tokens[10].split("x")
+        stride_d, stride_h, stride_w = tokens[11].split("x")
+        dilation_d, dilation_h, dilation_w = tokens[12].split("x")
+        bias = tokens[13]
+        layout, precision, direction = tokens[14:17]
+        values = [
+            3, channels, height, width, depth, filter_h, filter_w, filter_d, out_channels, batch,
+            pad_h, pad_w, pad_d, stride_h, stride_w, stride_d, dilation_h, dilation_w, dilation_d,
+            bias, group_count, layout, precision, direction,
+        ]
+    else:
+        raise ValueError(f"Unsupported find DB key: {find_db_key}")
+    return "x".join(str(value) for value in values)
