@@ -212,7 +212,7 @@ jobs:
       # Resolved separately because this step also runs when the core build was
       # skipped for a prebuilt core image, which is the path that used to have
       # no warm cache at all. It imports the same refs and exports none:
-      # the deps stage it would add is not worth a second exporter. The core
+      # the final stage it would add is not worth a second exporter. The core
       # cache candidate is imported too, because the live ref is only updated
       # after the secret scan.
       - name: Resolve untuned build cache

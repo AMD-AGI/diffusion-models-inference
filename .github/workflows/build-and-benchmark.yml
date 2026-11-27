@@ -605,7 +605,7 @@ jobs:
         run: docker pull ${{ steps.metadata.outputs.working_image }} || true
       
       # Import only. The untuned image is not listed as a cache source: it
-      # carries no cache records, and the deps stage it would have to describe
+      # carries no cache records, and the final stage it would have to describe
       # rebuilds here regardless, because this build feeds the final stage the
       # freshly tuned MIOpen databases instead of the ones committed to the repo.
       - name: Resolve final build cache
