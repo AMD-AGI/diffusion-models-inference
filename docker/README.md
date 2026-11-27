@@ -262,11 +262,18 @@ unzip -p "$wheels"/torch-*.whl 'torch-*.dist-info/METADATA' |
 
 ### amd-smi Python bindings
 
-`docker/setup_amdsmi.sh` links the ROCm Python bindings into the venv, because
-the ROCm SDK wheels ship them under `${ROCM_HOME}/share/amd_smi/amdsmi` with no
-`setup.py`, where pip cannot install them and nothing can import them. It runs
-in `rocm_sdk`; the script header explains why a symlink is the only correct
-mechanism.
+`docker/setup_amdsmi.sh` links the amd-smi Python bindings into the venv. The
+`rocm-sdk-core` wheel installs them in its private tree
+(`_rocm_sdk_core/share/amd_smi/amdsmi`), and `rocm-sdk init` mirrors them into
+the `rocm-sdk-devel` tree that `/opt/rocm` links to. Neither location is on
+`sys.path`, so without the link `import amdsmi` fails. The `amd-smi` command
+needs no shim: it is in both `/opt/rocm/bin` and `/venv/bin`.
+
+The script runs in `rocm_sdk` and links `site-packages/amdsmi` to
+`/opt/rocm/share/amd_smi/amdsmi`. The wrapper finds
+`libamd_smi.so.<SOVERSION>` relative to the resolved path of its own file, so
+the link loads the library from the same ROCm tree. The script header explains
+why a copy or a `sys.path` entry is wrong.
 
 If a future ROCm build puts the bindings on `sys.path` itself, a build log prints
 a `setup_amdsmi: RETIRE THIS SHIM` banner and the script makes no changes —
@@ -276,3 +283,9 @@ delete it and its `COPY`/`RUN` at that point. Watch for the banner when bumping 
 docker build -f docker/Dockerfile.ci --target rocm_sdk . --progress=plain 2>&1 \
     | grep -i 'setup_amdsmi'
 ```
+
+If `import amdsmi` resolves outside `/opt/rocm`, the banner says the bindings
+are probably from a PyPI `amdsmi` wheel. A future `rocm-sdk-core` that installs
+`amdsmi` directly into `site-packages` also triggers this note. To tell the two
+apart, look for `libamd_smi_python.so` next to the resolved `amdsmi` package.
+Only the PyPI wheel ships that file.
