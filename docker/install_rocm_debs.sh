@@ -31,8 +31,10 @@ readonly prefix="/opt/rocm/core-${deb_series}"
 # Host libraries the AITER JIT link line names, plus the runtimes
 # libtorch_hip loads. Per-arch shards hold device code. solver/sparse
 # gfx packages are empty edges pulled in by the BLAS shard.
-# rocSHMEM, hipFile, rocJPEG, rocDecode, and RPP stay out: this
-# libtorch does not link them, and amdrocm-core would pull them in.
+# PyTorch 2.14 and later require hipFile for ROCm 7.14 and later
+# (cmake/public/LoadHIP.cmake), so hipfile-dev is in the list.
+# rocSHMEM, rocJPEG, rocDecode, and RPP stay out: this libtorch does
+# not link them, and amdrocm-core would pull them in.
 #
 # developer-tools depends on the profiler, emulator, and debugger.
 # It does not depend on amdrocm-core, so it does not pull the libraries
@@ -50,6 +52,7 @@ packages=(
     "amdrocm-rand-dev${deb_series}"
     "amdrocm-sparse-dev${deb_series}"
     "amdrocm-rccl-dev${deb_series}"
+    "amdrocm-hipfile-dev${deb_series}"
     "amdrocm-amdsmi${deb_series}"
     "amdrocm-developer-tools${deb_series}"
     "amdrocm-rdc${deb_series}"

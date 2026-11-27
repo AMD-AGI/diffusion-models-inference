@@ -19,10 +19,10 @@ ARG ROCM_RELEASE_ID="20261108-42427827092"
 # https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus
 ARG ROCM_GFX_TARGETS="gfx942;gfx950"
 ARG PYTORCH_ROCM_ARCH="${ROCM_GFX_TARGETS}"
-ARG TRITON_COMMIT="669b31acc1dd1b3fd93286afd5db67f65d9f7557"
-ARG PYTORCH_COMMIT="3369fa23f831832166651a0b8e151dc2877f3c77"
-ARG PYTORCH_VISION_COMMIT="53881ee74892a7c22f2b16a84b15a00f64a8bf68"
-ARG PYTORCH_AUDIO_COMMIT="b3ec2afa3ae504ca600d5e08956eb13d6e2aee31"
+ARG TRITON_COMMIT="0a6e13e6e31f18fa75a17ac72dee0dd1bcb507b8"
+ARG PYTORCH_COMMIT="4a9b2dfc02105f30e8bdcb78bcd2cf2167815c6e"
+ARG PYTORCH_VISION_COMMIT="b7d540b22fab0df4673898fb0aec2fc6954cddac"
+ARG PYTORCH_AUDIO_COMMIT="4c8abfdd423f40e5d04c073a4af5beec564ac630"
 ARG MORI_COMMIT="01de777c122923bacc6f0f50dedfe94a240435b0"
 # deps image arguments
 ARG AITER_COMMIT="04913fc854631d74147a926ad8be005c8a0bb133"
@@ -153,6 +153,8 @@ FROM build_triton AS build_pytorch
 ARG PYTORCH_COMMIT
 ARG PYTORCH_ROCM_ARCH
 RUN python pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${PYTORCH_COMMIT} --jobs 8 --depth 1
+# PyTorch 2.14 and later build through PEP 517 (scikit-build-core).
+# There, "setup.py bdist_wheel" only prints a deprecation notice and fails.
 RUN cd pytorch && \
     UPSTREAM_HASH=$(git rev-parse --short THEROCK_UPSTREAM_DIFFBASE) && \
     PYTORCH_VERSION=$(cat version.txt | tr -d '\n') && \
@@ -166,7 +168,7 @@ RUN cd pytorch && \
     CXXFLAGS="-I${ROCM_HOME}/include/roctracer -I${ROCM_HOME}/lib/rocm_sysdeps/include" \
     LDFLAGS="-L${ROCM_HOME}/lib/rocm_sysdeps/lib" \
     PKG_CONFIG_PATH="${ROCM_HOME}/lib/rocm_sysdeps/lib/pkgconfig" \
-    python setup.py bdist_wheel && \
+    python -m build --wheel --no-isolation && \
     pip install dist/*.whl && \
     mv dist/*.whl /install && \
     rm -rf build dist
