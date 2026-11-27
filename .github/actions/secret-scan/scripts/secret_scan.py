@@ -760,6 +760,56 @@ def command_promote(args: argparse.Namespace) -> int:
     return 0
 
 
+ALLOW_RULES_KEY = "allow-rules:"
+RULE_ID = re.compile(r"^  - id: (\S+)\s*$")
+
+
+def top_level_keys(lines: list[str]) -> list[tuple[int, str]]:
+    return [
+        (index, line.rstrip()) for index, line in enumerate(lines) if line.strip() and not line.startswith((" ", "#"))
+    ]
+
+
+def rule_ids(lines: list[str]) -> list[str]:
+    return [match.group(1) for line in lines if (match := RULE_ID.match(line))]
+
+
+def merge_policy(base: str, overlay: str) -> str:
+    """Append an overlay's allow rules to the base policy.
+
+    Trivy accepts a single secret config, and the runner has no YAML parser,
+    so this works on the text. Anything other than the expected shape fails
+    rather than risk silently dropping or misplacing rules.
+    """
+    base_lines = base.splitlines()
+    base_keys = top_level_keys(base_lines)
+    if not base_keys or base_keys[-1][1] != ALLOW_RULES_KEY:
+        raise ScanError(f"The base policy must end with its top-level {ALLOW_RULES_KEY} list")
+
+    overlay_lines = overlay.splitlines()
+    overlay_keys = top_level_keys(overlay_lines)
+    if [key for _, key in overlay_keys] != [ALLOW_RULES_KEY]:
+        raise ScanError(f"The overlay policy must contain only a top-level {ALLOW_RULES_KEY} list")
+    body = overlay_lines[overlay_keys[0][0] + 1 :]
+    ids = rule_ids(body)
+    if not ids:
+        raise ScanError("The overlay policy has no allow rules")
+    first_item = next(line for line in body if line.strip() and not line.lstrip().startswith("#"))
+    if not RULE_ID.match(first_item):
+        raise ScanError("Overlay allow rules must be '  - id: ...' list items")
+    duplicates = sorted(set(ids) & set(rule_ids(base_lines)) | {i for i in ids if ids.count(i) > 1})
+    if duplicates:
+        raise ScanError(f"Duplicate allow rule ids in the overlay policy: {', '.join(duplicates)}")
+    return "\n".join(base_lines + [""] + body) + "\n"
+
+
+def command_merge_policy(args: argparse.Namespace) -> int:
+    merged = merge_policy(Path(args.base).read_text(), Path(args.overlay).read_text())
+    Path(args.output).write_text(merged)
+    log(f"Merged {len(rule_ids(merged.splitlines()))} allow rules into {args.output}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -776,6 +826,12 @@ def main() -> int:
     promote = sub.add_parser("promote", help="Copy scanned digests to their destination tags")
     promote.add_argument("--targets-file", required=True, help="JSON target list file")
     promote.set_defaults(func=command_promote)
+
+    merge = sub.add_parser("merge-policy", help="Append an overlay's allow rules to a base policy")
+    merge.add_argument("--base", required=True, help="Base Trivy secret config file")
+    merge.add_argument("--overlay", required=True, help="Overlay file holding only allow-rules")
+    merge.add_argument("--output", required=True, help="Merged policy file to write")
+    merge.set_defaults(func=command_merge_policy)
 
     args = parser.parse_args()
     try:

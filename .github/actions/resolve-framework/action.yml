@@ -1,0 +1,46 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: 'Resolve Framework'
+description: 'Validates a framework name and resolves its image repositories, Dockerfile and cache channel'
+inputs:
+  framework:
+    description: 'Framework: xdit, sgld, or vllmo'
+    required: true
+  target:
+    description: 'Image target: rocm or cuda'
+    required: true
+  vars_json:
+    description: 'Repository variables as JSON (pass toJSON(vars)); composite actions cannot read the vars context'
+    required: false
+    default: '{}'
+outputs:
+  image:
+    description: 'Image repository: the core image for ROCm, the CUDA image for CUDA'
+    value: ${{ steps.resolve.outputs.image }}
+  staging_image:
+    description: 'ROCm staging image repository; empty for CUDA'
+    value: ${{ steps.resolve.outputs.staging_image }}
+  dockerfile:
+    description: 'Dockerfile path relative to the repository root'
+    value: ${{ steps.resolve.outputs.dockerfile }}
+  build_target:
+    description: 'Docker build target; empty to build the final stage'
+    value: ${{ steps.resolve.outputs.build_target }}
+  cache_channel:
+    description: 'Registry cache channel; part of cache tag names, so keep values stable'
+    value: ${{ steps.resolve.outputs.cache_channel }}
+  label:
+    description: 'Human-readable framework name for scan target and summary names'
+    value: ${{ steps.resolve.outputs.label }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve framework
+      id: resolve
+      shell: bash
+      env:
+        FRAMEWORK: ${{ inputs.framework }}
+        TARGET: ${{ inputs.target }}
+        VARS_JSON: ${{ inputs.vars_json }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/resolve-framework.sh"

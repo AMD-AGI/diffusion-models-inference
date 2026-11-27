@@ -8,7 +8,7 @@ labels: release
 <!--
 Maintainers: replace every placeholder below. Release versions follow vYY.M.P (for example,
 v26.5.1). The orchestrate-release skill creates the GitHub release and separately dispatches the
-Build and Benchmark xDiT workflow; creating a release branch does not trigger that workflow.
+Build and Benchmark workflow; creating a release branch does not trigger that workflow.
 -->
 
 Release `vYY.M.P` of the pytorch-xdit image.
@@ -35,7 +35,7 @@ Release `vYY.M.P` of the pytorch-xdit image.
 
 - [ ] Release notes generated and reviewed
 - [ ] GitHub release `vYY.M.P` created
-- [ ] Build and Benchmark xDiT workflow dispatched for the release ref
+- [ ] Build and Benchmark workflow dispatched for the release ref
 - [ ] Workflow run linked: <!-- URL -->
 - [ ] Staging image tag or digest recorded: <!-- image reference -->
 - [ ] Functional and output-quality validation completed

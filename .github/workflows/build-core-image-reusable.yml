@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Build Core Images (Reusable)
+name: Build ROCm Framework Image (Reusable)
 
 on:
   workflow_call:
@@ -14,16 +14,11 @@ on:
         description: 'Image tag to use for built images'
         required: true
         type: string
-      core_image_name:
-        description: 'Core image name'
+      framework:
+        description: 'Framework image to build: xdit, sgld, or vllmo'
         required: false
         type: string
-        default: 'amdsiloai/pytorch-xdit-core'
-      staging_image_name:
-        description: 'Staging image name'
-        required: false
-        type: string
-        default: 'amdsiloai/pytorch-xdit-staging'
+        default: xdit
       cache_image_name:
         description: 'Repository holding the registry layer cache tags'
         required: false
@@ -35,15 +30,10 @@ on:
         type: string
         default: ''
       prebuilt_core_image_tag:
-        description: 'Prebuilt core image tag or full Docker Hub path to use as cache (skips core build if provided)'
+        description: 'xDiT-only prebuilt core tag or Docker Hub path to use as cache (skips core build if provided)'
         required: false
         type: string
         default: ''
-      build_untuned_image:
-        description: 'Whether to build the untuned image'
-        required: false
-        type: boolean
-        default: true
       runner:
         description: 'Runner label to use'
         required: false
@@ -86,6 +76,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_ref }}
+
+      - name: Resolve framework
+        id: framework
+        uses: ./.github/actions/resolve-framework
+        with:
+          framework: ${{ inputs.framework }}
+          target: rocm
+          vars_json: ${{ toJSON(vars) }}
       
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
@@ -96,9 +94,9 @@ jobs:
       - name: Determine images to build
         id: images
         env:
-          PREBUILT_CORE_TAG_INPUT: ${{ inputs.prebuilt_core_image_tag }}
-          CORE_IMAGE_NAME: ${{ inputs.core_image_name }}
+          PREBUILT_CORE_TAG_INPUT: ${{ inputs.framework == 'xdit' && inputs.prebuilt_core_image_tag || '' }}
           IMAGE_TAG: ${{ inputs.image_tag }}
+          CORE_IMAGE_NAME: ${{ steps.framework.outputs.image }}
         run: |
           PREBUILT_CORE_TAG=$(echo "$PREBUILT_CORE_TAG_INPUT" | xargs)
           
@@ -115,36 +113,36 @@ jobs:
             echo "cache_source=${CORE_IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
           fi
       
-      # The core build is the only step in the pipeline that exports cache. Its
-      # expensive stages (build_rocm, build_torch_stack, ffmpeg_builder) never
-      # reach the final image, so only a mode=max registry export can describe
-      # them; the untuned and tuned builds import what this step writes.
-      - name: Resolve core build cache
-        id: core_cache
+      # This initial build is the only step in the pipeline that exports cache.
+      # For xDiT, mode=max is needed to preserve its intermediate build stages.
+      - name: Resolve framework build cache
+        id: image_cache
         if: ${{ steps.images.outputs.skip_core_build == 'false' }}
         uses: ./.github/actions/resolve-build-cache
         with:
           cache_image_name: ${{ inputs.cache_image_name }}
-          channel: 'core'
+          channel: ${{ steps.framework.outputs.cache_channel }}
           ref: ${{ inputs.git_ref }}
           cache_scope: ${{ inputs.cache_scope }}
           extra_cache_from: ${{ steps.images.outputs.cache_source }}
           export: ${{ inputs.export_docker_cache }}
-          export_tag: ${{ env.CANDIDATE_TAG }}-corecache-${{ inputs.image_tag }}
+          export_tag: ${{ env.CANDIDATE_TAG }}-${{ steps.framework.outputs.cache_channel }}cache-${{ inputs.image_tag }}
           disable_cache: ${{ inputs.disable_docker_cache }}
 
-      - name: Build core image
-        id: build_core
+      - name: Build framework image
+        id: build_image
         if: ${{ steps.images.outputs.skip_core_build == 'false' }}
         env:
           BUILDKIT_PROGRESS: plain
           DISABLE_CACHE: ${{ inputs.disable_docker_cache }}
           DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
-          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-core-${{ inputs.image_tag }}
-          CACHE_FROM_FLAGS: ${{ steps.core_cache.outputs.cache_from_flags }}
-          CACHE_TO_FLAG: ${{ steps.core_cache.outputs.cache_to_flag }}
+          DOCKERFILE: ${{ steps.framework.outputs.dockerfile }}
+          BUILD_TARGET: ${{ steps.framework.outputs.build_target }}
+          CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-${{ steps.framework.outputs.cache_channel }}-${{ inputs.image_tag }}
+          CACHE_FROM_FLAGS: ${{ steps.image_cache.outputs.cache_from_flags }}
+          CACHE_TO_FLAG: ${{ steps.image_cache.outputs.cache_to_flag }}
           EXPORT_CACHE: ${{ inputs.export_docker_cache }}
-          EXPORT_REF: ${{ steps.core_cache.outputs.export_ref }}
+          EXPORT_REF: ${{ steps.image_cache.outputs.export_ref }}
         run: |
           # A ref checked out from before secret scanning has a cache action
           # that ignores export_tag and would export straight to the live ref.
@@ -169,13 +167,18 @@ jobs:
             NO_CACHE_FLAG="--no-cache"
           fi
 
+          TARGET_ARGS=()
+          if [ -n "${BUILD_TARGET}" ]; then
+            TARGET_ARGS=(--target "${BUILD_TARGET}")
+          fi
+
           # The export runs even under --no-cache, which makes a disabled-cache
           # run the way to replace a stale cache rather than something the cache
           # needs protecting from.
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
-            -f docker/Dockerfile.ci \
-            --target core \
+            -f "${DOCKERFILE}" \
+            "${TARGET_ARGS[@]}" \
             --pull \
             --push \
             ${NO_CACHE_FLAG} \
@@ -197,7 +200,7 @@ jobs:
         id: check_cache
         if: ${{ steps.images.outputs.skip_core_build == 'false' && inputs.export_docker_cache }}
         env:
-          EXPORT_REF: ${{ steps.core_cache.outputs.export_ref }}
+          EXPORT_REF: ${{ steps.image_cache.outputs.export_ref }}
         run: |
           if DIGEST=$(crane digest "${EXPORT_REF}" 2>/dev/null); then
             echo "Cache exported to candidate ${EXPORT_REF} (${DIGEST})"
@@ -214,22 +217,23 @@ jobs:
       # after the secret scan.
       - name: Resolve untuned build cache
         id: untuned_cache
-        if: ${{ inputs.build_untuned_image }}
+        if: ${{ inputs.framework == 'xdit' }}
         uses: ./.github/actions/resolve-build-cache
         with:
           cache_image_name: ${{ inputs.cache_image_name }}
-          channel: 'core'
+          channel: ${{ steps.framework.outputs.cache_channel }}
           ref: ${{ inputs.git_ref }}
           cache_scope: ${{ inputs.cache_scope }}
-          extra_cache_from: ${{ steps.images.outputs.cache_source }} ${{ steps.core_cache.outputs.export_ref }}
+          extra_cache_from: ${{ steps.images.outputs.cache_source }} ${{ steps.image_cache.outputs.export_ref }}
           export: 'false'
 
       - name: Build untuned image
         id: build_untuned
-        if: ${{ inputs.build_untuned_image }}
+        if: ${{ inputs.framework == 'xdit' }}
         env:
           BUILDKIT_PROGRESS: plain
           DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
+          DOCKERFILE: ${{ steps.framework.outputs.dockerfile }}
           CACHE_FROM_FLAGS: ${{ steps.untuned_cache.outputs.cache_from_flags }}
           CANDIDATE_IMAGE: ${{ inputs.cache_image_name }}:${{ env.CANDIDATE_TAG }}-untuned-${{ inputs.image_tag }}
         run: |
@@ -245,7 +249,7 @@ jobs:
 
           docker buildx build \
             --builder "${BUILDX_BUILDER:?BUILDX_BUILDER is required}" \
-            -f docker/Dockerfile.ci \
+            -f "${DOCKERFILE}" \
             --push \
             ${CACHE_FROM_FLAGS} \
             "${BUILD_ARGS[@]}" \
@@ -258,21 +262,23 @@ jobs:
       
       - name: Write scan targets
         env:
-          CORE_IMAGE: ${{ inputs.core_image_name }}:${{ inputs.image_tag }}
-          STAGING_IMAGE: ${{ inputs.staging_image_name }}:${{ inputs.image_tag }}-temp
-          CORE_SOURCE: ${{ steps.build_core.outputs.source }}
+          CORE_IMAGE: ${{ steps.framework.outputs.image }}:${{ inputs.image_tag }}
+          STAGING_IMAGE: ${{ inputs.framework == 'xdit' && format('{0}:{1}-temp', steps.framework.outputs.staging_image, inputs.image_tag) || '' }}
+          CORE_SOURCE: ${{ steps.build_image.outputs.source }}
           UNTUNED_SOURCE: ${{ steps.build_untuned.outputs.source }}
           CACHE_SOURCE: ${{ steps.check_cache.outputs.source }}
-          CACHE_LIVE_REF: ${{ steps.core_cache.outputs.live_ref }}
+          CACHE_LIVE_REF: ${{ steps.image_cache.outputs.live_ref }}
+          LABEL: ${{ inputs.framework == 'xdit' && 'xDiT core' || steps.framework.outputs.label }}
         run: |
           TARGETS=$(jq -cn \
+            --arg label "${LABEL}" \
             --arg core "${CORE_SOURCE}" --arg core_dest "${CORE_IMAGE}" \
             --arg untuned "${UNTUNED_SOURCE}" --arg untuned_dest "${STAGING_IMAGE}" \
             --arg cache "${CACHE_SOURCE}" --arg cache_dest "${CACHE_LIVE_REF}" \
             '[
-              (select($core != "") | {name: "core image", source: $core, image_scan: true, promote: [$core_dest]}),
+              (select($core != "") | {name: "\($label) image", source: $core, image_scan: true, promote: [$core_dest]}),
               (select($untuned != "") | {name: "untuned image", source: $untuned, image_scan: true, promote: [$untuned_dest]}),
-              (select($cache != "") | {name: "core build cache", source: $cache, image_scan: false, promote: [$cache_dest]})
+              (select($cache != "") | {name: "\($label) build cache", source: $cache, image_scan: false, promote: [$cache_dest]})
             ]')
           # Kept in a file: GitHub drops job outputs that contain the Docker
           # Hub organization, which is stored as a secret.
@@ -283,7 +289,7 @@ jobs:
         uses: ./.github/actions/secret-scan
         with:
           targets_file: ${{ runner.temp }}/secret-scan-targets/targets.json
-          scan_id: core
+          scan_id: rocm-${{ inputs.framework }}
           policy_ref: ${{ github.ref_name }}
       
       - name: Cleanup

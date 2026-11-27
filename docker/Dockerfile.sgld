@@ -11,8 +11,6 @@ ARG VLLM_COMMIT="v0.28.0" # v0.28.0
 # Necessary PRs manually merged
 ARG SGL_COMMIT="perf_branch_1410"
 ARG SGL_REPO="https://github.com/avjves/sglang.git"
-ARG AMDGPU_TARGET="gfx950"
-
 ENV SGLANG_BUILD_RUST_EXTS=none
 
 WORKDIR /app/external
@@ -25,12 +23,28 @@ RUN git clone https://github.com/vllm-project/vllm.git && \
     PYTORCH_ROCM_ARCH="gfx942;gfx950" python3 setup.py develop
 
 # Install SGL
+# Build each architecture separately; the patched loader selects its matching library.
+# The gfx950 install only registers the sgl_kernel package (reusing the last build/
+# output); the per-arch libraries are then copied into gfx942/ and gfx950/ subdirs.
+COPY patches/sglang-rocm-arch-loader.patch /tmp/sglang-rocm-arch-loader.patch
 RUN git clone ${SGL_REPO} sglang && \
     cd sglang && \
     git checkout ${SGL_COMMIT} && \
+    git apply /tmp/sglang-rocm-arch-loader.patch && \
+    rm /tmp/sglang-rocm-arch-loader.patch && \
     cd python/sglang/kernels/aot && \
     mv pyproject_rocm.toml pyproject.toml && \
-    AMDGPU_TARGET=${AMDGPU_TARGET} python setup_rocm.py install && \
+    for arch in gfx942 gfx950; do \
+        rm -rf build && \
+        AMDGPU_TARGET=${arch} python setup_rocm.py build && \
+        mkdir -p /tmp/sgl_ops/${arch} && \
+        cp build/lib*/sgl_kernel/common_ops*.so /tmp/sgl_ops/${arch}/ || exit 1; \
+    done && \
+    AMDGPU_TARGET=gfx950 python setup_rocm.py install && \
+    sgl_kernel_dir=$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("sgl_kernel").origin).parent)') && \
+    cp -r /tmp/sgl_ops/gfx942 /tmp/sgl_ops/gfx950 "${sgl_kernel_dir}/" && \
+    rm -rf /tmp/sgl_ops && \
+    ls "${sgl_kernel_dir}"/gfx942/common_ops*.so "${sgl_kernel_dir}"/gfx950/common_ops*.so && \
     cd ../../../../ && \
     mv python/pyproject_other.toml python/pyproject.toml && \
     sed -i 's/compressed-tensors==0\.15\.0/compressed-tensors==0.17.0/' python/pyproject.toml && \
