@@ -413,16 +413,15 @@ COPY --from=build_torch_stack /install/license-evidence /opt/license-evidence/to
 COPY --from=ffmpeg_builder /ffmpeg/license-evidence /opt/license-evidence/ffmpeg-build-sources
 COPY --from=evidence_mori /evidence/mori /opt/license-evidence/mori-build-sources
 
-# Install the Python packages directly in final. The pip runs keep no cache
-# (PIP_NO_CACHE_DIR), and no step leaves files outside /venv and /app, so a
-# separate stage to copy from is not necessary. An ARG is not kept in the
-# image, so users still get the default pip cache.
 FROM core AS final
 ARG LONGCONTEXTATTENTION_COMMIT
 ARG DIFFUSERS_COMMIT
 ARG DISTVAE_COMMIT
 ARG XDIT_COMMIT
 ARG PYAV_VERSION
+# Keep the pip cache out of the image layers. The environment variable also
+# reaches the pip subprocesses of editable installs, which --no-cache-dir does
+# not. An ARG is not kept in the image, so users get the default pip cache.
 ARG PIP_NO_CACHE_DIR=1
 
 # setup
