@@ -17,6 +17,12 @@
     use_torch_compile: true
     attention_backend: aiter
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
+    enable_tiling: true
+    vae_tile_size_height: 192
+    vae_tile_size_width: 2048
+    vae_tile_overlap_height: 64
+    vae_tile_overlap_width: 0
 
 - name: qwen_image.default.hopper
   tags: [lucid, hopper, h100, h200]
@@ -34,6 +40,12 @@
     use_torch_compile: true
     attention_backend: cudnn
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
+    enable_tiling: true
+    vae_tile_size_height: 192
+    vae_tile_size_width: 2048
+    vae_tile_overlap_height: 64
+    vae_tile_overlap_width: 0
 
 - name: qwen_image.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -51,6 +63,12 @@
     use_torch_compile: true
     attention_backend: cudnn
     memory_efficient_replicated_load: true
+    use_parallel_vae: true
+    enable_tiling: true
+    vae_tile_size_height: 192
+    vae_tile_size_width: 2048
+    vae_tile_overlap_height: 64
+    vae_tile_overlap_width: 0
 
 - name: qwen_image.4gpu.rdna4
   tags: [rdna4, gfx1201]

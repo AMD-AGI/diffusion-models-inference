@@ -19,6 +19,7 @@
     enable_slicing: true
     use_torch_compile: true
     attention_backend: aiter
+    use_parallel_vae: true
 
 - name: hunyuanvideo_1_5.default.gfx950
   tags: [release, mad, lucid, instinct, gfx950, nightly]
@@ -38,6 +39,7 @@
     enable_slicing: true
     use_torch_compile: true
     attention_backend: aiter_bf16
+    use_parallel_vae: true
 
 - name: hunyuanvideo_1_5.default.hopper
   tags: [lucid, hopper, h100, h200]
@@ -57,6 +59,7 @@
     enable_slicing: true
     use_torch_compile: true
     attention_backend: flash_3
+    use_parallel_vae: true
 
 - name: hunyuanvideo_1_5.default.blackwell
   tags: [lucid, blackwell, b200, b300]
@@ -76,3 +79,4 @@
     enable_slicing: true
     use_torch_compile: true
     attention_backend: cudnn
+    use_parallel_vae: true
